@@ -1,0 +1,15 @@
+# Generated Assets
+.agent/studio/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.env
+
+# OS
+.DS_Store
+
+.env
