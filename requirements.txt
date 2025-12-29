@@ -1,0 +1,9 @@
+google-genai
+pillow
+opencv-python-headless
+numpy
+fastapi
+uvicorn
+python-multipart
+python-dotenv
+mcp[cli]

@@ -1,0 +1,65 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "celstate"
+version = "0.1.0"
+description = "AI-powered media creation platform"
+authors = [
+    {name = "Emre", email = "emre@celstate.com"},
+]
+dependencies = [
+    "google-genai",
+    "pillow",
+    "opencv-python-headless",
+    "numpy",
+    "fastapi",
+    "uvicorn",
+    "python-multipart",
+    "python-dotenv",
+    "mcp[cli]",
+]
+requires-python = ">=3.12"
+readme = "README.md"
+license = {text = "MIT"}
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "black",
+    "ruff",
+    "mypy",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=7.0.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+]
+
+[tool.black]
+line-length = 88
+target-version = ['py312']
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.scripts]
+start = "uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000"
+dev = "uv run uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000"
+lint = "uv run ruff check src/"
+format = "uv run black src/"
+test = "uv run pytest"

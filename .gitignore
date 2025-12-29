@@ -12,4 +12,5 @@ venv/
 # OS
 .DS_Store
 
-.env
+archive/
+assets/
