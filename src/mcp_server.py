@@ -148,7 +148,7 @@ def get_asset(job_id: str) -> dict:
     # Resolve URLs for AI agent consumption
     # Note: For MCP, we use a placeholder base_url that will be replaced by the actual deployment URL
     # In production on Render, this will be the public URL
-    base_url = "http://localhost:8000"  # Will be replaced by actual host in production
+    base_url = "https://celstate.onrender.com"  # Will be replaced by actual host in production
     job = _resolve_asset_urls(job, base_url)
 
     return job

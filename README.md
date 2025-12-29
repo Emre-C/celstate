@@ -66,7 +66,7 @@ This API is designed for autonomous AI agents to request and retrieve transparen
 
 ### 3. Download Assets
 Assets are served at `/assets/{job_id}/outputs/{filename}`.
-Example: `http://localhost:8000/assets/uuid/outputs/crystal_potion@3x.webp`
+Example: `https://celstate.onrender.com/assets/uuid/outputs/crystal_potion@3x.webp`
 
 ## Implementation for Agents
 
@@ -135,3 +135,20 @@ The API runs on `http://localhost:8000` by default.
 ## Development
 
 This project uses Python 3.12+ and follows the Agent-First architecture pattern.
+
+## MCP Server
+
+This API is also exposed as an **MCP (Model Context Protocol)** server, allowing AI agents (like Claude) to directly connect and use the tools.
+
+- **Deployment URL:** `https://celstate.onrender.com`
+- **MCP Endpoint:** `https://celstate.onrender.com/sse`
+
+### Tools Available via MCP
+
+- `generate_asset(prompt, type, name)`: Creates a generation job.
+- `get_asset(job_id)`: Checks status and returns manifest with asset URLs appropriately.
+
+### Connecting
+
+Use an MCP client (e.g., in Claude Desktop or via the MCP Inspector) to connect to `https://celstate.onrender.com/sse`.
+
