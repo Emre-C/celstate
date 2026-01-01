@@ -6,10 +6,10 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-from src.engine.generator import MediaGenerator
-from src.engine.processor import MediaProcessor
-from src.engine.job_store import JobStore
-from src.engine.orchestrator import Orchestrator
+from src.engine.core.generator import MediaGenerator
+from src.engine.core.processor import MediaProcessor
+from src.engine.core.job_store import JobStore
+from src.engine.core.orchestrator import Orchestrator
 
 # Load environment variables
 load_dotenv()
@@ -31,6 +31,9 @@ class AssetRequest(BaseModel):
     type: str  # "image" or "video"
     prompt: str
     name: Optional[str] = None
+    aspect_ratio: Optional[str] = "16:9"
+    animation_intent: Optional[str] = None
+    context_hint: Optional[str] = None
 
 class ComponentManifest(BaseModel):
     version: str
@@ -62,7 +65,14 @@ async def create_asset(request: AssetRequest, background_tasks: BackgroundTasks)
     if request.type not in ["image", "video"]:
         raise HTTPException(status_code=400, detail="Type must be 'image' or 'video'")
     
-    job = job_store.create_job(request.type, request.prompt, request.name)
+    job = job_store.create_job(
+        asset_type=request.type, 
+        prompt=request.prompt, 
+        name=request.name,
+        aspect_ratio=request.aspect_ratio,
+        animation_intent=request.animation_intent,
+        context_hint=request.context_hint
+    )
     background_tasks.add_task(orchestrator.run_job, job["id"])
     
     return job

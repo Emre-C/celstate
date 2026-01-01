@@ -1,0 +1,203 @@
+{
+  "3": {
+    "_meta": {
+      "title": "KSampler"
+    },
+    "inputs": {
+      "cfg": 1,
+      "seed": 17298192,
+      "model": [
+        "48",
+        0
+      ],
+      "steps": 4,
+      "denoise": 1,
+      "negative": [
+        "7",
+        0
+      ],
+      "positive": [
+        "6",
+        0
+      ],
+      "scheduler": "simple",
+      "latent_image": [
+        "40",
+        0
+      ],
+      "sampler_name": "uni_pc"
+    },
+    "class_type": "KSampler"
+  },
+  "6": {
+    "_meta": {
+      "title": "CLIP Text Encode (Positive Prompt)"
+    },
+    "inputs": {
+      "clip": [
+        "38",
+        0
+      ],
+      "text": "Medium shot. Side Profile. A little girl holds a bubble wand and blows out colorful bubbles that float and pop in the air. The background of this video is transparent. Realistic style."
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "7": {
+    "_meta": {
+      "title": "CLIP Text Encode (Negative Prompt) Useless s"
+    },
+    "inputs": {
+      "clip": [
+        "38",
+        0
+      ],
+      "text": ""
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "8": {
+    "_meta": {
+      "title": "RGB VAE Decode"
+    },
+    "inputs": {
+      "vae": [
+        "39",
+        0
+      ],
+      "samples": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "37": {
+    "_meta": {
+      "title": "Load Wan 2.1 t2v 14B"
+    },
+    "inputs": {
+      "unet_name": "Phantom/wan2114BFusionx_fusionxText2video.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader"
+  },
+  "38": {
+    "_meta": {
+      "title": "Load Text Encoder"
+    },
+    "inputs": {
+      "type": "wan",
+      "device": "default",
+      "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors"
+    },
+    "class_type": "CLIPLoader"
+  },
+  "39": {
+    "_meta": {
+      "title": "Load VAE"
+    },
+    "inputs": {
+      "vae_name": "wan_alpha_2.1_vae_rgb_channel.safetensors.safetensors"
+    },
+    "class_type": "VAELoader"
+  },
+  "40": {
+    "_meta": {
+      "title": "EmptyHunyuanLatentVideo"
+    },
+    "inputs": {
+      "width": 1280,
+      "height": 720,
+      "length": 33,
+      "batch_size": 1
+    },
+    "class_type": "EmptyHunyuanLatentVideo"
+  },
+  "48": {
+    "_meta": {
+      "title": "ModelSamplingSD3"
+    },
+    "inputs": {
+      "model": [
+        "65",
+        0
+      ],
+      "shift": 5
+    },
+    "class_type": "ModelSamplingSD3"
+  },
+  "51": {
+    "_meta": {
+      "title": "Load VAE"
+    },
+    "inputs": {
+      "vae_name": "wan_alpha_2.1_vae_alpha_channel.safetensors.safetensors"
+    },
+    "class_type": "VAELoader"
+  },
+  "52": {
+    "_meta": {
+      "title": "Alpha VAE Decode"
+    },
+    "inputs": {
+      "vae": [
+        "51",
+        0
+      ],
+      "samples": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "59": {
+    "_meta": {
+      "title": "LoraLoaderModelOnly"
+    },
+    "inputs": {
+      "model": [
+        "37",
+        0
+      ],
+      "lora_name": "Wan/lightx2v_T2V_14B_cfg_step_distill_v2_lora_rank64_bf16.safetensors",
+      "strength_model": 1
+    },
+    "class_type": "LoraLoaderModelOnly"
+  },
+  "65": {
+    "_meta": {
+      "title": "LoraLoaderModelOnly"
+    },
+    "inputs": {
+      "model": [
+        "59",
+        0
+      ],
+      "lora_name": "Wan/epoch-13-1500_changed.safetensors",
+      "strength_model": 1
+    },
+    "class_type": "LoraLoaderModelOnly"
+  },
+  "73": {
+    "_meta": {
+      "title": "SavePNGZIP_and_Preview_RGBA_AnimatedWEBP"
+    },
+    "inputs": {
+      "fps": 16,
+      "method": "default",
+      "quality": 80,
+      "lossless": true,
+      "images_rgb": [
+        "8",
+        0
+      ],
+      "images_alpha": [
+        "52",
+        0
+      ],
+      "filename_prefix": "Wan_Alpha"
+    },
+    "class_type": "SavePNGZIP_and_Preview_RGBA_AnimatedWEBP"
+  }
+}
