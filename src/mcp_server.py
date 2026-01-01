@@ -15,10 +15,10 @@ load_dotenv()
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel
 
-from src.engine.generator import MediaGenerator
-from src.engine.processor import MediaProcessor
-from src.engine.job_store import JobStore
-from src.engine.orchestrator import Orchestrator
+from src.engine.core.generator import MediaGenerator
+from src.engine.core.processor import MediaProcessor
+from src.engine.core.job_store import JobStore
+from src.engine.core.orchestrator import Orchestrator
 
 # --- Pydantic Models (Inline, matching src/api/main.py) ---
 
@@ -59,19 +59,63 @@ orchestrator = Orchestrator(job_store, generator, processor)
 
 mcp = FastMCP("Celstate AI Media")
 
-# Note: Static file serving will be handled by adding a custom route
-# We'll add a Starlette route for /assets
-from starlette.routing import Mount
-from starlette.staticfiles import StaticFiles
+# --- Local Asset Server ---
 
-# Add static files route via custom_route decorator is not suitable.
-# We'll serve assets differently - the sse_app doesn't support mounting.
-# For now, assets will need to be served via a separate endpoint or the existing API.
-# In production, Render can serve static files or we use the main API for assets.
+import os
+import http.server
+import socketserver
+
+ASSET_SERVER_PORT = int(os.getenv("ASSET_SERVER_PORT", 8081))
+IS_RENDER = os.getenv("RENDER") == "true"
+
+def start_local_asset_server(directory: Path, port: int):
+    """
+    Starts a simple HTTP server to serve assets locally.
+    This runs in a daemon thread so it dies when the main process dies.
+    """
+    class Handler(http.server.SimpleHTTPRequestHandler):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, directory=str(directory), **kwargs)
+
+    # Allow address reuse to prevent "Address already in use" errors on restart
+    socketserver.TCPServer.allow_reuse_address = True
+    
+    with socketserver.TCPServer(("", port), Handler) as httpd:
+        print(f"Local asset server running on port {port} serving {directory}")
+        httpd.serve_forever()
+
+if not IS_RENDER:
+    # Ensure the directory exists
+    output_dir = JOB_STORE_DIR # /var/jobs
+    # Actually, the file path structure is /var/jobs/<id>/outputs/...
+    # But resolution logic is /assets/<id>/outputs/...
+    # If we serve JOB_STORE_DIR at root, then:
+    # http://localhost:8081/<id>/outputs/... matches the structure if we map /assets/ -> /
+    # So we need to be careful about the path mapping.
+    # The resolution logic below expects: {base_url}/assets/{job['id']}/outputs/{filename}
+    # If base_url is localhost:8081, then URL is localhost:8081/assets/...
+    # Use a custom handler or simpler: just serve BASE_DIR and adjust path?
+    # Or just serve JOB_STORE_DIR and change the resolution URL structure for local?
+    
+    # Simpler: Modify resolution to NOT include /assets/ prefix for local, or alias it.
+    # Let's serve JOB_STORE_DIR.
+    # URL: http://localhost:8081/<job_id>/outputs/<filename>
+    # We will adjust _resolve_asset_urls to handle this difference.
+    
+    # Create directory if it doesn't exist to prevent server launch error
+    JOB_STORE_DIR.mkdir(parents=True, exist_ok=True)
+    
+    server_thread = threading.Thread(
+        target=start_local_asset_server, 
+        args=(JOB_STORE_DIR, ASSET_SERVER_PORT),
+        daemon=True
+    )
+    server_thread.start()
+
 
 # --- Internal Helpers ---
 
-def _resolve_asset_urls(job: dict, base_url: str) -> dict:
+def _resolve_asset_urls(job: dict) -> dict:
     """Populate component asset URLs. Inline for AI maintainability."""
     if job.get("status") != "succeeded":
         return job
@@ -81,8 +125,24 @@ def _resolve_asset_urls(job: dict, base_url: str) -> dict:
         return job
 
     resolved_assets = {}
+    
+    if IS_RENDER:
+        base_url = "https://celstate.onrender.com"
+        # Render URL structure: /assets/<id>/outputs/<filename>
+        # Implies there's a route /assets that maps to the job store.
+        url_pattern = f"{base_url}/assets/{{job_id}}/outputs/{{filename}}"
+    else:
+        base_url = f"http://localhost:{ASSET_SERVER_PORT}"
+        # Local SimpleHTTPRequestHandler serving JOB_STORE_DIR directly.
+        # Structure in disk: JOB_STORE_DIR/<id>/outputs/<filename>
+        # So URL should be: http://localhost:8081/<id>/outputs/<filename>
+        url_pattern = f"{base_url}/{{job_id}}/outputs/{{filename}}"
+
     for filename in component.get("assets", {}).keys():
-        resolved_assets[filename] = f"{base_url}/assets/{job['id']}/outputs/{filename}"
+        resolved_assets[filename] = url_pattern.format(
+            job_id=job['id'], 
+            filename=filename
+        )
 
     job["component"]["assets"] = resolved_assets
     return job
@@ -94,27 +154,39 @@ def _run_job_background(job_id: str):
 # --- MCP Tools ---
 
 @mcp.tool()
-def generate_asset(prompt: str, type: str = "image", name: Optional[str] = None) -> dict:
+def generate_asset(
+    prompt: str, 
+    type: str = "image", 
+    name: Optional[str] = None,
+    aspect_ratio: str = "16:9",
+    animation_intent: Optional[str] = None,
+    context_hint: Optional[str] = None
+) -> dict:
     """
     Generates a UI asset (image or video with transparent background).
 
     Args:
-        prompt: Description of the asset to generate (e.g., "A glowing crystal potion bottle").
-        type: Either "image" (for static WebP) or "video" (for animated WebP). Defaults to "image".
-        name: Optional name for the asset (will be snake_cased). If omitted, derived from prompt.
+        prompt: Description of the asset (e.g., "A glowing potion bottle").
+        type: "image" or "video". Defaults to "image".
+        name: Optional name.
+        aspect_ratio: For video only. "16:9" (landscape) or "9:16" (portrait). Defaults to "16:9". "1:1" is NOT supported and will be auto-corrected.
+        animation_intent: Optional style hint (e.g., "drift", "pulse", "spin").
+        context_hint: Optional placement hint (e.g., "header background", "behind button").
 
     Returns:
-        A JobResponse dict with 'id' and 'status'. Poll get_asset(id) until status is 'succeeded'.
-
-    Example:
-        job = generate_asset("A nervous glowing button", type="image", name="nervous_button")
-        # job["id"] -> "uuid-v4-string"
-        # job["status"] -> "queued" or "running"
+        A JobResponse dict with 'id' and 'status'.
     """
     if type not in ["image", "video"]:
         return {"error": "Type must be 'image' or 'video'"}
 
-    job = job_store.create_job(type, prompt, name)
+    job = job_store.create_job(
+        asset_type=type, 
+        prompt=prompt, 
+        name=name,
+        aspect_ratio=aspect_ratio,
+        animation_intent=animation_intent,
+        context_hint=context_hint
+    )
     
     # Run job in background thread
     thread = threading.Thread(target=_run_job_background, args=(job["id"],))
@@ -146,10 +218,7 @@ def get_asset(job_id: str) -> dict:
         return {"error": f"Job {job_id} not found"}
 
     # Resolve URLs for AI agent consumption
-    # Note: For MCP, we use a placeholder base_url that will be replaced by the actual deployment URL
-    # In production on Render, this will be the public URL
-    base_url = "https://celstate.onrender.com"  # Will be replaced by actual host in production
-    job = _resolve_asset_urls(job, base_url)
+    job = _resolve_asset_urls(job)
 
     return job
 
@@ -159,5 +228,6 @@ def get_asset(job_id: str) -> dict:
 app = mcp.sse_app()
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Run with stdio transport for local Cursor/client usage
+    # For production (Render), use 'uvicorn src.mcp_server:app --host 0.0.0.0 --port 8000'
+    mcp.run()

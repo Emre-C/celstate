@@ -15,7 +15,7 @@ class JobStore:
     def _get_job_file(self, job_id: str) -> Path:
         return self._get_job_dir(job_id) / "job.json"
 
-    def create_job(self, asset_type: str, prompt: str, name: Optional[str] = None) -> Dict[str, Any]:
+    def create_job(self, asset_type: str, prompt: str, name: Optional[str] = None, **kwargs) -> Dict[str, Any]:
         job_id = str(uuid.uuid4())
         job_dir = self._get_job_dir(job_id)
         job_dir.mkdir(parents=True, exist_ok=True)
@@ -34,8 +34,15 @@ class JobStore:
             "updated_at": datetime.utcnow().isoformat(),
             "progress_stage": "initialized",
             "component": None,
-            "error": None
+            "error": None,
+            "aspect_ratio": "16:9", # Default safe value
+            "animation_intent": None,
+            "context_hint": None
         }
+        
+        if kwargs:
+            job_data.update(kwargs)
+
         
         self.save_job(job_id, job_data)
         return job_data

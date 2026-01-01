@@ -3,9 +3,10 @@ import traceback
 from pathlib import Path
 from typing import Dict, Any
 
-from src.engine.generator import MediaGenerator
-from src.engine.processor import MediaProcessor
-from src.engine.job_store import JobStore
+from src.engine.core.generator import MediaGenerator
+from src.engine.core.processor import MediaProcessor
+from src.engine.core.job_store import JobStore
+from src.engine.core.archiver import MediaArchiver
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +15,7 @@ class Orchestrator:
         self.job_store = job_store
         self.generator = generator
         self.processor = processor
+        self.archiver = MediaArchiver()
 
     def run_job(self, job_id: str):
         job = self.job_store.get_job(job_id)
@@ -38,7 +40,9 @@ class Orchestrator:
                 paths = self.generator.generate_image_pair(
                     prompt=job["prompt"],
                     name=job["name"],
-                    studio_dir=studio_dir
+                    studio_dir=studio_dir,
+                    animation_intent=job.get("animation_intent"),
+                    context_hint=job.get("context_hint")
                 )
                 
                 # 2. Process
@@ -62,7 +66,10 @@ class Orchestrator:
                 video_path = self.generator.generate_video(
                     prompt=job["prompt"],
                     name=job["name"],
-                    studio_dir=studio_dir
+                    studio_dir=studio_dir,
+                    aspect_ratio=job.get("aspect_ratio", "16:9"),
+                    animation_intent=job.get("animation_intent"),
+                    context_hint=job.get("context_hint")
                 )
                 
                 # 2. Process
@@ -79,6 +86,13 @@ class Orchestrator:
 
             job["status"] = "succeeded"
             job["progress_stage"] = "completed"
+            
+            # Archive assets to permanent gallery
+            try:
+                self.archiver.archive_job_assets(job_id, job["name"], output_dir)
+            except Exception as archive_err:
+                logger.error(f"Failed to archive job {job_id}: {archive_err}")
+                
             self.job_store.save_job(job_id, job)
 
         except Exception as e:
