@@ -13,3 +13,5 @@ venv/
 .DS_Store
 
 assets/
+archive/
+.ruff_cache/
