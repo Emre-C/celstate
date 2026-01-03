@@ -15,3 +15,5 @@ venv/
 assets/
 archive/
 .ruff_cache/
+.pytest_cache/
+*.png
