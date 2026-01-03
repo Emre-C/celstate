@@ -1,3 +1,5 @@
+import os
+import tempfile
 import json
 import uuid
 from datetime import datetime
@@ -15,7 +17,7 @@ class JobStore:
     def _get_job_file(self, job_id: str) -> Path:
         return self._get_job_dir(job_id) / "job.json"
 
-    def create_job(self, asset_type: str, prompt: str, name: Optional[str] = None, **kwargs) -> Dict[str, Any]:
+    def create_job(self, asset_type: str, prompt: str, style_context: str, layout_intent: str = "auto", name: Optional[str] = None, **kwargs) -> Dict[str, Any]:
         job_id = str(uuid.uuid4())
         job_dir = self._get_job_dir(job_id)
         job_dir.mkdir(parents=True, exist_ok=True)
@@ -27,17 +29,16 @@ class JobStore:
         job_data = {
             "id": job_id,
             "status": "queued",
-            "type": asset_type,
+            "type": asset_type,   # Now strict (container, icon, texture)
+            "layout_intent": layout_intent,
             "prompt": prompt,
+            "style_context": style_context,
             "name": name or f"asset_{job_id[:8]}",
             "created_at": datetime.utcnow().isoformat(),
             "updated_at": datetime.utcnow().isoformat(),
             "progress_stage": "initialized",
             "component": None,
-            "error": None,
-            "aspect_ratio": "16:9", # Default safe value
-            "animation_intent": None,
-            "context_hint": None
+            "error": None
         }
         
         if kwargs:
@@ -50,8 +51,20 @@ class JobStore:
     def save_job(self, job_id: str, data: Dict[str, Any]):
         data["updated_at"] = datetime.utcnow().isoformat()
         job_file = self._get_job_file(job_id)
-        with open(job_file, "w") as f:
-            json.dump(data, f, indent=2)
+        
+        # Atomic write: write to temp file then rename
+        # This prevents race conditions where reader sees partial/empty file
+        with tempfile.NamedTemporaryFile("w", dir=self._get_job_dir(job_id), delete=False) as tf:
+            json.dump(data, tf, indent=2)
+            temp_name = tf.name
+            
+        try:
+            os.replace(temp_name, job_file)
+        except Exception as e:
+            # Fallback cleanup if replace fails (unlikely)
+            if os.path.exists(temp_name):
+                os.remove(temp_name)
+            raise e
 
     def get_job(self, job_id: str) -> Optional[Dict[str, Any]]:
         job_file = self._get_job_file(job_id)

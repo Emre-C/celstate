@@ -11,11 +11,10 @@ See [docs/VISION.md](docs/VISION.md) for the full product vision.
 ## Core Concepts
 
 1. **Jobs**: Generation is asynchronous. Create a job, poll for status, retrieve the "Smart Asset" response.
-2. **Transparent Backgrounds**: 
-   - **Images**: "Difference Matting" (dual-pass white/black) for perfect semi-transparency.
-   - **Videos**: Chroma key (green screen) processing.
-3. **Smart Metadata**: CV-based analysis returns `content_zones`, `slice_insets`, `shape_hint`, and mask companions.
-4. **Storage**: Assets stored in `var/jobs/{job_id}/outputs` during generation, archived to `assets/archive/`.
+2. **Smart Assets**:
+   - **Pixels**: "Difference Matting" (dual-pass white/black) for perfect semi-transparency.
+   - **Logic**: CV-based analysis returns `content_zones`, `slice_insets`, `shape_hint`, and mask companions.
+3. **Storage**: Assets stored in `var/jobs/{job_id}/outputs` during generation, archived to `assets/archive/`.
 
 ## Quick Start
 
@@ -27,6 +26,7 @@ See [docs/VISION.md](docs/VISION.md) for the full product vision.
   - `VERTEX_API_KEY`
   - `VERTEX_PROJECT_ID`
   - `VERTEX_LOCATION`
+  - `HF_TOKEN` (for Creative Interpreter layer)
 
 ### Installation
 
@@ -58,14 +58,14 @@ Creates a UI asset generation job.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `prompt` | string | Description of the asset |
-| `type` | string | `"image"` or `"video"` |
-| `name` | string? | Optional human-readable name |
-| `aspect_ratio` | string? | For video: `"16:9"` or `"9:16"` (1:1 auto-corrects) |
-| `animation_intent` | string? | Style hint (e.g., `"drift"`, `"pulse"`) |
-| `context_hint` | string? | Placement context (e.g., `"behind a button"`) |
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `prompt` | string | **Shape & Subject ONLY** (e.g. "A pill-shaped container"). |
+| `asset_type` | string | `container`, `icon`, or `texture`. |
+| `style_context` | string | **Creative Direction** (e.g. "Ghibli style, vines"). |
+| `layout_intent` | string? | Optional `row` / `column` / `auto` hint. |
 
-**Returns:** Job object with `id` and `status`.
+**Returns:** Job object with `id`, `status`, and `estimated_duration_seconds` (for polling timers).
 
 #### `get_asset`
 
@@ -76,9 +76,25 @@ Retrieves job status and the "Smart Asset" response.
 | `job_id` | string | UUID from `generate_asset` |
 
 **Returns:** Job object. When `status == "succeeded"`, includes:
-- `component.manifest` — Full component manifest with intrinsics
-- `component.assets` — Dict of filename → download URL
-- `component.telemetry` — Generation metrics and spatial analysis
+- `component.manifest.intrinsics`:
+    - `content_zones`: Padding insets (px + %) for structural bounds.
+    - `safe_zone`: **STRICT** obstruction-free area (for buttons/inputs).
+    - `layout_bounds`: **LOOSE** visual container area (for centering).
+    - `shape_hint`: Shape classification (`type`, `corner_radius`).
+    - `mask_asset`: URL to mask image (if organic shape).
+- `component.assets` — Dict of filename → download URL (TEMPORARY!)
+- `component.telemetry` — Generation metrics.
+
+#### `save_asset`
+
+**Infrastructure Action** to reliably save a generated asset to your project.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `job_id` | string | UUID of completed job. |
+| `target_path` | string | Absolute path to save file (e.g. `/app/public/asset.png`). |
+
+**Returns:** Success status and file size.
 
 ### Connecting
 
@@ -90,20 +106,21 @@ Use an MCP client to connect:
 
 ```
 src/
-├── mcp_server.py           # MCP server (primary interface)
+├── mcp_server.py            # MCP server (primary interface)
 └── engine/
     └── core/
-        ├── generator.py     # Gemini/Vertex image & video generation
-        ├── processor.py     # Difference matting & chromakey
+        ├── generator.py     # Gemini/Vertex image generation
+        ├── processor.py     # Difference matting pipeline
+        ├── analyzer.py      # CV layout analysis (Alpha Scanning)
         ├── orchestrator.py  # Job lifecycle management
         ├── job_store.py     # JSON job persistence
         └── archiver.py      # Asset archiving
 var/
-├── jobs/                   # Active job storage
+├── jobs/                    # Active job storage
 docs/
-├── VISION.md               # Product vision
+├── VISION.md                # Product vision
 assets/
-├── archive/                # Permanent asset gallery
+├── archive/                 # Permanent asset gallery
 ```
 
 ## Local Debugging

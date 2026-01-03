@@ -1,0 +1,14 @@
+{
+  "id": "75c5582a-e544-43e9-8198-dd5c285b7e80",
+  "status": "failed",
+  "type": "container",
+  "layout_intent": "row",
+  "prompt": "Pill container, Ghibli style.",
+  "style_context": "Watercolor.",
+  "name": "asset_75c5582a",
+  "created_at": "2026-01-03T01:39:47.684186",
+  "updated_at": "2026-01-03T01:40:03.067745",
+  "progress_stage": "error",
+  "component": null,
+  "error": "[TraceID: 75c5582a-e544-43e9-8198-dd5c285b7e80] 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'Resource exhausted. Please try again later. Please refer to https://cloud.google.com/vertex-ai/generative-ai/docs/error-code-429 for more details.', 'status': 'RESOURCE_EXHAUSTED'}}"
+}

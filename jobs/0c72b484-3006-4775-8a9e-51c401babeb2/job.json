@@ -1,0 +1,76 @@
+{
+  "id": "0c72b484-3006-4775-8a9e-51c401babeb2",
+  "status": "succeeded",
+  "type": "container",
+  "layout_intent": "row",
+  "prompt": "A wide pill-shaped container for avatar and name display, with soft rounded edges and hand-drawn imperfections",
+  "style_context": "Studio Ghibli watercolor style, warm parchment tones, organic hand-painted borders with subtle brush strokes, reminiscent of Spirited Away menu frames",
+  "name": "asset_0c72b484",
+  "created_at": "2026-01-02T21:24:30.426827",
+  "updated_at": "2026-01-02T21:24:45.703277",
+  "progress_stage": "completed",
+  "component": {
+    "manifest": {
+      "version": "0.1",
+      "id": "asset_0c72b484",
+      "type": "static",
+      "intrinsics": {
+        "size": {
+          "width": 1344,
+          "height": 768
+        },
+        "anchor": {
+          "x": 0.5,
+          "y": 0.5
+        },
+        "content_zones": {
+          "inset_top": 61,
+          "inset_right": 80,
+          "inset_bottom": 64,
+          "inset_left": 82,
+          "layout_hint": {
+            "suggested": "horizontal_row",
+            "avatar_alignment": "left",
+            "text_alignment": "center-left"
+          }
+        },
+        "slice_insets": {
+          "top": 8,
+          "right": 8,
+          "bottom": 8,
+          "left": 8
+        },
+        "shape_hint": {
+          "type": "rounded_rectangle",
+          "corner_radius": 320
+        },
+        "mask_asset": null
+      },
+      "states": {
+        "idle": {
+          "clip": "asset_0c72b484.png",
+          "loop": false
+        }
+      },
+      "transitions": [],
+      "accessibility": {
+        "role": "image",
+        "label": "Asset 0C72B484"
+      }
+    },
+    "assets": {
+      "asset_0c72b484.png": null
+    },
+    "telemetry": {
+      "size": "1344x768",
+      "transparent": "2.9%",
+      "semi_transparent": "97.1%",
+      "opaque": "0.0%",
+      "center_transparency": "80.3%"
+    },
+    "snippets": {
+      "react_native": "// Integration Hint\n<Image \n  source={{ uri: assets['asset_0c72b484.png'] }} \n  style={{ width: WIDTH, height: HEIGHT }} \n  resizeMode=\"contain\" \n/>"
+    }
+  },
+  "error": null
+}

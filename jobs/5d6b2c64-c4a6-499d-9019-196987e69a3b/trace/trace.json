@@ -1,0 +1,152 @@
+{
+  "job_id": "5d6b2c64-c4a6-499d-9019-196987e69a3b",
+  "created_at": "2026-01-02T20:39:24.552302+00:00",
+  "duration_ms": 16895,
+  "events": [
+    {
+      "timestamp": "2026-01-02T20:39:24.552321+00:00",
+      "event_type": "input",
+      "data": {
+        "prompt": "A wide pill-shaped container for avatar and name display, with soft rounded edges and hand-drawn imperfections",
+        "asset_type": "container",
+        "style_context": "Studio Ghibli watercolor style, warm parchment tones, organic hand-painted borders with subtle brush strokes, reminiscent of Spirited Away menu frames",
+        "name": "asset_5d6b2c64"
+      }
+    },
+    {
+      "timestamp": "2026-01-02T20:39:24.553203+00:00",
+      "event_type": "hf_request",
+      "data": {
+        "model": "moonshotai/Kimi-K2-Instruct-0905:groq",
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are a Creative Director for a \"Software Whimsy\" design studio.\n\nYour job is to transform generic UI asset descriptions into IMAGINATIVE, SPECIFIC visual directions that will inspire stunning, whimsical artwork.\n\n## Your Philosophy\n- **Anti-Sterile**: Modern apps are boring. We make them \"alive,\" \"immersive,\" and \"emotional.\"\n- **Game Feel**: Think video game aesthetics, anime charm, tactile textures\u2014NOT flat Material Design.\n- **Visual Excellence**: Use terminology from photography (lighting, lens) and art direction (materials, atmosphere).\n\n## Structure Your Output\nFollow this structure for the visual description (one dense paragraph):\n1. **Subject & Shape**: The core object (e.g., \"A pill-shaped glass container\").\n2. **Material & Texture**: Tactile details (e.g., \"Frosted glass with inner iridescence\").\n3. **Lighting & Atmosphere**: How light interacts (e.g., \"Soft subsurface scattering, golden hour rim light\").\n4. **Style & Mood**: The artistic vibe (e.g., \"Studio Ghibli background art, serene, magical\").\n\n## Rules\n- **Be SPECIFIC**: \"Iridescent pearl with soft rainbow refractions\" > \"Colorful\".\n- **Be PHOTOGRAPHIC**: Mention \"soft focus bokeh,\" \"volumetric lighting,\" or \"macro lens details\" where appropriate to add depth.\n- **NO Text**: Do not describe text inside the asset unless explicitly asked. The code handles text.\n- **NO Technical Jargon**: Do not stick technical terms like \"PNG\", \"alpha channel\", or \"center hole\" in the visual description. The generator handles those constraints separately.\n\n## Examples\n\nINPUT:\n- Prompt: \"A container for user avatar\"\n- Asset Type: container\n- Style: \"Ghibli anime clouds\"\n\nOUTPUT:\nA soft, billowing cloud frame with gentle cream and sky-blue gradients. The edges are wispy and distinct, curling like morning mist. Illuminated by a warm, internal sunlight that creates a translucent, fluffy texture. Soft subsurface scattering makes the cloud look touchably soft and plush. Rendered in a hand-painted Studio Ghibli background style with high-fidelity textures.\n\nINPUT:\n- Prompt: \"A button\"\n- Asset Type: icon\n- Style: \"Organic, nature-inspired\"\n\nOUTPUT:\nA polished river stone with moss creeping along one edge. The surface is weathered smooth by centuries of water, exhibiting matte grey and sage green tones. Tiny dew drops catch the light, adding sparkling highlights. Photographed with a macro lens to emphasize the granular texture of the stone and the delicate fibers of the moss. Warm, eager lighting makes it feel tactile and grounded."
+          },
+          {
+            "role": "user",
+            "content": "Prompt: A wide pill-shaped container for avatar and name display, with soft rounded edges and hand-drawn imperfections\nAsset Type: container\nStyle: Studio Ghibli watercolor style, warm parchment tones, organic hand-painted borders with subtle brush strokes, reminiscent of Spirited Away menu frames"
+          }
+        ],
+        "max_tokens": 256,
+        "temperature": 0.8
+      }
+    },
+    {
+      "timestamp": "2026-01-02T20:39:25.744563+00:00",
+      "event_type": "hf_response",
+      "data": {
+        "status": "success",
+        "content": "A gentle pill-shaped parchment scroll with softly undulating edges, hand-torn rather than cut, revealing delicate fibers along its borders. The surface bears the warm honey-amber tones of aged washi paper, with subtle watercolor washes bleeding softly outward in burnt sienna and pale gold. Soft, diffused candlelight catches the tiny peaks of impasto paint where a trembling brush left whispers of raw umber, while the periphery fades into a dreamy soft-focus reminiscent of vintage Japanese stationery. Rendered in Studio Ghibli's background art style with visible paper grain and translucent layering, the container feels like an heirloom letter pressed between pages of an ancient herbal tome.",
+        "usage": {
+          "prompt_tokens": 632,
+          "completion_tokens": 136,
+          "total_tokens": 768
+        }
+      }
+    },
+    {
+      "timestamp": "2026-01-02T20:39:25.745316+00:00",
+      "event_type": "gemini_request",
+      "data": {
+        "pass": "white",
+        "model": "gemini-2.5-flash-image",
+        "prompt": "=== GEOMETRY (STRICT) ===\nPILL/CAPSULE shaped frame with HOLLOW CENTER. The CENTER of the pill MUST be filled with the SAME SOLID COLOR as the background. This creates a 'cutout' effect where the center becomes transparent after processing. Do NOT add any decorative content in the center - it must be pure solid background color. The decorative edges should frame the empty center without obscuring it. 9-slice compatible (stretchable center region).\n\n=== STYLE (EMBELLISH THE GEOMETRY) ===\nStudio Ghibli watercolor style, warm parchment tones, organic hand-painted borders with subtle brush strokes, reminiscent of Spirited Away menu frames\n\n=== CONTENT ===\nA gentle pill-shaped parchment scroll with softly undulating edges, hand-torn rather than cut, revealing delicate fibers along its borders. The surface bears the warm honey-amber tones of aged washi paper, with subtle watercolor washes bleeding softly outward in burnt sienna and pale gold. Soft, diffused candlelight catches the tiny peaks of impasto paint where a trembling brush left whispers of raw umber, while the periphery fades into a dreamy soft-focus reminiscent of vintage Japanese stationery. Rendered in Studio Ghibli's background art style with visible paper grain and translucent layering, the container feels like an heirloom letter pressed between pages of an ancient herbal tome.\n\nCONSTRAINT: Style must EMBELLISH the geometry, not obscure it. The hollow center region must remain filled with pure background color.\n\n=== BACKGROUND ===\nSolid pure white background (HEX #FFFFFF). No gradient. Flat, even lighting. No shadows on background. If this is a container with a hollow center, the center MUST also be pure white #FFFFFF. Centered composition with padding for touch targets.",
+        "aspect_ratio": "16:9"
+      }
+    },
+    {
+      "timestamp": "2026-01-02T20:39:34.254824+00:00",
+      "event_type": "gemini_response",
+      "data": {
+        "pass": "white",
+        "status": "success",
+        "output_path": "/Users/emre/Documents/codebase/active-projects/celstate/var/jobs/5d6b2c64-c4a6-499d-9019-196987e69a3b/studio/asset_5d6b2c64_white.png"
+      }
+    },
+    {
+      "timestamp": "2026-01-02T20:39:34.257023+00:00",
+      "event_type": "gemini_request",
+      "data": {
+        "pass": "black",
+        "model": "gemini-2.5-flash-image",
+        "prompt": "Change the background to solid pure black (HEX #000000). If there is a hollow center, it must also become pure black #000000. Keep the decorative frame/edges identical - same position, size, colors, lighting.",
+        "type": "edit"
+      }
+    },
+    {
+      "timestamp": "2026-01-02T20:39:41.334599+00:00",
+      "event_type": "gemini_response",
+      "data": {
+        "pass": "black",
+        "status": "success",
+        "output_path": "/Users/emre/Documents/codebase/active-projects/celstate/var/jobs/5d6b2c64-c4a6-499d-9019-196987e69a3b/studio/asset_5d6b2c64_black.png"
+      }
+    },
+    {
+      "timestamp": "2026-01-02T20:39:41.445475+00:00",
+      "event_type": "output",
+      "data": {
+        "status": "succeeded",
+        "component": {
+          "manifest": {
+            "version": "0.1",
+            "id": "asset_5d6b2c64",
+            "type": "static",
+            "intrinsics": {
+              "size": {
+                "width": 1344,
+                "height": 768
+              },
+              "anchor": {
+                "x": 0.5,
+                "y": 0.5
+              },
+              "content_zones": {
+                "inset_top": 128,
+                "inset_right": 139,
+                "inset_bottom": 124,
+                "inset_left": 140
+              },
+              "slice_insets": {
+                "top": 8,
+                "right": 8,
+                "bottom": 8,
+                "left": 8
+              },
+              "shape_hint": {
+                "type": "rounded_rectangle",
+                "corner_radius": 258
+              },
+              "mask_asset": null
+            },
+            "states": {
+              "idle": {
+                "clip": "asset_5d6b2c64.png",
+                "loop": false
+              }
+            },
+            "transitions": [],
+            "accessibility": {
+              "role": "image",
+              "label": "Asset 5D6B2C64"
+            }
+          },
+          "assets": {
+            "asset_5d6b2c64.png": null
+          },
+          "telemetry": {
+            "size": "1344x768",
+            "transparent": "53.8%",
+            "semi_transparent": "46.2%",
+            "opaque": "0.0%",
+            "center_transparency": "85.9%"
+          },
+          "snippets": {
+            "react_native": "// Integration Hint\n<Image \n  source={{ uri: assets['asset_5d6b2c64.png'] }} \n  style={{ width: WIDTH, height: HEIGHT }} \n  resizeMode=\"contain\" \n/>"
+          }
+        }
+      }
+    }
+  ]
+}

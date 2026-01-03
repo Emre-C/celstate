@@ -1,0 +1,98 @@
+{
+  "id": "65822701-69f0-4385-be00-9052f1acab93",
+  "status": "succeeded",
+  "type": "container",
+  "layout_intent": "row",
+  "prompt": "A pill-shaped container for an avatar and name label, hand-drawn, organic, whimsical frame",
+  "style_context": "Studio Ghibli anime style, warm, organic, watercolor texture, aged paper feel, mossy details, soft sunlight",
+  "name": "asset_65822701",
+  "created_at": "2026-01-03T01:11:49.618227",
+  "updated_at": "2026-01-03T01:12:06.600044",
+  "progress_stage": "completed",
+  "component": {
+    "manifest": {
+      "version": "0.1",
+      "id": "asset_65822701",
+      "type": "static",
+      "intrinsics": {
+        "size": {
+          "width": 1344,
+          "height": 768
+        },
+        "anchor": {
+          "x": 0.5,
+          "y": 0.5
+        },
+        "content_zones": {
+          "inset_top": 220,
+          "inset_right": 302,
+          "inset_bottom": 236,
+          "inset_left": 308,
+          "layout_hint": {
+            "suggested": "horizontal_row",
+            "avatar_alignment": "left",
+            "text_alignment": "center-left"
+          },
+          "inset_top_pct": 28.6,
+          "inset_right_pct": 22.5,
+          "inset_bottom_pct": 30.7,
+          "inset_left_pct": 22.9,
+          "usable_width_pct": 54.6,
+          "usable_height_pct": 40.6,
+          "coordinate_system": {
+            "origin": "top-left",
+            "inset_top_pct_of": "image_height",
+            "inset_bottom_pct_of": "image_height",
+            "inset_left_pct_of": "image_width",
+            "inset_right_pct_of": "image_width"
+          }
+        },
+        "slice_insets": {
+          "top": 8,
+          "right": 8,
+          "bottom": 8,
+          "left": 8
+        },
+        "shape_hint": {
+          "type": "organic"
+        },
+        "safe_zone": {
+          "x": 0,
+          "y": 623,
+          "width": 1344,
+          "height": 145
+        },
+        "layout_bounds": {
+          "x": 308,
+          "y": 220,
+          "width": 734,
+          "height": 312
+        },
+        "mask_asset": "asset_65822701_mask.png"
+      },
+      "states": {
+        "idle": {
+          "clip": "asset_65822701.png",
+          "loop": false
+        }
+      },
+      "transitions": [],
+      "accessibility": {
+        "role": "image",
+        "label": "Asset 65822701"
+      }
+    },
+    "assets": {
+      "asset_65822701.png": null,
+      "asset_65822701_mask.png": null
+    },
+    "telemetry": {
+      "size": "1344x768",
+      "transparent": "0.4%",
+      "semi_transparent": "99.6%",
+      "opaque": "0.0%",
+      "center_transparency": "51.9%"
+    }
+  },
+  "error": null
+}

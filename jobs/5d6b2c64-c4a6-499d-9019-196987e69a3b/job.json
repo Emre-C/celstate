@@ -1,0 +1,70 @@
+{
+  "id": "5d6b2c64-c4a6-499d-9019-196987e69a3b",
+  "status": "succeeded",
+  "type": "container",
+  "prompt": "A wide pill-shaped container for avatar and name display, with soft rounded edges and hand-drawn imperfections",
+  "style_context": "Studio Ghibli watercolor style, warm parchment tones, organic hand-painted borders with subtle brush strokes, reminiscent of Spirited Away menu frames",
+  "name": "asset_5d6b2c64",
+  "created_at": "2026-01-02T20:39:24.550828",
+  "updated_at": "2026-01-02T20:39:41.447464",
+  "progress_stage": "completed",
+  "component": {
+    "manifest": {
+      "version": "0.1",
+      "id": "asset_5d6b2c64",
+      "type": "static",
+      "intrinsics": {
+        "size": {
+          "width": 1344,
+          "height": 768
+        },
+        "anchor": {
+          "x": 0.5,
+          "y": 0.5
+        },
+        "content_zones": {
+          "inset_top": 128,
+          "inset_right": 139,
+          "inset_bottom": 124,
+          "inset_left": 140
+        },
+        "slice_insets": {
+          "top": 8,
+          "right": 8,
+          "bottom": 8,
+          "left": 8
+        },
+        "shape_hint": {
+          "type": "rounded_rectangle",
+          "corner_radius": 258
+        },
+        "mask_asset": null
+      },
+      "states": {
+        "idle": {
+          "clip": "asset_5d6b2c64.png",
+          "loop": false
+        }
+      },
+      "transitions": [],
+      "accessibility": {
+        "role": "image",
+        "label": "Asset 5D6B2C64"
+      }
+    },
+    "assets": {
+      "asset_5d6b2c64.png": null
+    },
+    "telemetry": {
+      "size": "1344x768",
+      "transparent": "53.8%",
+      "semi_transparent": "46.2%",
+      "opaque": "0.0%",
+      "center_transparency": "85.9%"
+    },
+    "snippets": {
+      "react_native": "// Integration Hint\n<Image \n  source={{ uri: assets['asset_5d6b2c64.png'] }} \n  style={{ width: WIDTH, height: HEIGHT }} \n  resizeMode=\"contain\" \n/>"
+    }
+  },
+  "error": null
+}

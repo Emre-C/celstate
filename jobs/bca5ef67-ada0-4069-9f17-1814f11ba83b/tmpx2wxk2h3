@@ -1,0 +1,49 @@
+{
+  "id": "bca5ef67-ada0-4069-9f17-1814f11ba83b",
+  "status": "running",
+  "type": "container",
+  "layout_intent": "row",
+  "prompt": "A wide pill-shaped container for avatar and name display, with soft rounded edges and hand-drawn imperfections",
+  "style_context": "Studio Ghibli watercolor style, warm parchment tones, organic hand-painted borders with subtle brush strokes, reminiscent of Spirited Away menu frames",
+  "name": "asset_bca5ef67",
+  "created_at": "2026-01-02T22:15:03.773667",
+  "updated_at": "2026-01-02T22:15:19.589257",
+  "progress_stage": "verifying_container",
+  "component": {
+    "manifest": {
+      "version": "0.1",
+      "id": "asset_bca5ef67",
+      "type": "static",
+      "intrinsics": {
+        "size": {
+          "width": 1344,
+          "height": 768
+        },
+        "anchor": {
+          "x": 0.5,
+          "y": 0.5
+        },
+        "content_zones": {
+          "inset_top": 150,
+          "inset_right": 223,
+          "inset_bottom": 157,
+          "inset_left": 219,
+          "layout_hint": {
+            "suggested": "horizontal_row",
+            "avatar_alignment": "left",
+            "text_alignment": "center-left"
+          }
+        },
+        "slice_insets": {
+          "top": 8,
+          "right": 8,
+          "bottom": 8,
+          "left": 8
+        },
+        "shape_hint": {
+          "type": "rounded_rectangle",
+          "corner_radius": 229
+        },
+        "safe_zone": {
+          "x": 0,
+          "y": 

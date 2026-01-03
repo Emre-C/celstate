@@ -1,0 +1,79 @@
+{
+  "id": "c8481238-e4f4-427c-aea6-311e61a79a5d",
+  "status": "succeeded",
+  "type": "container",
+  "layout_intent": "row",
+  "prompt": "A wide pill-shaped container for avatar and name display, with soft rounded edges and hand-drawn imperfections",
+  "style_context": "Studio Ghibli watercolor style, warm parchment tones, organic hand-painted borders with subtle brush strokes, reminiscent of Spirited Away menu frames",
+  "name": "asset_c8481238",
+  "created_at": "2026-01-02T22:28:22.263183",
+  "updated_at": "2026-01-02T22:28:38.075519",
+  "progress_stage": "completed",
+  "component": {
+    "manifest": {
+      "version": "0.1",
+      "id": "asset_c8481238",
+      "type": "static",
+      "intrinsics": {
+        "size": {
+          "width": 1344,
+          "height": 768
+        },
+        "anchor": {
+          "x": 0.5,
+          "y": 0.5
+        },
+        "content_zones": {
+          "inset_top": 133,
+          "inset_right": 255,
+          "inset_bottom": 139,
+          "inset_left": 231,
+          "layout_hint": {
+            "suggested": "horizontal_row",
+            "avatar_alignment": "left",
+            "text_alignment": "center-left"
+          }
+        },
+        "slice_insets": {
+          "top": 8,
+          "right": 8,
+          "bottom": 8,
+          "left": 8
+        },
+        "shape_hint": {
+          "type": "rounded_rectangle",
+          "corner_radius": 242
+        },
+        "safe_zone": {
+          "x": 1104,
+          "y": 0,
+          "width": 240,
+          "height": 768
+        },
+        "mask_asset": null
+      },
+      "states": {
+        "idle": {
+          "clip": "asset_c8481238.png",
+          "loop": false
+        }
+      },
+      "transitions": [],
+      "accessibility": {
+        "role": "image",
+        "label": "Asset C8481238"
+      }
+    },
+    "assets": {
+      "asset_c8481238.png": null
+    },
+    "telemetry": {
+      "size": "1344x768",
+      "transparent": "2.0%",
+      "semi_transparent": "98.0%",
+      "opaque": "0.0%",
+      "center_transparency": "45.3%"
+    }
+  },
+  "error": null
+}

@@ -1,0 +1,49 @@
+{
+  "id": "5c153beb-548f-4369-904d-26338ba4872a",
+  "status": "failed",
+  "type": "container",
+  "layout_intent": "row",
+  "prompt": "A hand-drawn wide pill-shaped parchment frame for user profile info, soft organic edges, subtle paper texture",
+  "style_context": "Studio Ghibli watercolor aesthetic, warm earth tones, nostalgic and cozy, high quality line art",
+  "name": "asset_5c153beb",
+  "created_at": "2026-01-02T22:17:11.357343",
+  "updated_at": "2026-01-02T22:17:26.214748",
+  "progress_stage": "error",
+  "component": {
+    "manifest": {
+      "version": "0.1",
+      "id": "asset_5c153beb",
+      "type": "static",
+      "intrinsics": {
+        "size": {
+          "width": 1344,
+          "height": 768
+        },
+        "anchor": {
+          "x": 0.5,
+          "y": 0.5
+        },
+        "content_zones": {
+          "inset_top": 116,
+          "inset_right": 170,
+          "inset_bottom": 116,
+          "inset_left": 182,
+          "layout_hint": {
+            "suggested": "horizontal_row",
+            "avatar_alignment": "left",
+            "text_alignment": "center-left"
+          }
+        },
+        "slice_insets": {
+          "top": 8,
+          "right": 8,
+          "bottom": 8,
+          "left": 8
+        },
+        "shape_hint": {
+          "type": "rounded_rectangle",
+          "corner_radius": 267
+        },
+        "safe_zone": {
+          "x": 0,
+          "y": 
