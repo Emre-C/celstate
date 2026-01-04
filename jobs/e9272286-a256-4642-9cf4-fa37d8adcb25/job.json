@@ -1,0 +1,15 @@
+{
+  "id": "e9272286-a256-4642-9cf4-fa37d8adcb25",
+  "status": "failed",
+  "type": "container",
+  "layout_intent": "row",
+  "prompt": "A long, horizontal pill-shaped container for a user profile card. It should have a slightly irregular, hand-drawn outline.",
+  "style_context": "Studio Ghibli aesthetic, warm watercolor textures, organic paper feel, soft mossy accents at the edges, whimsical hand-drawn ink lines.",
+  "name": "asset_e9272286",
+  "created_at": "2026-01-04T00:12:38.303097",
+  "updated_at": "2026-01-04T00:12:45.908732",
+  "progress_stage": "error",
+  "component": null,
+  "error": "[TraceID: e9272286-a256-4642-9cf4-fa37d8adcb25] 'Image' object has no attribute 'size'",
+  "render_size_hint": 342
+}

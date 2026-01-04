@@ -1,0 +1,108 @@
+{
+  "id": "e8d1a761-41ec-47b1-954a-9fb8c2a252f5",
+  "status": "failed",
+  "type": "container",
+  "layout_intent": "row",
+  "prompt": "A wide, pill-shaped wooden frame with delicate vines, tiny flowers, and a warm, glowing hollow center. Hand-drawn JRPG UI element.",
+  "style_context": "Studio Ghibli style, watercolor textures, soft moss greens and warm wood tones, nostalgic and organic.",
+  "name": "asset_e8d1a761",
+  "created_at": "2026-01-04T00:19:37.232200",
+  "updated_at": "2026-01-04T00:20:55.910200",
+  "progress_stage": "error",
+  "component": {
+    "manifest": {
+      "version": "0.1",
+      "id": "asset_e8d1a761",
+      "type": "static",
+      "intrinsics": {
+        "size": {
+          "width": 788,
+          "height": 417
+        },
+        "anchor": {
+          "x": 0.5,
+          "y": 0.5
+        },
+        "content_zones": {
+          "inset_top": 0,
+          "inset_right": 0,
+          "inset_bottom": 0,
+          "inset_left": 0,
+          "layout_hint": {
+            "suggested": "horizontal_row",
+            "avatar_alignment": "left",
+            "text_alignment": "center-left"
+          },
+          "inset_top_pct": 0.0,
+          "inset_right_pct": 0.0,
+          "inset_bottom_pct": 0.0,
+          "inset_left_pct": 0.0,
+          "usable_width_pct": 100.0,
+          "usable_height_pct": 100.0,
+          "coordinate_system": {
+            "origin": "top-left",
+            "inset_top_pct_of": "image_height",
+            "inset_bottom_pct_of": "image_height",
+            "inset_left_pct_of": "image_width",
+            "inset_right_pct_of": "image_width"
+          }
+        },
+        "slice_insets": {
+          "top": 8,
+          "right": 8,
+          "bottom": 8,
+          "left": 8
+        },
+        "shape_hint": {
+          "type": "rounded_rectangle",
+          "corner_radius": 208
+        },
+        "safe_zone": {
+          "x": 0,
+          "y": 0,
+          "width": 788,
+          "height": 417,
+          "_fallback": "layout_bounds"
+        },
+        "layout_bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 788,
+          "height": 417
+        },
+        "mask_asset": null,
+        "snippets": {
+          "css_absolute": "position: absolute;\nleft: 0px;\ntop: 0px;\nwidth: 788px;\nheight: 417px;",
+          "tailwind_absolute": "absolute left-[0px] top-[0px] w-[788px] h-[417px]",
+          "react_native_absolute": "{\n  position: 'absolute',\n  left: 0,\n  top: 0,\n  width: 788,\n  height: 417\n}",
+          "swift_uikit": "CGRect(x: 0, y: 0, width: 788, height: 417)",
+          "kotlin_compose": "Modifier.offset(x = 0.dp, y = 0.dp).size(width = 788.dp, height = 417.dp)"
+        }
+      },
+      "states": {
+        "idle": {
+          "clip": "asset_e8d1a761.png",
+          "loop": false
+        }
+      },
+      "transitions": [],
+      "accessibility": {
+        "role": "image",
+        "label": "Asset E8D1A761"
+      }
+    },
+    "assets": {
+      "asset_e8d1a761.png": null,
+      "asset_e8d1a761_debug.png": null
+    },
+    "telemetry": {
+      "size": "788x417",
+      "transparent": "11.4%",
+      "semi_transparent": "88.4%",
+      "opaque": "0.3%",
+      "center_transparency": "1.9%"
+    }
+  },
+  "error": "[TraceID: e8d1a761-41ec-47b1-954a-9fb8c2a252f5] Container quality check failed: Insufficient center transparency (1.9%). Container may obscure avatar.. Center transparency: 1.9%. The generated asset does not have a usable transparent center for content placement.",
+  "render_size_hint": 342
+}

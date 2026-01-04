@@ -31,6 +31,7 @@ class ComponentManifest(BaseModel):
     states: Dict[str, Any]
     transitions: List[Any]
     accessibility: Dict[str, Any]
+    snippets: Optional[Dict[str, str]] = None
 
 class ComponentData(BaseModel):
     manifest: ComponentManifest
@@ -179,7 +180,8 @@ def generate_asset(
     prompt: Annotated[str, Field(description="The subject and shape description", max_length=2000)],
     asset_type: Annotated[str, Field(description="Type of asset: 'container', 'icon', or 'texture'")],
     style_context: Annotated[str, Field(description="Creative art style direction", max_length=2000)],
-    layout_intent: Annotated[str, Field(description="Optional layout preference: 'row', 'column', 'grid', or 'auto'", default="auto")]
+    layout_intent: Annotated[str, Field(description="Optional layout preference: 'row', 'column', 'grid', or 'auto'", default="auto")],
+    render_size_hint: Annotated[Optional[int], Field(description="OPTICAL SIZING HINT: Approximate target pixel width. Controls detail level.", default=None)]
 ) -> dict:
     """
     Generates a Smart UI Component with layout metadata (insets, masks).
@@ -198,7 +200,7 @@ def generate_asset(
             - "icon": A standalone symbol.
             - "texture": A seamless background.
             
-            style_context: THE ART STYLE ONLY. Creative direction.
+        style_context: THE ART STYLE ONLY. Creative direction.
             Example: "Studio Ghibli anime style, warm, organic"
             Used by the interpreter to embellish the geometry with specific materials/lighting.
             
@@ -206,6 +208,12 @@ def generate_asset(
             - "row": Horizontal layout (e.g., Avatar + Name)
             - "column": Vertical layout (e.g., Icon + Label)
             - "auto": Let the analyzer suggest the best layout based on the generated shape.
+            
+        render_size_hint: CRITICAL. Estimate the target pixel width based on your CSS/Layout.
+            Example: If you are writing `w-12` (48px), pass `48`.
+            - Small (< 128): We will force BOLD lines and STRONG silhouettes (no whisper-thin details).
+            - Large (> 400): We will allow intricate details.
+            Passed to the Creative Interpreter to control "Optical Sizing".
             
     Returns:
         Job ID. Use `get_asset(id)` to retrieve the asset and its
@@ -233,7 +241,8 @@ def generate_asset(
         asset_type=asset_type,
         prompt=prompt,
         style_context=style_context,
-        layout_intent=layout_intent
+        layout_intent=layout_intent,
+        render_size_hint=render_size_hint
     )
     
     # Run job in background thread
@@ -279,6 +288,9 @@ def get_asset(job_id: str) -> dict:
             - `layout_bounds`: {x, y, w, h} - Structural container bounds
             - `shape_hint`: Shape classification ("organic", "rounded_rectangle", etc.)
             - `mask_asset`: (ORGANIC SHAPES ONLY) Filename of clipping mask image
+            - `snippets`: **Code to copy-paste**. Includes:
+                - `css_absolute`, `tailwind_absolute`
+                - `react_native_absolute`, `kotlin_compose`, `swift_uikit`
         - assets: Dict of filename -> download URL:
             - `{name}.png`: Primary transparent asset
             - `{name}_mask.png`: (ORGANIC ONLY) Clipping mask
@@ -323,8 +335,12 @@ def get_asset(job_id: str) -> dict:
             else:
                 bounds = manifest["intrinsics"]["safe_zone"]
             
-            # Position content using bounds
+            # OPTION 1: Use raw measurements
             # style = { left: bounds["x"], top: bounds["y"], ... }
+            
+            # OPTION 2 (EASIER): Use generated snippets
+            # css = manifest["snippets"]["tailwind_absolute"]
+            # return <div className={css}>...</div>
     """
     job = job_store.get_job(job_id)
     if not job:

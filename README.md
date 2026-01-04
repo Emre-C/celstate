@@ -8,12 +8,23 @@ AI Coding Agents are currently "Visually Illiterate." If an Agent generates a de
 
 See [docs/VISION.md](docs/VISION.md) for the full product vision.
 
+## Why Celstate?
+
+Most design tools treat "Safe Zones" as absolute mathematical voids. For organic styles (watercolor, hand-drawn), this fails: a single stray paint splatter or a hanging vine will "break" the rectangle, forcing content into a cramped, off-center position.
+
+Celstate implements **Al-First Layout Analysis**:
+- **The "Morphological Squint"**: Instead of strict LIR, we apply morphological operations to "squint" at the image. Small artistic noise (vines, splatters) are filtered out *before* calculation.
+- **Perceptual Accuracy > Mathematical Precision**: We optimize for the *visually largest* void. It is better to have an avatar slightly overlapped by a semi-transparent vine (making the UI look "alive") than to have it undersized and perfectly "safe."
+
 ## Core Concepts
 
 1. **Jobs**: Generation is asynchronous. Create a job, poll for status, retrieve the "Smart Asset" response.
 2. **Smart Assets**:
    - **Pixels**: "Difference Matting" (dual-pass white/black) for perfect semi-transparency.
    - **Logic**: CV-based analysis returns `content_zones`, `slice_insets`, `shape_hint`, and mask companions.
+   - **Morphological Safe Zone**: Perceptual LIR that ignores "artistic noise" (vines, splatters).
+   - **Fat Response (Snippets)**: Returns ready-to-use code for CSS, Tailwind, React Native, Swift, and Kotlin/Compose.
+   - **Optical Sizing**: Prompts adapt to target size (Small = Bold, Large = Intricate).
 3. **Storage**: Assets stored in `var/jobs/{job_id}/outputs` during generation, archived to `assets/archive/`.
 
 ## Quick Start
@@ -64,6 +75,7 @@ Creates a UI asset generation job.
 | `asset_type` | string | `container`, `icon`, or `texture`. |
 | `style_context` | string | **Creative Direction** (e.g. "Ghibli style, vines"). |
 | `layout_intent` | string? | Optional `row` / `column` / `auto` hint. |
+| `render_size_hint` | int? | **Optical Sizing** (e.g. 48 for `w-12`). Controls detail level. |
 
 **Returns:** Job object with `id`, `status`, and `estimated_duration_seconds` (for polling timers).
 
@@ -78,10 +90,11 @@ Retrieves job status and the "Smart Asset" response.
 **Returns:** Job object. When `status == "succeeded"`, includes:
 - `component.manifest.intrinsics`:
     - `content_zones`: Padding insets (px + %) for structural bounds.
-    - `safe_zone`: **STRICT** obstruction-free area (for buttons/inputs).
+    - `safe_zone`: **Robust** LIR area (ignores artistic noise/vines via Morphological Squint).
     - `layout_bounds`: **LOOSE** visual container area (for centering).
     - `shape_hint`: Shape classification (`type`, `corner_radius`).
     - `mask_asset`: URL to mask image (if organic shape).
+    - `snippets`: **Code snippets** for CSS, Tailwind, React Native, Swift, and Kotlin.
 - `component.assets` — Dict of filename → download URL (TEMPORARY!)
 - `component.telemetry` — Generation metrics.
 
@@ -112,6 +125,7 @@ src/
         ├── generator.py     # Gemini/Vertex image generation
         ├── processor.py     # Difference matting pipeline
         ├── analyzer.py      # CV layout analysis (Alpha Scanning)
+        ├── snippets.py      # Platform-agnostic code snippet logic
         ├── orchestrator.py  # Job lifecycle management
         ├── job_store.py     # JSON job persistence
         └── archiver.py      # Asset archiving

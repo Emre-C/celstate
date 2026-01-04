@@ -1,0 +1,15 @@
+{
+  "id": "18a40b53-b5d8-473a-8eb8-adc7f048566a",
+  "status": "failed",
+  "type": "icon",
+  "layout_intent": "auto",
+  "prompt": "A small, whimsical forest spirit sprite. Ghibli style.",
+  "style_context": "Watercolor, hand-drawn.",
+  "name": "asset_18a40b53",
+  "created_at": "2026-01-04T00:14:16.125193",
+  "updated_at": "2026-01-04T00:14:53.016649",
+  "progress_stage": "error",
+  "component": null,
+  "error": "[TraceID: 18a40b53-b5d8-473a-8eb8-adc7f048566a] 'Image' object has no attribute 'size'",
+  "render_size_hint": 64
+}

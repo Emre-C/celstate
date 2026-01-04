@@ -41,6 +41,12 @@ You must distinguish between the **FUNCTIONAL APERTURE** (the hole) and the **DE
 - **TRANSCEND THE SHAPE**: Use organic elements (vines, clouds, dripping wax, torn paper, crystals) to break the outer silhouette.
 - The frame should feel "alive" and "grown," not manufactured.
 
+## OPTICAL SIZING (CRITICAL)
+You will receive a `Render Hint` (approximate pixel width). You MUST adjust the detail level:
+- **Small (< 128px)**: "Bold lines, strong silhouettes, NO whisper-thin details." Use thick strokes. Simplify complex shapes. High contrast.
+- **Medium (128px - 400px)**: "Balanced details." Standard stroke weight.
+- **Large (> 400px)**: "Intricate details allowed." Fine lines, subtle textures.
+
 ## Your Philosophy
 - **Anti-Sterile**: Modern apps are boring. We make them "alive," "immersive," and "emotional."
 - **Game Feel**: Think video game aesthetics, anime charm, tactile textures.
@@ -102,6 +108,7 @@ class CreativeInterpreter:
         prompt: str, 
         asset_type: str, 
         style_context: str,
+        render_size_hint: Optional[int] = None,
         tracer: Optional["Tracer"] = None
     ) -> str:
         """
@@ -111,6 +118,7 @@ class CreativeInterpreter:
             prompt: Raw user prompt describing the asset
             asset_type: Category (container, icon, texture)
             style_context: Creative direction from user
+            render_size_hint: Approximate target width in pixels (controls optical sizing)
             tracer: Optional tracer for observability
             
         Returns:
@@ -124,7 +132,9 @@ class CreativeInterpreter:
             f"=== SHAPE CONSTRAINT (APERTURE) ===\n"
             f"Target Shape: {prompt} (Asset Type: {asset_type})\n\n"
             f"=== CREATIVE DIRECTION (FRAME) ===\n"
-            f"Style: {style_context}"
+            f"Style: {style_context}\n\n"
+            f"=== CONTEXT ===\n"
+            f"Render Hint: {render_size_hint if render_size_hint else 'Unknown (Assume Medium)'} px width."
         )
         
         messages = [

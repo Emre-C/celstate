@@ -1,0 +1,15 @@
+{
+  "id": "e76d503c-dba0-4a03-a28b-8685e3798913",
+  "status": "failed",
+  "type": "texture",
+  "layout_intent": "auto",
+  "prompt": "A seamless watercolor paper texture with soft mossy green and warm cream tones. Ghibli style.",
+  "style_context": "Watercolor, organic, warm.",
+  "name": "asset_e76d503c",
+  "created_at": "2026-01-04T00:13:41.179729",
+  "updated_at": "2026-01-04T00:13:49.655616",
+  "progress_stage": "error",
+  "component": null,
+  "error": "[TraceID: e76d503c-dba0-4a03-a28b-8685e3798913] 'Image' object has no attribute 'size'",
+  "render_size_hint": 342
+}

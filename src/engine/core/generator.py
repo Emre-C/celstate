@@ -6,6 +6,8 @@ from typing import Callable, Dict, Optional, TYPE_CHECKING, TypeVar
 from google import genai
 from google.genai import types
 from google.genai.errors import ClientError
+import io
+from PIL import Image
 
 from src.engine.core.interpreter import CreativeInterpreter
 
@@ -168,6 +170,7 @@ class MediaGenerator:
         studio_dir: Path, 
         asset_type: str, 
         style_context: str,
+        render_size_hint: Optional[int] = None,
         tracer: Optional["Tracer"] = None
     ) -> Dict[str, str]:
         """Generates white and black pass images for difference matting.
@@ -178,12 +181,19 @@ class MediaGenerator:
             studio_dir: Directory for intermediate files
             asset_type: container, icon, or texture
             style_context: User-provided style direction
+            render_size_hint: Approximate target width for optical sizing
             tracer: Optional tracer for observability
         """
         studio_dir.mkdir(parents=True, exist_ok=True)
         
         # Creative interpretation layer: transform generic prompt into imaginative description
-        interpreted_prompt = self.interpreter.interpret(prompt, asset_type, style_context, tracer=tracer)
+        interpreted_prompt = self.interpreter.interpret(
+            prompt, 
+            asset_type, 
+            style_context, 
+            render_size_hint=render_size_hint,
+            tracer=tracer
+        )
         
         base_prompt = self._enhance_prompt(interpreted_prompt, asset_type, style_context)
         aspect_ratio = self._get_aspect_ratio(asset_type)
@@ -201,42 +211,95 @@ class MediaGenerator:
         image_config = types.ImageConfig(aspect_ratio=aspect_ratio)
         gen_config = types.GenerateContentConfig(image_config=image_config)
         
-        # Record white pass request
-        if tracer:
-            tracer.record("gemini_request", {
-                "pass": "white",
-                "model": IMAGE_MODEL,
-                "prompt": prompt_white,
-                "aspect_ratio": aspect_ratio
-            })
-        
-        response_white = self._call_with_retry(
-            lambda: self.client.models.generate_content(
-                model=IMAGE_MODEL,
-                contents=[prompt_white],
-                config=gen_config,
-            ),
-            operation_name="white_pass",
-            tracer=tracer
-        )
-        
+        # Validation & Retry Loop for White Pass
         white_image = None
         white_bytes = None
-        for part in response_white.parts:
-            if part.inline_data is not None:
-                white_image = part.as_image()
-                white_bytes = part.inline_data.data
-                break
+        current_retry = 0
+        max_validation_retries = 3
         
-        if white_image is None or white_bytes is None:
+        while current_retry <= max_validation_retries:
+            # Record white pass request
             if tracer:
-                tracer.record("gemini_response", {
+                tracer.record("gemini_request", {
                     "pass": "white",
-                    "status": "error",
-                    "error": "Failed to generate white-pass image"
+                    "model": IMAGE_MODEL,
+                    "prompt": prompt_white,
+                    "aspect_ratio": aspect_ratio,
+                    "attempt": current_retry + 1
                 })
-            raise RuntimeError("Failed to generate white-pass image")
-        
+            
+            response_white = self._call_with_retry(
+                lambda: self.client.models.generate_content(
+                    model=IMAGE_MODEL,
+                    contents=[prompt_white],
+                    config=gen_config,
+                ),
+                operation_name="white_pass",
+                tracer=tracer
+            )
+            
+            # Extract image
+            for part in response_white.parts:
+                if part.inline_data is not None:
+                    white_image = part.as_image()
+                    white_bytes = part.inline_data.data
+                    break
+            
+            if white_image is None or white_bytes is None:
+                raise RuntimeError("Failed to generate white-pass image (no image data returned)")
+                
+            # VALIDATION: Check for Black Background Hallucination
+            # Verify that corners are actually white (or close to it)
+            # Use PIL to read bytes directly to ensure we have a valid PIL Image
+            try:
+                pil_image = Image.open(io.BytesIO(white_bytes))
+                w, h = pil_image.size
+                
+                # Sample 4 corners
+                corners = [
+                    pil_image.getpixel((0, 0)),
+                    pil_image.getpixel((w - 1, 0)),
+                    pil_image.getpixel((0, h - 1)),
+                    pil_image.getpixel((w - 1, h - 1))
+                ]
+                
+                # Helper to get brightness (handling RGB/RGBA/Grayscale)
+                def get_brightness(px):
+                    if isinstance(px, int): return px # Grayscale
+                    if len(px) >= 3: return sum(px[:3]) / 3.0 # RGB/RGBA
+                    return 0
+                    
+                avg_corner_brightness = sum(get_brightness(c) for c in corners) / 4.0
+                
+                # Threshold: 240/255 (allow for some compression artifacts/noise)
+                if avg_corner_brightness >= 240:
+                    # Valid White Background
+                    break
+                else:
+                    # Invalid - Model Hallucinated Background
+                    msg = f"Model validation failed: Expected white background (mean > 240), got {avg_corner_brightness:.1f}. Retrying..."
+                    if tracer:
+                        tracer.record("validation_error", {
+                            "pass": "white",
+                            "error": msg,
+                            "attempt": current_retry + 1
+                        })
+                    
+                    current_retry += 1
+                    if current_retry > max_validation_retries:
+                        raise RuntimeError(f"Model persistently failed to generate white background after {max_validation_retries} retries.")
+            except Exception as e:
+                # Fallback if image parsing fails (shouldn't happen with valid bytes)
+                if tracer:
+                    tracer.record("validation_error", {
+                        "pass": "white",
+                        "error": f"Image parsing failed during validation: {str(e)}",
+                        "attempt": current_retry + 1
+                    })
+                current_retry += 1
+                if current_retry > max_validation_retries:
+                    raise
+                    
         # Record white pass success
         if tracer:
             tracer.record("gemini_response", {

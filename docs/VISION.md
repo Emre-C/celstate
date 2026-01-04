@@ -56,13 +56,16 @@ We utilize video game industry techniques to make standard PNGs responsive, comb
 2. Run a CV script to detect the bounding box of transparent regions.
 3. Return a JSON payload with content_zones.
 
-#### Platform Agnosticism: We return Measurements, not Code.
+#### Platform Agnosticism: The "Fat Response" (Measurements + Snippets)
+
+**The Philosophy**: Measurements are the Truth; Snippets are the Convenience.
 
 **Input:** `detect_zones(image)`
+**Output:** A JSON payload containing:
+1.  **Raw Measurements**: `{ "inset_top": 12, "inset_left": 12 }` (Platform Agnostic).
+2.  **Code Snippets**: Pre-calculated CSS, Tailwind, Swift, and Kotlin strings for immediate implementation.
 
-**Output:** `{ "inset_top": 12, "inset_left": 12 }`
-
-**Why:** This allows the Agent to translate the data into any framework:
+**Why:** This allows the Agent to choose between absolute control (Measurements) or instant implementation (Snippets) across any framework:
 
 - Web: `border-image-slice: 12`
 - Swift: `.resizable(capInsets: ...)`
