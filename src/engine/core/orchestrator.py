@@ -10,7 +10,7 @@ from src.engine.core.generator import MediaGenerator
 from src.engine.core.processor import MediaProcessor
 from src.engine.core.job_store import JobStore
 
-from src.engine.core.analyzer import LayoutAnalyzer
+from src.engine.core.layout_analyzer import LayoutAnalyzer
 from src.engine.core.tracer import Tracer
 
 logger = logging.getLogger(__name__)
@@ -53,12 +53,22 @@ class Orchestrator:
                 job["progress_stage"] = "generating_passes"
                 self.job_store.save_job(job_id, job)
                 
+                # Extract render_size_hint from job (optional)
+                render_size_hint = job.get("render_size_hint")
+                if render_size_hint is not None:
+                    try:
+                        render_size_hint = int(render_size_hint)
+                    except (ValueError, TypeError):
+                        logger.warning(f"Invalid render_size_hint: {render_size_hint}. Ignoring.")
+                        render_size_hint = None
+                
                 paths = self.generator.generate_image_pair(
                     prompt=job["prompt"],
                     name=job["name"],
                     studio_dir=studio_dir,
                     asset_type=job["type"],
                     style_context=job["style_context"],
+                    render_size_hint=render_size_hint,
                     tracer=tracer
                 )
                 

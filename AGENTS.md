@@ -9,19 +9,8 @@
 2. **Strict Verification**: "I think it works" is unacceptable. Proof or nothing.
 3. **Zero Tech Debt**: No legacy code or backwards compatibility. Resolve tech debt immediately when noticed.
 
----
-
-## Pre-Work Protocol
-
-**Before writing any code, you must generate a plan with these 4 components:**
-
-1.  **Implementation Plan**: Detailed textual description of the code changes.
-2.  **Tech Stack & Patterns**: specific libraries.
-3.  **AI-Optimization Justification**: Why is this approach best for *an AI* to execute?
-    *   *Bad*: "It's the industry standard."
-    *   *Good*: "This pattern uses strictly typed interfaces which prevents me from hallucinating properties, and has a flat structure that is easier for me to parse."
-4.  **Verification Strategy**: How will you prove it works?
-
-**Do not proceed until you have explicitly stated level of confidence in the proposed approach.**
+4. **Perceptual Intent**: For organic or artistic assets, prioritize "Perceptual Accuracy" over "Mathematical Precision". 
+    *   **The Squint Test**: When calculating content zones or safe areas, simulate "human squinting" (morphological cleanup) to ignore minor artistic noise (vines, splatters).
+    *   **Perceptual Safeness > Mathematical Safeness**: It is better to have a large, usable safe zone that slightly overlaps a decorative vine than a tiny, mathematically "perfect" zone that is unusable.
 
 ---
