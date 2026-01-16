@@ -8,6 +8,11 @@ uv run pytest              # Run tests (all pass)
 uv run ruff check src/     # Lint
 uv run black src/          # Format
 uv run mypy src/           # Type check
+
+# Convex logs - MUST use --history to avoid infinite streaming
+npx convex logs --prod --history 20   # View recent production logs
+npx convex logs --history 20          # View recent dev logs
+# Never use `npx convex logs` without --history (it streams forever)
 ```
 
 ## Key Documents

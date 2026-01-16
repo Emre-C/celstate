@@ -1,14 +1,17 @@
 import { useConvexAuth } from "convex/react";
+import { useAuthActions } from "@convex-dev/auth/react";
 import { useEffect, useState } from "react";
 import { SignIn } from "./components/SignIn";
 import { Dashboard } from "./components/Dashboard";
 
 function App() {
   const { isAuthenticated, isLoading } = useConvexAuth();
+  const { signOut } = useAuthActions();
   const [isProcessingAuth, setIsProcessingAuth] = useState(() => {
     if (typeof window === "undefined") return false;
     return new URLSearchParams(window.location.search).has("code");
   });
+  const [loadingTimedOut, setLoadingTimedOut] = useState(false);
 
   // Clean up URL after auth completes or times out
   useEffect(() => {
@@ -36,7 +39,23 @@ function App() {
     return () => clearTimeout(timeout);
   }, [isAuthenticated]);
 
-  const showLoading = isLoading || isProcessingAuth;
+  // Timeout for stale session: if isLoading stays true for too long, clear auth state
+  useEffect(() => {
+    if (!isLoading) {
+      setLoadingTimedOut(false);
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      console.warn("Auth loading timeout - clearing stale session");
+      signOut().catch(() => {});
+      setLoadingTimedOut(true);
+    }, 5000);
+
+    return () => clearTimeout(timeout);
+  }, [isLoading, signOut]);
+
+  const showLoading = (isLoading && !loadingTimedOut) || isProcessingAuth;
 
   return (
     <div className="app">
