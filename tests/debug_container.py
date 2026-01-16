@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 # Add project root to sys.path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-from src.engine.core.generator import MediaGenerator
+from celstate.generator import MediaGenerator
 from google.api_core import exceptions as google_exceptions
 
 class TestContainerFailure(unittest.TestCase):

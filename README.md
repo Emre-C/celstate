@@ -1,163 +1,173 @@
 # Celstate
 
-**Smart Asset Infrastructure for AI Agents** — MCP server providing "Layout-Ready Assets" (pixels + logic) for implementing "Software Whimsy".
+Celstate is an AI-first pipeline for generating transparent PNG assets using dual-pass image generation and difference matting. The core library (`JobStore` + `Orchestrator`) is the canonical implementation; the API and CLI are thin adapters with zero bespoke logic.
 
-## Vision
+## What It Does
 
-AI Coding Agents are currently "Visually Illiterate." If an Agent generates a decorative frame with a transparent hole, it doesn't know where the hole is. This tool solves that by returning JSON with Image URLs **and** precise layout measurements (insets, bounding boxes, masking data).
+- Generates a **white pass** and a **black pass** using Gemini 2.5 Flash Image.
+- Uses **difference matting** to extract alpha and produce a transparent PNG.
+- Produces a structured **component manifest** with layout metadata and telemetry.
 
-See [docs/VISION.md](docs/VISION.md) for the full product vision.
+## Architecture (Image Pipeline)
 
-## Why Celstate?
+```
+User Prompt
+  -> CreativeInterpreter (Kimi-K2)
+  -> White Pass (Gemini 2.5 Flash Image)
+  -> Edit to Black Pass
+  -> MediaProcessor (difference matting + layout analysis)
+  -> Transparent PNG + Component Manifest
+```
 
-Most design tools treat "Safe Zones" as absolute mathematical voids. For organic styles (watercolor, hand-drawn), this fails: a single stray paint splatter or a hanging vine will "break" the rectangle, forcing content into a cramped, off-center position.
+## Requirements
 
-Celstate implements **Al-First Layout Analysis**:
-- **The "Morphological Squint"**: Instead of strict LIR, we apply morphological operations to "squint" at the image. Small artistic noise (vines, splatters) are filtered out *before* calculation.
-- **Perceptual Accuracy > Mathematical Precision**: We optimize for the *visually largest* void. It is better to have an avatar slightly overlapped by a semi-transparent vine (making the UI look "alive") than to have it undersized and perfectly "safe."
+### Environment Variables
 
-## Core Concepts
+```
+VERTEX_API_KEY=...
+VERTEX_PROJECT_ID=...
+VERTEX_LOCATION=...
+HF_TOKEN=...
+```
 
-1. **Jobs**: Generation is asynchronous. Create a job, poll for status, retrieve the "Smart Asset" response.
-2. **Smart Assets**:
-   - **Pixels**: "Difference Matting" (dual-pass white/black) for perfect semi-transparency.
-   - **Logic**: CV-based analysis returns `content_zones`, `slice_insets`, `shape_hint`, and mask companions.
-   - **Morphological Safe Zone**: Perceptual LIR that ignores "artistic noise" (vines, splatters).
-   - **Fat Response (Snippets)**: Returns ready-to-use code for CSS, Tailwind, React Native, Swift, and Kotlin/Compose.
-   - **Optical Sizing**: Prompts adapt to target size (Small = Bold, Large = Intricate).
-3. **Storage**: Assets stored in `var/jobs/{job_id}/outputs` during generation, archived to `assets/archive/`.
-
-## Quick Start
-
-### Prerequisites
+### Python
 
 - Python 3.12+
-- [UV](https://github.com/astral-sh/uv) package manager
-- Environment variables:
-  - `VERTEX_API_KEY`
-  - `VERTEX_PROJECT_ID`
-  - `VERTEX_LOCATION`
-  - `HF_TOKEN` (for Creative Interpreter layer)
+- Dependencies are managed via `pyproject.toml` / `uv.lock`.
 
-### Installation
+## Install
 
-```bash
-# Install dependencies
+```
 uv sync
-
-# Run MCP server (local stdio mode)
-uv run python src/mcp_server.py
-
-# Run MCP server (SSE mode for remote agents)
-uvicorn src.mcp_server:app --host 0.0.0.0 --port 8000
 ```
 
-## MCP Interface
+## CLI (Internal)
 
-This is an **MCP-first** project. The primary interface is the Model Context Protocol server.
-
-### Deployment
-
-- **Production URL:** `https://celstate.onrender.com`
-- **MCP Endpoint:** `https://celstate.onrender.com/sse`
-
-### Tools
-
-#### `generate_asset`
-
-Creates a UI asset generation job.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `prompt` | string | **Shape & Subject ONLY** (e.g. "A pill-shaped container"). |
-| `asset_type` | string | `container`, `icon`, or `texture`. |
-| `style_context` | string | **Creative Direction** (e.g. "Ghibli style, vines"). |
-| `layout_intent` | string? | Optional `row` / `column` / `auto` hint. |
-| `render_size_hint` | int? | **Optical Sizing** (e.g. 48 for `w-12`). Controls detail level. |
-
-**Returns:** Job object with `id`, `status`, and `estimated_duration_seconds` (for polling timers).
-
-#### `get_asset`
-
-Retrieves job status and the "Smart Asset" response.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `job_id` | string | UUID from `generate_asset` |
-
-**Returns:** Job object. When `status == "succeeded"`, includes:
-- `component.manifest.intrinsics`:
-    - `content_zones`: Padding insets (px + %) for structural bounds.
-    - `safe_zone`: **Robust** LIR area (ignores artistic noise/vines via Morphological Squint).
-    - `layout_bounds`: **LOOSE** visual container area (for centering).
-    - `shape_hint`: Shape classification (`type`, `corner_radius`).
-    - `mask_asset`: URL to mask image (if organic shape).
-    - `snippets`: **Code snippets** for CSS, Tailwind, React Native, Swift, and Kotlin.
-- `component.assets` — Dict of filename → download URL (TEMPORARY!)
-- `component.telemetry` — Generation metrics.
-
-#### `save_asset`
-
-**Infrastructure Action** to reliably save a generated asset to your project.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `job_id` | string | UUID of completed job. |
-| `target_path` | string | Absolute path to save file (e.g. `/app/public/asset.png`). |
-
-**Returns:** Success status and file size.
-
-### Connecting
-
-Use an MCP client to connect:
-- **Cursor/Claude Desktop (local)**: Run `python src/mcp_server.py` (stdio)
-- **Remote agents**: Connect to `https://celstate.onrender.com/sse`
-
-## Project Structure
+Generate a transparent image:
 
 ```
-src/
-├── mcp_server.py            # MCP server (primary interface)
-└── engine/
-    └── core/
-        ├── generator.py     # Gemini/Vertex image generation
-        ├── processor.py     # Difference matting pipeline
-        ├── analyzer.py      # CV layout analysis (Alpha Scanning)
-        ├── snippets.py      # Platform-agnostic code snippet logic
-        ├── orchestrator.py  # Job lifecycle management
-        ├── job_store.py     # JSON job persistence
-        └── archiver.py      # Asset archiving
-var/
-├── jobs/                    # Active job storage
-docs/
-├── VISION.md                # Product vision
-assets/
-├── archive/                 # Permanent asset gallery
+celstate generate "a glowing health potion bottle" -o output.png
 ```
 
-## Local Debugging
+Common flags:
 
-```bash
-# Check job state directly on disk
-cat var/jobs/{job_id}/job.json
+- `--style-context` (optional)
+- `--render-size-hint` (optional, integer)
+- `--layout-intent` (optional, defaults to auto)
+- `--name` (optional)
+- `--asset-type` (optional override)
 
-# View intermediate generation passes
-ls var/jobs/{job_id}/studio/
+Process existing white/black passes:
+
+```
+celstate process white.png black.png -o output.png
 ```
 
-## Development
+List jobs:
 
-```bash
-# Lint
-uv run lint
-
-# Format
-uv run format
-
-# Test
-uv run test
+```
+celstate jobs
 ```
 
----
+Version:
+
+```
+celstate version
+```
+
+## API (Canonical)
+
+The API is a thin adapter over the core library.
+
+Run locally:
+
+```
+uvicorn src.mcp_server:app --reload
+```
+
+### POST /v1/assets
+
+Request:
+
+```json
+{
+  "prompt": "string",
+  "style_context": "string",
+  "asset_type": "container|icon|texture|effect|image|decoration",
+  "layout_intent": "auto|row|column|...",
+  "render_size_hint": 160,
+  "name": "string"
+}
+```
+
+Response:
+
+```json
+{
+  "job_id": "uuid",
+  "status": "queued"
+}
+```
+
+### GET /v1/assets/{job_id}
+
+Queued/Running:
+
+```json
+{
+  "job_id": "uuid",
+  "status": "processing",
+  "retry_after": 10
+}
+```
+
+Succeeded:
+
+```json
+{
+  "job_id": "uuid",
+  "status": "succeeded",
+  "component": { ... }
+}
+```
+
+Failed:
+
+```json
+{
+  "job_id": "uuid",
+  "status": "failed",
+  "error": "human-readable error",
+  "retry_after": 60
+}
+```
+
+## Job Artifacts
+
+Each job creates a directory under `jobs/{job_id}/`:
+
+```
+job.json
+studio/     # white + black passes
+outputs/    # final PNG + debug overlays/mask
+trace/trace.json
+```
+
+## Testing
+
+Run the test suite:
+
+```
+uv run pytest
+```
+
+Note: If `tests/test_analyzer.py` fails due to legacy method references, run:
+
+```
+uv run pytest --ignore=tests/test_analyzer.py
+```
+
+## Reference
+
+- Canonical contract: `docs/interface_contract.md`
+- Project plan: `update_plan.md`

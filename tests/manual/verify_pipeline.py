@@ -7,9 +7,9 @@ import os
 # Add src to path
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
-from src.engine.core.generator import MediaGenerator
-from src.engine.core.orchestrator import Orchestrator
-from src.engine.core.job_store import JobStore
+from celstate.generator import MediaGenerator
+from celstate.orchestrator import Orchestrator
+from celstate.job_store import JobStore
 
 class TestPipeline(unittest.TestCase):
     def setUp(self):
@@ -25,8 +25,8 @@ class TestPipeline(unittest.TestCase):
     def tearDown(self):
         self.env_patcher.stop()
 
-    @patch("src.engine.core.generator.genai.Client")
-    @patch("src.engine.core.generator.CreativeInterpreter")
+    @patch("src.celstate.generator.genai.Client")
+    @patch("src.celstate.generator.CreativeInterpreter")
     def test_full_generation_flow(self, MockInterpreter, MockGenAIClient):
         # 1. Setup Mocks
         mock_interpreter_instance = MockInterpreter.return_value
@@ -84,7 +84,7 @@ class TestPipeline(unittest.TestCase):
         # Cleanup
         shutil.rmtree(temp_dir)
 
-    @patch("src.engine.core.generator.genai.Client")
+    @patch("src.celstate.generator.genai.Client")
     def test_gemini_failure_handling(self, MockGenAIClient):
         # Setup failure
         mock_genai_client = MockGenAIClient.return_value
@@ -98,7 +98,7 @@ class TestPipeline(unittest.TestCase):
         job_store = JobStore(Path(temp_dir))
         
         # We need to mock Interpreter too to avoid real network call or error
-        with patch("src.engine.core.generator.CreativeInterpreter") as MockInterpreter:
+        with patch("src.celstate.generator.CreativeInterpreter") as MockInterpreter:
             generator = MediaGenerator()
             orchestrator = Orchestrator(job_store, generator, mock_processor)
             

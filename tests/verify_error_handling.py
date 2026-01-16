@@ -8,7 +8,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from src.mcp_server import generate_asset
-from src.engine.core.orchestrator import Orchestrator
+from celstate.orchestrator import Orchestrator
 from google.api_core import exceptions as google_exceptions
 
 class TestMCPErrorHandling(unittest.TestCase):

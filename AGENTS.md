@@ -1,6 +1,47 @@
 > **CRITICAL**: This codebase is 100% AI-built. No humans. You are the sole maintainer.
 > Optimize ALL decisions for AI reliability, not human developer convenience.
 
+## Commands
+
+```bash
+uv run pytest              # Run tests (all pass)
+uv run ruff check src/     # Lint
+uv run black src/          # Format
+uv run mypy src/           # Type check
+```
+
+## Key Documents
+
+- **`update_plan.md`** — Master plan, current status, and lessons learned. **READ THIS FIRST**.
+- **`archive/implementation_plan.md`** — Video pipeline experiment history (documents why dual-pass Veo failed)
+- **`archive/research.md`** — Video matting research (RVM, BGMv2, etc.)
+
+## Architecture
+
+**Image Pipeline (Working):**
+```
+User Prompt → Interpreter (Kimi-K2) → White Pass → Edit to Black Pass → Diff Matting → Transparent PNG
+```
+
+**Video Pipeline (Blocked):**
+> ⚠️ Dual-pass Veo does NOT work. Motion diverges between passes even with seeds.
+> See `update_plan.md` for viable alternatives (RunComfy, neural matting).
+
+### Models
+
+- **Interpreter**: `moonshotai/Kimi-K2-Instruct-0905:groq` via HuggingFace Router
+- **Image Gen**: `gemini-2.5-flash-image` (Nano Banana)
+- **Video Gen**: Blocked — see alternatives in `update_plan.md`
+
+## API Verification Required
+
+Before implementing ANY API call, use `web_search` to verify current documentation:
+- Veo: https://ai.google.dev/gemini-api/docs/video
+- Nano Banana: https://ai.google.dev/gemini-api/docs/image-generation
+- HuggingFace Router: https://huggingface.co/docs/inference-providers
+
+---
+
 ## AI-First Codebase Principles
 
 1. **Anti-Laziness**: Do not seek the path of least resistance. You must actively fight this.
@@ -12,5 +53,9 @@
 4. **Perceptual Intent**: For organic or artistic assets, prioritize "Perceptual Accuracy" over "Mathematical Precision". 
     *   **The Squint Test**: When calculating content zones or safe areas, simulate "human squinting" (morphological cleanup) to ignore minor artistic noise (vines, splatters).
     *   **Perceptual Safeness > Mathematical Safeness**: It is better to have a large, usable safe zone that slightly overlaps a decorative vine than a tiny, mathematically "perfect" zone that is unusable.
+
+5. **Model Reality**: Do not fight the model's nature.
+    *   **Aspect Ratios > Pixels**: You cannot ask an image model for "300px". You can only ask for "Aspect Ratio 3:1". The model (Nano Banana) generates at 1024x1024.
+    *   **Post-Process, Don't Pre-Optimize**: Generate high-res, then downscale. Attempting to force low-res generation yields "muddy" results.
 
 ---
