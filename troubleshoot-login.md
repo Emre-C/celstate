@@ -1,129 +1,113 @@
 # Login Troubleshooting - January 16, 2026
 
-## Current Problem
+## Current Status
 
-Clicking "Continue with Google" on https://www.celstate.com/app/ results in:
+**Backend:** ✅ Working — OAuth completes successfully, sessions created  
+**Frontend:** ❌ Stuck on loading spinner after OAuth callback returns
+
+---
+
+## Root Cause Found & Fixed
+
+### Issue 1: JWT_PRIVATE_KEY Format (FIXED)
+The `JWT_PRIVATE_KEY` was set to the JWKS JSON instead of PEM format.
+- Error was: `Invalid byte 91, offset 0` (byte 91 = `[`, meaning it started with JSON)
+- **Fix:** Regenerated keys via `node generateKeys.mjs` and set correctly in Convex dashboard
+
+### Issue 2: Frontend Auth State (IN PROGRESS)
+After OAuth callback returns with `?code=...`, the frontend's `isLoading` stays `true` indefinitely.
+- Backend logs show `verifyCodeAndSignIn` and `refreshSession` succeed
+- But `useConvexAuth()` never transitions to `isAuthenticated: true`
+
+---
+
+## What's Been Done This Session
+
+1. ✅ Diagnosed JWT key issue via `npx convex logs --prod --history 20`
+2. ✅ Regenerated and set JWT_PRIVATE_KEY + JWKS correctly
+3. ✅ Confirmed backend auth works (logs show successful auth flow)
+4. ✅ Simplified App.tsx auth handling with better timeout logic
+5. ✅ Added `[Auth Debug]` console logging to trace frontend state
+6. ✅ Updated AGENTS.md with correct `convex logs` command (must use `--history`)
+7. ✅ Set local `.env.local` to point to production Convex for testing
+
+---
+
+## Current App.tsx Logic
+
 ```
-[CONVEX A(auth:signIn)] [Request ID: a3ee01d727cd50ee] Server Error
+- Shows LoadingScreen while isLoading=true (with 8s timeout)
+- After timeout, shows SignIn page
+- Debug logs show: isAuthenticated, isLoading, authTimedOut, hasCode, url
 ```
 
-The `auth:signIn` Convex action is failing with an unspecified server error.
-
 ---
 
-## What's Been Configured ✅
+## Next Steps
 
-### Cloudflare Pages
-- **Project**: `celstate` 
-- **URL**: https://www.celstate.com
-- **Build command**: `npm --prefix web install && npm --prefix web run build && node scripts/build_static.mjs`
-- **Build output**: `dist`
-- **Env var**: `VITE_CONVEX_URL=https://original-jackal-530.convex.cloud`
-- **Custom domain**: www.celstate.com → celstate.pages.dev
-- **Apex redirect**: celstate.com → https://www.celstate.com (Page Rule)
-
-### Convex Production
-- **Deployment**: https://original-jackal-530.convex.cloud
-- **HTTP Actions**: https://original-jackal-530.convex.site
-
-**Environment Variables Set:**
-| Variable | Value |
-|----------|-------|
-| SITE_URL | https://www.celstate.com |
-| JWT_PRIVATE_KEY | ✅ Set (RSA private key) |
-| JWKS | ✅ Set (JSON Web Key Set) |
-| SERVICE_KEY | ✅ Set |
-| AUTH_GOOGLE_ID | 951791321388-sk0tmu2ha87cbcjl2udph5fq430p4jkr.apps.googleusercontent.com |
-| AUTH_GOOGLE_SECRET | ✅ Set |
-
-### Google OAuth (Google Cloud Console)
-- **Authorized JavaScript origins**: `https://www.celstate.com`
-- **Authorized redirect URIs**: `https://original-jackal-530.convex.site/api/auth/callback/google`
-
----
-
-## Steps Taken
-
-1. ✅ Created Cloudflare Pages project with GitHub integration
-2. ✅ Set VITE_CONVEX_URL build environment variable
-3. ✅ Configured custom domain (www.celstate.com)
-4. ✅ Set up apex → www redirect
-5. ✅ Generated JWT keys and set in Convex
-6. ✅ Set all 6 required Convex environment variables
-7. ✅ Deployed Convex functions to production (`npx convex deploy -y`)
-8. ✅ Verified Google OAuth credentials match
-9. ✅ Fixed App.tsx auth timeout handling
-10. ✅ Triggered fresh Cloudflare deployment
-
----
-
-## Root Cause (Likely)
-
-The `auth:signIn` action is throwing a server error. This typically means:
-
-1. **JWT_PRIVATE_KEY format issue** - The key may not have been set correctly (multiline handling)
-2. **JWKS mismatch** - The JWKS public key doesn't match the private key
-3. **Missing provider config** - Google provider might need explicit configuration
-
----
-
-## Next Steps to Debug
-
-### 1. Check Convex Logs
+### Option A: Test Locally (No Deploy Needed)
 ```bash
-cd /Users/emre/Documents/codebase/active-projects/celstate
-npx convex logs
+cd /Users/emre/Documents/codebase/active-projects/celstate/web
+npm run dev
 ```
-Then try signing in again and watch for the actual error message.
+Visit `http://localhost:5173/app/` and check browser console for `[Auth Debug]` output.
 
-### 2. Verify JWT Keys Match
-Regenerate keys and set them atomically:
+**Note:** OAuth won't complete locally (redirects to production). But initial state loading can be verified.
+
+### Option B: Deploy and Check Production Console
 ```bash
+git add -A && git commit -m "Simplify auth handling with debug logs" && git push
+```
+Wait for Cloudflare deploy, then:
+1. Open https://www.celstate.com/app/
+2. Open DevTools Console
+3. Click "Continue with Google"
+4. After redirect back, note the `[Auth Debug]` output
+5. Share the output to diagnose
+
+### Option C: Full Local OAuth Testing
+Requires Google Cloud Console changes:
+1. Add `http://localhost:5173` to authorized JavaScript origins
+2. Create separate Convex dev deployment with `SITE_URL=http://localhost:5173`
+3. Run `npx convex dev` + `npm run dev`
+
+---
+
+## Key Commands
+
+```bash
+# Check production logs (MUST use --history)
+npx convex logs --prod --history 20
+
+# Check environment variables
+npx convex env list --prod
+
+# Regenerate JWT keys
 node generateKeys.mjs
-# Copy JWT_PRIVATE_KEY and JWKS from output
-npx convex env set JWT_PRIVATE_KEY '<paste-private-key>' --prod
-npx convex env set JWKS '<paste-jwks>' --prod
+
+# Build frontend
+npm --prefix web run build
+
+# Local dev server
+cd web && npm run dev
 ```
-
-### 3. Check Convex Dashboard for Errors
-Visit: https://dashboard.convex.dev/d/original-jackal-530/production/logs
-
-### 4. Test OAuth Callback Directly
-```bash
-curl -I "https://original-jackal-530.convex.site/api/auth/callback/google"
-```
-Should return 302 redirect.
-
-### 5. Verify Auth Tables Exist
-Check Convex Dashboard → Data tab for these tables:
-- `users`
-- `authAccounts`
-- `authSessions`
-- `authRefreshTokens`
 
 ---
 
-## Credentials Reference (for re-configuration)
+## Configuration Reference
 
-**Cloudflare Account ID**: `d2c9995638b5271234eb91f8ecfcdcc0`
-**Cloudflare Zone ID** (celstate.com): `3c0166f25e08dba6547b4b542e30fc61`
-**Convex Deployment**: `original-jackal-530`
-
----
-
-## Files Modified This Session
-
-- `web/src/App.tsx` - Added auth timeout handling (10s timeout to prevent infinite loading)
+| Service | Value |
+|---------|-------|
+| Convex Production | `original-jackal-530.convex.cloud` |
+| Convex HTTP Actions | `original-jackal-530.convex.site` |
+| Cloudflare Pages | `celstate.pages.dev` → `www.celstate.com` |
+| Google OAuth Client ID | `951791321388-sk0tmu2ha87cbcjl2udph5fq430p4jkr.apps.googleusercontent.com` |
+| OAuth Callback | `https://original-jackal-530.convex.site/api/auth/callback/google` |
 
 ---
 
-## Console Errors Observed
+## Files Modified
 
-```
-[CONVEX A(auth:signIn)] [Request ID: a3ee01d727cd50ee] Server Error
-```
-
-Additional noise (can be ignored):
-- CSP inline script warning (Cloudflare analytics)
-- CORS errors for cloudflareinsights beacon (analytics script)
-- YouTube favicon 404 (Google sign-in page artifact)
+- `web/src/App.tsx` — Simplified auth handling with debug logs
+- `web/.env.local` — Points to production Convex for local testing
+- `AGENTS.md` — Added convex logs command guidance
