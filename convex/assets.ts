@@ -1,9 +1,16 @@
 import { v } from "convex/values";
-import { mutation } from "./_generated/server";
+import { checkServiceKey, requireAuth } from "./lib/auth";
+import { mutation, query } from "./_generated/server";
 
 export const generateUploadUrl = mutation({
-  args: {},
-  handler: async (ctx) => ctx.storage.generateUploadUrl(),
+  args: { serviceKey: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const isServiceRequest = checkServiceKey(args.serviceKey);
+    if (!isServiceRequest) {
+      await requireAuth(ctx);
+    }
+    return ctx.storage.generateUploadUrl();
+  },
 });
 
 export const save = mutation({
@@ -14,8 +21,11 @@ export const save = mutation({
     storageId: v.id("_storage"),
     contentType: v.string(),
     bytes: v.number(),
+    serviceKey: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const isServiceRequest = checkServiceKey(args.serviceKey);
+    const ownerId = isServiceRequest ? null : await requireAuth(ctx);
     const job = await ctx.db
       .query("jobs")
       .withIndex("by_job_id", (q) => q.eq("jobId", args.jobId))
@@ -39,8 +49,13 @@ export const save = mutation({
       storageId: args.storageId,
       contentType: args.contentType,
       bytes: args.bytes,
+      ownerId: ownerId ?? existing?.ownerId,
       createdAt: Date.now(),
     };
+
+    if (!payload.ownerId) {
+      delete (payload as Partial<typeof payload>).ownerId;
+    }
 
     if (existing) {
       await ctx.db.patch(existing._id, payload);
@@ -48,5 +63,28 @@ export const save = mutation({
     }
 
     return await ctx.db.insert("jobAssets", payload);
+  },
+});
+
+export const listForCurrentUser = query({
+  args: {},
+  handler: async (ctx) => {
+    const ownerId = await requireAuth(ctx);
+    const assets = await ctx.db
+      .query("jobAssets")
+      .withIndex("by_owner", (q) => q.eq("ownerId", ownerId))
+      .collect();
+
+    return await Promise.all(
+      assets.map(async (asset) => ({
+        jobId: asset.jobId,
+        role: asset.role,
+        filename: asset.filename,
+        contentType: asset.contentType,
+        bytes: asset.bytes,
+        createdAt: asset.createdAt,
+        url: await ctx.storage.getUrl(asset.storageId),
+      }))
+    );
   },
 });

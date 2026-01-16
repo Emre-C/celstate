@@ -27,6 +27,7 @@ class ConvexSyncConfig:
     convex_url: Optional[str]
     strict: bool
     upload_timeout_seconds: int
+    service_key: Optional[str]
 
     @classmethod
     def from_env(cls) -> "ConvexSyncConfig":
@@ -35,11 +36,13 @@ class ConvexSyncConfig:
         enabled = _parse_enabled(raw_enabled, convex_url)
         strict = _parse_bool(os.getenv("CONVEX_SYNC_STRICT"), default=True)
         timeout = _parse_int(os.getenv("CONVEX_UPLOAD_TIMEOUT_SECONDS"), default=30)
+        service_key = os.getenv("SERVICE_KEY")
         return cls(
             enabled=enabled,
             convex_url=convex_url,
             strict=strict,
             upload_timeout_seconds=timeout,
+            service_key=service_key,
         )
 
 
@@ -52,6 +55,7 @@ class ConvexSync:
     - CONVEX_SYNC_ENABLED: true/false/auto (auto enables if CONVEX_URL is set)
     - CONVEX_SYNC_STRICT: true/false (default true when enabled)
     - CONVEX_UPLOAD_TIMEOUT_SECONDS: request timeout for uploads
+    - SERVICE_KEY: service-only key for Convex mutations
     """
 
     def __init__(
@@ -66,6 +70,10 @@ class ConvexSync:
             raise ConvexSyncConfigurationError(
                 "CONVEX_URL is required when CONVEX_SYNC_ENABLED is true."
             )
+        if self.config.enabled and not self.config.service_key:
+            raise ConvexSyncConfigurationError(
+                "SERVICE_KEY is required when Convex sync is enabled."
+            )
 
     @property
     def enabled(self) -> bool:
@@ -79,6 +87,7 @@ class ConvexSync:
         if not self.enabled:
             return
         payload = _build_job_payload(job)
+        payload["serviceKey"] = self.config.service_key
         try:
             client = self._get_client()
             client.mutation("jobs:upsert", payload)
@@ -99,7 +108,10 @@ class ConvexSync:
 
         try:
             client = self._get_client()
-            upload_url = client.mutation("assets:generateUploadUrl")
+            upload_url = client.mutation(
+                "assets:generateUploadUrl",
+                {"serviceKey": self.config.service_key},
+            )
         except Exception as exc:
             raise ConvexSyncError(f"Convex upload URL failed: {exc}") from exc
 
@@ -131,6 +143,7 @@ class ConvexSync:
                     "storageId": storage_id,
                     "contentType": content_type,
                     "bytes": path.stat().st_size,
+                    "serviceKey": self.config.service_key,
                 },
             )
         except Exception as exc:
@@ -149,7 +162,7 @@ class ConvexSync:
 def _build_job_payload(job: Dict[str, Any]) -> Dict[str, Any]:
     created_at = _iso_to_epoch_ms(job.get("created_at"))
     updated_at = _iso_to_epoch_ms(job.get("updated_at"))
-    return {
+    payload = {
         "jobId": job["id"],
         "status": job["status"],
         "progressStage": job["progress_stage"],
@@ -166,6 +179,7 @@ def _build_job_payload(job: Dict[str, Any]) -> Dict[str, Any]:
         "createdAt": created_at,
         "updatedAt": updated_at,
     }
+    return {key: value for key, value in payload.items() if value is not None}
 
 
 def _iso_to_epoch_ms(value: Optional[str]) -> int:
