@@ -13,6 +13,11 @@ function App() {
   });
   const [loadingTimedOut, setLoadingTimedOut] = useState(false);
 
+  // Debug logging
+  useEffect(() => {
+    console.log("[Auth Debug]", { isAuthenticated, isLoading, isProcessingAuth, loadingTimedOut, url: window.location.href });
+  }, [isAuthenticated, isLoading, isProcessingAuth, loadingTimedOut]);
+
   // Clean up URL after auth completes or times out
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -22,6 +27,7 @@ function App() {
 
     // If authenticated, clean up URL immediately
     if (isAuthenticated) {
+      console.log("[Auth Debug] Authenticated, cleaning URL");
       url.searchParams.delete("code");
       window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
       setIsProcessingAuth(false);
@@ -30,7 +36,7 @@ function App() {
 
     // Timeout: if auth doesn't complete in 10 seconds, stop waiting
     const timeout = setTimeout(() => {
-      console.warn("Auth timeout - clearing code parameter");
+      console.warn("[Auth Debug] Auth timeout - clearing code parameter");
       url.searchParams.delete("code");
       window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
       setIsProcessingAuth(false);
@@ -47,7 +53,7 @@ function App() {
     }
 
     const timeout = setTimeout(() => {
-      console.warn("Auth loading timeout - clearing stale session");
+      console.warn("[Auth Debug] Loading timeout - clearing stale session");
       signOut().catch(() => {});
       setLoadingTimedOut(true);
     }, 5000);
