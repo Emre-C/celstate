@@ -1,5 +1,5 @@
 import unittest
-from src.engine.core.snippets import SnippetGenerator
+from celstate.snippets import SnippetGenerator
 
 class TestSnippetGenerator(unittest.TestCase):
     def setUp(self):

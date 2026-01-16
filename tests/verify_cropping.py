@@ -1,5 +1,5 @@
 import numpy as np
-from src.engine.core.analyzer import LayoutAnalyzer
+from celstate.layout_analyzer import LayoutAnalyzer
 
 def test_calculate_visible_bbox():
     analyzer = LayoutAnalyzer()

@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from src.engine.core.tracer import Tracer, Trace, TraceEvent
+from celstate.tracer import Tracer, Trace, TraceEvent
 
 
 class TestTraceEvent(unittest.TestCase):

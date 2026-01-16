@@ -5,7 +5,7 @@ import os
 # Add src to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../")))
 
-from src.engine.core.layout_analyzer import LayoutAnalyzer
+from celstate.layout_analyzer import LayoutAnalyzer
 
 def test_analyzer():
     print("Testing LayoutAnalyzer refactor...")

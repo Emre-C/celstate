@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 # Add project root to sys.path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-from src.engine.core.generator import MediaGenerator
-from src.engine.core.orchestrator import Orchestrator
+from celstate.generator import MediaGenerator
+from celstate.orchestrator import Orchestrator
 from google.api_core import exceptions as google_exceptions
 
 class TestContainerFix(unittest.TestCase):
@@ -52,7 +52,7 @@ class TestContainerFix(unittest.TestCase):
             else:
                 self.fail("generate_content not called")
 
-    @patch('src.engine.core.orchestrator.JobStore')
+    @patch('src.celstate.orchestrator.JobStore')
     def test_error_reporting_trace_id(self, MockStore):
         """Verify error messages contain Trace ID."""
         mock_store = MockStore()

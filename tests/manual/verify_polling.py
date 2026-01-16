@@ -6,7 +6,7 @@ import threading
 # Add src to python path
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
-from src.engine.core.job_store import JobStore
+from celstate.job_store import JobStore
 from src.mcp_server import get_asset, job_store
 
 def test_polling_logic():

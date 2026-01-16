@@ -8,7 +8,7 @@ os.environ["VERTEX_LOCATION"] = "dummy"
 os.environ["VERTEX_API_KEY"] = "dummy"
 os.environ["HF_TOKEN"] = "dummy"
 
-from src.engine.core.interpreter import CreativeInterpreter
+from celstate.interpreter import CreativeInterpreter
 
 class TestOpticalSizing(unittest.TestCase):
     def setUp(self):

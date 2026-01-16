@@ -8,3 +8,5 @@ python-multipart
 python-dotenv
 mcp[cli]
 openai
+convex
+requests

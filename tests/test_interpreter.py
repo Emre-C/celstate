@@ -6,68 +6,81 @@ import unittest
 from unittest.mock import MagicMock, patch
 import os
 
-from src.engine.core.interpreter import CreativeInterpreter, SYSTEM_PROMPT
+from celstate.interpreter import CreativeInterpreter, SYSTEM_PROMPT, infer_asset_type
+
+
+class TestAssetTypeInference(unittest.TestCase):
+    """Tests for asset type inference from prompt keywords."""
+    
+    def test_infer_container(self):
+        self.assertEqual(infer_asset_type("a pill-shaped frame for avatars"), "container")
+        self.assertEqual(infer_asset_type("chat bubble container"), "container")
+        self.assertEqual(infer_asset_type("a card with rounded corners"), "container")
+    
+    def test_infer_icon(self):
+        self.assertEqual(infer_asset_type("a glowing health potion icon"), "icon")
+        self.assertEqual(infer_asset_type("submit button"), "icon")
+        self.assertEqual(infer_asset_type("badge for achievements"), "icon")
+    
+    def test_infer_texture(self):
+        self.assertEqual(infer_asset_type("seamless stone pattern"), "texture")
+        self.assertEqual(infer_asset_type("tileable grass texture"), "texture")
+    
+    def test_infer_effect(self):
+        self.assertEqual(infer_asset_type("floating sparkle particles"), "effect")
+        self.assertEqual(infer_asset_type("glow animation effect"), "effect")
+    
+    def test_default_to_icon(self):
+        self.assertEqual(infer_asset_type("a glowing health potion bottle"), "icon")
+        self.assertEqual(infer_asset_type("something random"), "icon")
 
 
 class TestCreativeInterpreter(unittest.TestCase):
     """Tests for CreativeInterpreter class."""
     
-    def test_passthrough_mode_without_hf_token(self):
-        """When HF_TOKEN is not set, interpreter should return original prompt."""
-        # Ensure HF_TOKEN is not set
+    def test_no_hf_token_raises_on_interpret(self):
+        """When HF_TOKEN is not set, interpret() should raise RuntimeError."""
         with patch.dict(os.environ, {}, clear=True):
-            # Remove HF_TOKEN if it exists
             os.environ.pop("HF_TOKEN", None)
             
             interpreter = CreativeInterpreter()
-            
-            result = interpreter.interpret(
-                prompt="A container for avatar",
-                asset_type="container",
-                style_context="Ghibli clouds"
-            )
-            
-            self.assertEqual(result, "A container for avatar")
             self.assertIsNone(interpreter.client)
+            
+            with self.assertRaises(RuntimeError) as ctx:
+                interpreter.interpret("A container for avatar")
+            
+            self.assertIn("HF_TOKEN", str(ctx.exception))
     
-    @patch("src.engine.core.interpreter.OpenAI")
+    @patch("celstate.interpreter.OpenAI")
     def test_interpret_success(self, mock_openai_class):
         """When API succeeds, should return interpreted prompt."""
-        # Mock the OpenAI client
         mock_client = MagicMock()
         mock_openai_class.return_value = mock_client
         
-        # Mock the completion response
         mock_message = MagicMock()
-        mock_message.content = "A soft, billowing cloud frame with gentle gradients..."
+        mock_message.content = "A pill-shaped frame. The center must be solid background color..."
         mock_choice = MagicMock()
         mock_choice.message = mock_message
         mock_completion = MagicMock()
         mock_completion.choices = [mock_choice]
+        mock_completion.usage = None
         mock_client.chat.completions.create.return_value = mock_completion
         
         with patch.dict(os.environ, {"HF_TOKEN": "test-token"}):
             interpreter = CreativeInterpreter()
             
-            result = interpreter.interpret(
-                prompt="A container for avatar",
-                asset_type="container",
-                style_context="Ghibli clouds"
-            )
+            result = interpreter.interpret("A pill-shaped frame for avatars")
             
-            self.assertEqual(result, "A soft, billowing cloud frame with gentle gradients...")
+            self.assertEqual(result, "A pill-shaped frame. The center must be solid background color...")
             
-            # Verify the API was called correctly
             mock_client.chat.completions.create.assert_called_once()
             call_args = mock_client.chat.completions.create.call_args
             self.assertEqual(call_args.kwargs["model"], "moonshotai/Kimi-K2-Instruct-0905:groq")
-            self.assertEqual(len(call_args.kwargs["messages"]), 2)
-            self.assertEqual(call_args.kwargs["messages"][0]["role"], "system")
-            self.assertEqual(call_args.kwargs["messages"][1]["role"], "user")
+            self.assertEqual(call_args.kwargs["temperature"], 0.3)  # Lower temp for faithfulness
     
-    @patch("src.engine.core.interpreter.OpenAI")
-    def test_interpret_fallback_on_api_error(self, mock_openai_class):
-        """When API fails, should fall back to original prompt."""
+    @patch("celstate.interpreter.OpenAI")
+    def test_interpret_raises_on_api_error(self, mock_openai_class):
+        """When API fails, should raise exception (not fallback)."""
         mock_client = MagicMock()
         mock_openai_class.return_value = mock_client
         mock_client.chat.completions.create.side_effect = Exception("API Error")
@@ -75,22 +88,15 @@ class TestCreativeInterpreter(unittest.TestCase):
         with patch.dict(os.environ, {"HF_TOKEN": "test-token"}):
             interpreter = CreativeInterpreter()
             
-            result = interpreter.interpret(
-                prompt="A button",
-                asset_type="icon",
-                style_context="Nature-inspired"
-            )
-            
-            # Should return original prompt on failure
-            self.assertEqual(result, "A button")
+            with self.assertRaises(Exception):
+                interpreter.interpret("A button")
     
-    @patch("src.engine.core.interpreter.OpenAI")
-    def test_interpret_fallback_on_empty_response(self, mock_openai_class):
-        """When API returns empty response, should fall back to original prompt."""
+    @patch("celstate.interpreter.OpenAI")
+    def test_interpret_raises_on_empty_response(self, mock_openai_class):
+        """When API returns empty response, should raise RuntimeError."""
         mock_client = MagicMock()
         mock_openai_class.return_value = mock_client
         
-        # Mock empty response
         mock_message = MagicMock()
         mock_message.content = ""
         mock_choice = MagicMock()
@@ -102,19 +108,20 @@ class TestCreativeInterpreter(unittest.TestCase):
         with patch.dict(os.environ, {"HF_TOKEN": "test-token"}):
             interpreter = CreativeInterpreter()
             
-            result = interpreter.interpret(
-                prompt="A texture",
-                asset_type="texture",
-                style_context="Organic"
-            )
+            with self.assertRaises(RuntimeError) as ctx:
+                interpreter.interpret("A texture")
             
-            self.assertEqual(result, "A texture")
+            self.assertIn("empty", str(ctx.exception).lower())
     
-    def test_system_prompt_contains_whimsy_philosophy(self):
-        """System prompt should encode the 'Whimsy' philosophy."""
-        self.assertIn("Software Whimsy", SYSTEM_PROMPT)
-        self.assertIn("Ghibli", SYSTEM_PROMPT)
-        self.assertIn("IMAGINATIVE", SYSTEM_PROMPT)
+    def test_system_prompt_focuses_on_transparency(self):
+        """System prompt should focus on transparency, not aesthetics."""
+        self.assertIn("transparency", SYSTEM_PROMPT.lower())
+        self.assertIn("background", SYSTEM_PROMPT.lower())
+        # The prompt should NOT inject Ghibli/Whimsy as positive directions
+        # (they appear in "MUST NOT" section which is acceptable)
+        self.assertNotIn("Software Whimsy", SYSTEM_PROMPT)
+        self.assertNotIn("IMAGINATIVE", SYSTEM_PROMPT)
+        self.assertIn("MUST NOT", SYSTEM_PROMPT)
 
 
 if __name__ == '__main__':
