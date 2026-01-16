@@ -16,7 +16,7 @@ This is the authoritative, step-by-step production deployment runbook for **cels
    npx convex deploy --prod
    ```
 2. In the Convex dashboard, note your **production deployment URL** (used by the web app):
-   - Example format: `https://<deployment>.convex.cloud`
+   - Example format: `https://original-jackal-530.convex.cloud`
 
 ## 2) Generate JWT keys (one-time)
 
