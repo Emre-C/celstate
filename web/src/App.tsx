@@ -1,30 +1,42 @@
 import { useConvexAuth } from "convex/react";
-import { useEffect, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { SignIn } from "./components/SignIn";
 import { Dashboard } from "./components/Dashboard";
 
 function App() {
   const { isAuthenticated, isLoading } = useConvexAuth();
-  const hasAuthCode = useMemo(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
+  const [isProcessingAuth, setIsProcessingAuth] = useState(() => {
+    if (typeof window === "undefined") return false;
     return new URLSearchParams(window.location.search).has("code");
-  }, []);
+  });
 
+  // Clean up URL after auth completes or times out
   useEffect(() => {
-    if (!isAuthenticated || typeof window === "undefined") {
-      return;
-    }
+    if (typeof window === "undefined") return;
+    
     const url = new URL(window.location.href);
-    if (!url.searchParams.has("code")) {
+    if (!url.searchParams.has("code")) return;
+
+    // If authenticated, clean up URL immediately
+    if (isAuthenticated) {
+      url.searchParams.delete("code");
+      window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+      setIsProcessingAuth(false);
       return;
     }
-    url.searchParams.delete("code");
-    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+
+    // Timeout: if auth doesn't complete in 10 seconds, stop waiting
+    const timeout = setTimeout(() => {
+      console.warn("Auth timeout - clearing code parameter");
+      url.searchParams.delete("code");
+      window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+      setIsProcessingAuth(false);
+    }, 10000);
+
+    return () => clearTimeout(timeout);
   }, [isAuthenticated]);
 
-  const showLoading = isLoading || (hasAuthCode && !isAuthenticated);
+  const showLoading = isLoading || isProcessingAuth;
 
   return (
     <div className="app">
