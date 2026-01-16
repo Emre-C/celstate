@@ -62,3 +62,50 @@
    - Ensure all pipeline stages work correctly through the new architecture
 
 **Result:** Single source of truth for generation pipeline, full observability for your infrastructure, clean AI-agent interface via CLI.
+
+---
+
+## Deployment Next Steps (Cloudflare Pages → Convex → Namecheap)
+
+### 1) Cloudflare Pages: Host the landing + app bundle
+**Goal:** Serve `dist/landing/` at `/landing/` and `dist/app/` at `/app/`.
+
+1. Create a **Cloudflare Pages** project for this repo.
+2. Build command (example):
+   ```bash
+   npm --prefix web install
+   npm --prefix web run build
+   node scripts/build_static.mjs
+   ```
+3. Build output directory: `dist` (the script assembles `/landing/` + `/app/`).
+4. Add environment variables in Cloudflare Pages (build time):
+   - `VITE_CONVEX_URL` (frontend build time)
+
+### 2) Convex: Production auth config
+**Goal:** Make OAuth callbacks + JWTs work on the production domain.
+
+1. In Convex **production** deployment, set:
+   - `SITE_URL=https://<your-domain>`
+   - `JWT_PRIVATE_KEY` + `JWKS`
+   - `AUTH_GOOGLE_ID` + `AUTH_GOOGLE_SECRET`
+   - `SERVICE_KEY`
+2. In Google Cloud Console:
+   - Authorized JS origin: `https://<your-domain>`
+   - Redirect URI: `https://<your-deployment>.convex.site/api/auth/callback/google`
+
+### 3) Namecheap: Point custom domain to Cloudflare Pages
+**Goal:** `https://<your-domain>` resolves to the Cloudflare Pages site.
+
+1. In Cloudflare Pages, add a **Custom Domain** (e.g., `www.yourdomain.com`).
+2. Cloudflare will provide DNS records. In Namecheap DNS settings:
+   - For subdomain (recommended):
+     - CNAME `www` → `<project>.pages.dev`
+   - For root domain:
+     - Use Namecheap URL redirect to `https://www.yourdomain.com`, or
+     - Move DNS to Cloudflare if you want apex `@` directly.
+3. Wait for DNS propagation, then HTTPS will auto-provision on Cloudflare Pages.
+
+### 4) Final verification
+1. Visit `https://<your-domain>/app/` and sign in via Google OAuth.
+2. Confirm sign-out works.
+3. Confirm auth tables populate in Convex production data viewer.

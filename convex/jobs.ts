@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { requireAuth, checkServiceKey } from "./lib/auth";
 import { mutation, query } from "./_generated/server";
 
 const JOB_ARGUMENTS = {
@@ -20,8 +21,13 @@ const JOB_ARGUMENTS = {
 };
 
 export const upsert = mutation({
-  args: JOB_ARGUMENTS,
+  args: {
+    ...JOB_ARGUMENTS,
+    serviceKey: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
+    const isServiceRequest = checkServiceKey(args.serviceKey);
+    const ownerId = isServiceRequest ? null : await requireAuth(ctx);
     const existing = await ctx.db
       .query("jobs")
       .withIndex("by_job_id", (q) => q.eq("jobId", args.jobId))
@@ -37,12 +43,17 @@ export const upsert = mutation({
       layoutIntent: args.layoutIntent,
       renderSizeHint: args.renderSizeHint,
       internalAssetType: args.internalAssetType,
+      ownerId: ownerId ?? existing?.ownerId,
       component: args.component,
       telemetry: args.telemetry,
       error: args.error,
       retryAfter: args.retryAfter,
       updatedAt,
     };
+
+    if (!payload.ownerId) {
+      delete (payload as Partial<typeof payload>).ownerId;
+    }
 
     if (existing) {
       await ctx.db.patch(existing._id, payload);
@@ -55,6 +66,28 @@ export const upsert = mutation({
       createdAt,
       ...payload,
     });
+  },
+});
+
+export const listForCurrentUser = query({
+  args: {},
+  handler: async (ctx) => {
+    const ownerId = await requireAuth(ctx);
+    const jobs = await ctx.db
+      .query("jobs")
+      .withIndex("by_owner", (q) => q.eq("ownerId", ownerId))
+      .collect();
+
+    return jobs.map((job) => ({
+      jobId: job.jobId,
+      status: job.status,
+      progressStage: job.progressStage,
+      name: job.name,
+      layoutIntent: job.layoutIntent,
+      renderSizeHint: job.renderSizeHint ?? null,
+      createdAt: job.createdAt,
+      updatedAt: job.updatedAt,
+    }));
   },
 });
 

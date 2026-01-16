@@ -1,5 +1,6 @@
 # Generated Assets
 .agent/studio/
+dist/
 
 # Node.js
 node_modules/
@@ -9,6 +10,7 @@ yarn-error.log*
 
 # Python
 __pycache__/
+.mypy_cache/
 *.py[cod]
 *$py.class
 .venv/
