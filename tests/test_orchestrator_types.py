@@ -29,13 +29,12 @@ class TestOrchestratorTypes(unittest.TestCase):
         job_id = job["id"]
 
         # Mock generator output
-        self.generator.generate_image_pair.return_value = {
-            "white": str(self.test_dir / "white.png"),
-            "black": str(self.test_dir / "black.png")
+        self.generator.generate_image.return_value = {
+            "image": str(self.test_dir / "input.png")
         }
 
         # Mock processor output
-        self.processor.process_image.return_value = {
+        self.processor.process_input_image.return_value = {
             "component": {"some": "data"}
         }
 
@@ -43,7 +42,7 @@ class TestOrchestratorTypes(unittest.TestCase):
         self.orchestrator.run_job(job_id)
 
         # Verify generator was called
-        self.generator.generate_image_pair.assert_called_once()
+        self.generator.generate_image.assert_called_once()
         
         # Verify job status
         updated_job = self.job_store.get_job(job_id)
@@ -60,16 +59,16 @@ class TestOrchestratorTypes(unittest.TestCase):
         job_id = job["id"]
 
         # Mock generator/processor
-        self.generator.generate_image_pair.return_value = {
-            "white": "w", "black": "b"
+        self.generator.generate_image.return_value = {
+            "image": "input.png"
         }
-        self.processor.process_image.return_value = {
+        self.processor.process_input_image.return_value = {
             "component": {"icon": "data"}
         }
 
         self.orchestrator.run_job(job_id)
         
-        self.generator.generate_image_pair.assert_called_once()
+        self.generator.generate_image.assert_called_once()
         updated_job = self.job_store.get_job(job_id)
         self.assertEqual(updated_job["component"], {"icon": "data"})
 

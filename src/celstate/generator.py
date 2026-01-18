@@ -129,6 +129,168 @@ class MediaGenerator:
         }
         return specs.get(asset_type, "")
 
+    def _build_prompt_components(
+        self,
+        prompt: str,
+        asset_type: Optional[str],
+        style_context: Optional[str],
+        render_size_hint: Optional[int],
+        tracer: Optional["Tracer"],
+    ) -> tuple[str, str, str]:
+        resolved_asset_type = asset_type or infer_asset_type(prompt)
+
+        interpreted_prompt = self.interpreter.interpret(
+            prompt,
+            asset_type=resolved_asset_type,
+            style_context=style_context,
+            render_size_hint=render_size_hint,
+            tracer=tracer,
+        )
+
+        geometry_spec = self._get_geometry_spec(resolved_asset_type)
+        aspect_ratio = self._get_aspect_ratio(resolved_asset_type)
+        base_prompt = (
+            f"{interpreted_prompt}\n\n{geometry_spec}" if geometry_spec else interpreted_prompt
+        )
+
+        return base_prompt, aspect_ratio, resolved_asset_type
+
+    def _generate_white_pass(
+        self,
+        prompt_white: str,
+        aspect_ratio: str,
+        tracer: Optional["Tracer"],
+    ) -> tuple[Image.Image, bytes]:
+        image_config = types.ImageConfig(aspect_ratio=aspect_ratio)
+        gen_config = types.GenerateContentConfig(image_config=image_config)
+
+        white_image = None
+        white_bytes = None
+        max_validation_retries = 3
+
+        for attempt in range(max_validation_retries + 1):
+            if tracer:
+                tracer.record(
+                    "gemini_request",
+                    {
+                        "pass": "white",
+                        "model": IMAGE_MODEL,
+                        "prompt": prompt_white,
+                        "aspect_ratio": aspect_ratio,
+                        "attempt": attempt + 1,
+                    },
+                )
+
+            response_white = self._call_with_retry(
+                lambda: self.client.models.generate_content(
+                    model=IMAGE_MODEL,
+                    contents=[prompt_white],
+                    config=gen_config,
+                ),
+                operation_name="white_pass",
+                tracer=tracer,
+            )
+
+            for part in response_white.parts:
+                if part.inline_data is not None:
+                    white_bytes = part.inline_data.data
+                    white_image = Image.open(io.BytesIO(white_bytes))
+                    break
+
+            if white_image is None or white_bytes is None:
+                raise RuntimeError("Failed to generate white-pass image (no image data returned)")
+
+            # Validate white background
+            try:
+                w, h = white_image.size
+                corners = [
+                    white_image.getpixel((0, 0)),
+                    white_image.getpixel((w - 1, 0)),
+                    white_image.getpixel((0, h - 1)),
+                    white_image.getpixel((w - 1, h - 1)),
+                ]
+
+                def get_brightness(px):
+                    if isinstance(px, int):
+                        return px
+                    if len(px) >= 3:
+                        return sum(px[:3]) / 3.0
+                    return 0
+
+                avg_corner_brightness = sum(get_brightness(c) for c in corners) / 4.0
+
+                if avg_corner_brightness >= 240:
+                    break  # Valid
+                if attempt == max_validation_retries:
+                    raise RuntimeError(
+                        "Model failed to generate white background after "
+                        f"{max_validation_retries} retries"
+                    )
+
+                if tracer:
+                    tracer.record(
+                        "validation_error",
+                        {
+                            "pass": "white",
+                            "brightness": avg_corner_brightness,
+                            "attempt": attempt + 1,
+                        },
+                    )
+            except RuntimeError:
+                raise
+            except Exception as e:
+                if attempt == max_validation_retries:
+                    raise RuntimeError(f"Image validation failed: {e}")
+
+        if white_image is None or white_bytes is None:
+            raise RuntimeError("White image generation failed")
+
+        return white_image, white_bytes
+
+    def generate_image(
+        self,
+        prompt: str,
+        name: str,
+        studio_dir: Path,
+        asset_type: Optional[str] = None,
+        style_context: Optional[str] = None,
+        render_size_hint: Optional[int] = None,
+        tracer: Optional["Tracer"] = None,
+    ) -> Dict[str, str]:
+        """Generate a single image for DiffDIS background removal."""
+        studio_dir.mkdir(parents=True, exist_ok=True)
+
+        base_prompt, aspect_ratio, resolved_asset_type = self._build_prompt_components(
+            prompt=prompt,
+            asset_type=asset_type,
+            style_context=style_context,
+            render_size_hint=render_size_hint,
+            tracer=tracer,
+        )
+
+        prompt_white = (
+            f"{base_prompt}\n\n"
+            "BACKGROUND: Solid pure white (#FFFFFF). No gradient. No shadows on background. "
+            "Centered composition with padding."
+        )
+
+        if resolved_asset_type == "container":
+            prompt_white += " The hollow center must also be pure white #FFFFFF."
+
+        white_image, _ = self._generate_white_pass(
+            prompt_white=prompt_white,
+            aspect_ratio=aspect_ratio,
+            tracer=tracer,
+        )
+
+        path_input = studio_dir / f"{name}_input.png"
+        white_image.save(str(path_input))
+
+        return {
+            "image": str(path_input),
+            "asset_type": resolved_asset_type,
+        }
+
     def generate_image_pair(
         self,
         prompt: str,
@@ -151,24 +313,14 @@ class MediaGenerator:
             Dict with 'white' and 'black' paths, and 'asset_type'
         """
         studio_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Infer asset type from prompt if not provided
-        resolved_asset_type = asset_type or infer_asset_type(prompt)
 
-        # Interpret prompt for transparency safety
-        interpreted_prompt = self.interpreter.interpret(
-            prompt,
-            asset_type=resolved_asset_type,
+        base_prompt, aspect_ratio, resolved_asset_type = self._build_prompt_components(
+            prompt=prompt,
+            asset_type=asset_type,
             style_context=style_context,
             render_size_hint=render_size_hint,
             tracer=tracer,
         )
-        
-        # Build final prompt with geometry constraints
-        geometry_spec = self._get_geometry_spec(resolved_asset_type)
-        aspect_ratio = self._get_aspect_ratio(resolved_asset_type)
-        
-        base_prompt = f"{interpreted_prompt}\n\n{geometry_spec}" if geometry_spec else interpreted_prompt
         
         # Pass 1: White background
         prompt_white = (
@@ -180,88 +332,21 @@ class MediaGenerator:
         if resolved_asset_type == "container":
             prompt_white += " The hollow center must also be pure white #FFFFFF."
         
-        image_config = types.ImageConfig(aspect_ratio=aspect_ratio)
-        gen_config = types.GenerateContentConfig(image_config=image_config)
-        
-        # Generate white pass with validation
-        white_image = None
-        white_bytes = None
-        max_validation_retries = 3
-        
-        for attempt in range(max_validation_retries + 1):
-            if tracer:
-                tracer.record("gemini_request", {
-                    "pass": "white",
-                    "model": IMAGE_MODEL,
-                    "prompt": prompt_white,
-                    "aspect_ratio": aspect_ratio,
-                    "attempt": attempt + 1
-                })
-            
-            response_white = self._call_with_retry(
-                lambda: self.client.models.generate_content(
-                    model=IMAGE_MODEL,
-                    contents=[prompt_white],
-                    config=gen_config,
-                ),
-                operation_name="white_pass",
-                tracer=tracer
-            )
-            
-            for part in response_white.parts:
-                if part.inline_data is not None:
-                    white_bytes = part.inline_data.data
-                    white_image = Image.open(io.BytesIO(white_bytes))
-                    break
-            
-            if white_image is None or white_bytes is None:
-                raise RuntimeError("Failed to generate white-pass image (no image data returned)")
-            
-            # Validate white background
-            try:
-                w, h = white_image.size
-                corners = [
-                    white_image.getpixel((0, 0)),
-                    white_image.getpixel((w - 1, 0)),
-                    white_image.getpixel((0, h - 1)),
-                    white_image.getpixel((w - 1, h - 1))
-                ]
-                
-                def get_brightness(px):
-                    if isinstance(px, int):
-                        return px
-                    if len(px) >= 3:
-                        return sum(px[:3]) / 3.0
-                    return 0
-                
-                avg_corner_brightness = sum(get_brightness(c) for c in corners) / 4.0
-                
-                if avg_corner_brightness >= 240:
-                    break  # Valid
-                elif attempt == max_validation_retries:
-                    raise RuntimeError(f"Model failed to generate white background after {max_validation_retries} retries")
-                    
-                if tracer:
-                    tracer.record("validation_error", {
-                        "pass": "white",
-                        "brightness": avg_corner_brightness,
-                        "attempt": attempt + 1
-                    })
-            except RuntimeError:
-                raise
-            except Exception as e:
-                if attempt == max_validation_retries:
-                    raise RuntimeError(f"Image validation failed: {e}")
-        
+        white_image, white_bytes = self._generate_white_pass(
+            prompt_white=prompt_white,
+            aspect_ratio=aspect_ratio,
+            tracer=tracer,
+        )
+
         if tracer:
-            tracer.record("gemini_response", {
-                "pass": "white",
-                "status": "success",
-                "output_path": str(studio_dir / f"{name}_white.png")
-            })
-        
-        if white_image is None or white_bytes is None:
-            raise RuntimeError("White image generation failed")
+            tracer.record(
+                "gemini_response",
+                {
+                    "pass": "white",
+                    "status": "success",
+                    "output_path": str(studio_dir / f"{name}_white.png"),
+                },
+            )
         
         path_white = studio_dir / f"{name}_white.png"
         white_image.save(str(path_white))

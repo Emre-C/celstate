@@ -1,17 +1,16 @@
 # Celstate
 
-AI pipeline for generating transparent PNG assets using dual-pass image generation and difference matting.
+AI pipeline for generating transparent PNG assets using single-pass image generation and DiffDIS background removal.
 
 ## How It Works
 
 ```
-User Prompt → Interpreter (Kimi-K2) → White Pass → Edit to Black → Diff Matte → Transparent PNG
+User Prompt → Interpreter (Kimi-K2) → White Pass → DiffDIS → Transparent PNG
 ```
 
 1. **Interpreter** expands prompt with transparency constraints
 2. **White Pass** generates image on white background (Gemini 2.5 Flash)
-3. **Black Pass** edits the white image to have a black background
-4. **Diff Matte** extracts alpha channel from the difference
+3. **DiffDIS** removes the background to produce an RGBA PNG
 
 ## Quick Start
 
@@ -37,6 +36,7 @@ Visit `http://localhost:5173/app/` for the web app.
 ```bash
 celstate generate "a glowing health potion bottle" -o output.png
 celstate process white.png black.png -o output.png
+celstate remove-bg input.png -o output.png
 celstate jobs
 ```
 
@@ -118,11 +118,16 @@ uv run pytest
 - ✅ Image pipeline (working)
 - ✅ Convex Auth + Google OAuth
 - ✅ Web app with user-scoped data
-- ⚠️ Video pipeline (blocked — see `update_plan.md`)
 
-## Docs
+## Commands
 
-- `update_plan.md` — Current status and roadmap
-- `Deployment.md` — Production deployment checklist
-- `docs/auth-setup.md` — Auth configuration details
-- `docs/interface_contract.md` — API contract
+uv run celstate remove-bg landing/original.png -o out.png
+
+uv run celstate remove-bg landing/original.png -o out.png \
+  --denoise-steps 10 \
+  --ensemble-size 3 \
+  --processing-res 1024 \
+  --use-tta \
+  --tta-scales "0.75,1,1.25" \
+  --tta-horizontal-flip \
+  --match-input-res

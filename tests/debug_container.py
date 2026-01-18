@@ -32,12 +32,12 @@ class TestContainerFailure(unittest.TestCase):
             mock_generate.return_value = MagicMock(parts=[MagicMock(inline_data=MagicMock(data=b''))])
             
             try:
-                self.generator.generate_image_pair(
-                    prompt=prompt, 
-                    name="test", 
-                    studio_dir=Path("/tmp"), 
-                    asset_type=asset_type, 
-                    style_context=style_context
+                self.generator.generate_image(
+                    prompt=prompt,
+                    name="test",
+                    studio_dir=Path("/tmp"),
+                    asset_type=asset_type,
+                    style_context=style_context,
                 )
             except Exception:
                 pass 
@@ -69,12 +69,12 @@ class TestContainerFailure(unittest.TestCase):
             mock_generate.return_value = MagicMock(parts=[MagicMock(inline_data=MagicMock(data=b''))])
             
             try:
-                self.generator.generate_image_pair(
-                    prompt=prompt, 
-                    name="test", 
-                    studio_dir=Path("/tmp"), 
-                    asset_type=asset_type, 
-                    style_context=style_context
+                self.generator.generate_image(
+                    prompt=prompt,
+                    name="test",
+                    studio_dir=Path("/tmp"),
+                    asset_type=asset_type,
+                    style_context=style_context,
                 )
             except Exception:
                 pass

@@ -68,7 +68,7 @@ class TestMCPErrorHandling(unittest.TestCase):
         orchestrator = Orchestrator(mock_store, mock_generator, mock_processor)
         
         # Case 1: ResourceExhausted -> Rate Limit
-        mock_generator.generate_image_pair.side_effect = google_exceptions.ResourceExhausted("Quota exceeded")
+        mock_generator.generate_image.side_effect = google_exceptions.ResourceExhausted("Quota exceeded")
         
         orchestrator.run_job("test-job-id")
         
@@ -81,7 +81,9 @@ class TestMCPErrorHandling(unittest.TestCase):
         self.assertEqual(saved_job["retry_after"], 60)
 
         # Case 2: HF Token Missing
-        mock_generator.generate_image_pair.side_effect = RuntimeError("CreativeInterpreter not configured: HF_TOKEN environment variable is missing.")
+        mock_generator.generate_image.side_effect = RuntimeError(
+            "CreativeInterpreter not configured: HF_TOKEN environment variable is missing."
+        )
         
         orchestrator.run_job("test-job-id")
         saved_job = mock_store.save_job.call_args[0][1]

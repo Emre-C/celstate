@@ -25,7 +25,7 @@ This is the single source of truth for job state. It is written by `JobStore` an
   "name": "string",
   "created_at": "ISO-8601 UTC",
   "updated_at": "ISO-8601 UTC",
-  "progress_stage": "initialized|generating|generating_passes|processing_matting|verifying_container|completed|error",
+  "progress_stage": "initialized|generating|generating_image|processing_background_removal|verifying_container|completed|error",
   "component": { ... } | null,
   "error": "string" | null
 }
@@ -130,7 +130,27 @@ Notes:
 - If `asset_type` is omitted, infer from prompt.
 - Orchestrator should run asynchronously (background thread) to avoid blocking.
 
-### 5.2 GET /v1/assets/{job_id}
+### 5.2 POST /v1/assets/remove-bg
+
+Accepts a single image upload for background removal.
+
+**Request (multipart/form-data)**
+
+- `file` (required): image upload
+- `asset_type` (optional): `container|icon|texture|effect|image|decoration`
+- `layout_intent` (optional): `auto|row|column|...`
+- `name` (optional): asset name
+
+**Response**
+
+```
+{
+  "job_id": "uuid",
+  "status": "queued"
+}
+```
+
+### 5.3 GET /v1/assets/{job_id}
 
 **Queued/Running**
 
@@ -163,7 +183,7 @@ Notes:
 }
 ```
 
-### 5.3 Error Envelope (Validation/Bad Input)
+### 5.4 Error Envelope (Validation/Bad Input)
 
 ```
 {

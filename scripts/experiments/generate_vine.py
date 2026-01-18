@@ -34,7 +34,7 @@ def generate_vine():
     # 400px width implies ~700px height. That's a good Hero Grade (Tier L/M).
     size_hint = 300 
     
-    paths = generator.generate_image_pair(
+    paths = generator.generate_image(
         prompt=prompt,
         name="vine",
         studio_dir=studio_dir,
@@ -66,7 +66,7 @@ def generate_vine():
                 }
             },
             "assets": {
-                "image_final": "/celstate-assets/vine-decoration/vine_white.png"
+                "image_final": "/celstate-assets/vine-decoration/vine_input.png"
             }
         }
     }

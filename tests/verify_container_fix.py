@@ -30,12 +30,12 @@ class TestContainerFix(unittest.TestCase):
             mock_generate.return_value = MagicMock(parts=[MagicMock(inline_data=MagicMock(data=b''))])
             
             try:
-                self.generator.generate_image_pair(
-                    prompt="test", 
-                    name="test", 
-                    studio_dir=Path("/tmp"), 
-                    asset_type="container", 
-                    style_context="test"
+                self.generator.generate_image(
+                    prompt="test",
+                    name="test",
+                    studio_dir=Path("/tmp"),
+                    asset_type="container",
+                    style_context="test",
                 )
             except Exception:
                 pass
@@ -61,7 +61,7 @@ class TestContainerFix(unittest.TestCase):
         
         # Mock generator to raise InvalidArgument
         mock_generator = MagicMock()
-        mock_generator.generate_image_pair.side_effect = google_exceptions.InvalidArgument("Invalid thing")
+        mock_generator.generate_image.side_effect = google_exceptions.InvalidArgument("Invalid thing")
         
         orchestrator = Orchestrator(mock_store, mock_generator, MagicMock())
         orchestrator.run_job("job-123")

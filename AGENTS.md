@@ -1,6 +1,6 @@
 # AI Agent Instructions
 
-> **CRITICAL**: This codebase is 100% AI-built. You are the sole maintainer.
+> **CRITICAL**: This codebase is 100% AI-built. You are the sole maintainer. Make decisions accordingly
 
 ## Commands
 
@@ -20,19 +20,11 @@ npx convex logs --prod --history 20   # Production logs
 npx convex logs --history 20          # Dev logs
 ```
 
-## Key Documents
-
-| Document | Purpose |
-|----------|---------|
-| `update_plan.md` | Master plan + current status. **READ FIRST** |
-| `Deployment.md` | Production deployment checklist |
-| `docs/auth-setup.md` | Convex Auth + Google OAuth details |
-
 ## Architecture
 
 **Image Pipeline:** `Prompt → Kimi-K2 → White Pass → Edit to Black → Diff Matte → PNG`
 
-**Video Pipeline:** ⚠️ Blocked. Dual-pass Veo fails (motion diverges). See `update_plan.md` for alternatives.
+**Video Pipeline:** ⚠️ Blocked. Dual-pass Veo fails (motion diverges).
 
 ## Models
 

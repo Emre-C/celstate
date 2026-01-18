@@ -21,7 +21,7 @@ def generate_pill():
     asset_type = "container"
     size_hint = 120 # Tier S (48-128px) -> Badge Grade
     
-    paths = generator.generate_image_pair(
+    paths = generator.generate_image(
         prompt=prompt,
         name="customer_pill",
         studio_dir=studio_dir,
@@ -34,10 +34,9 @@ def generate_pill():
     # note: in a real app this comes from the backend analyzer. 
     # For this experiment, we assume standard 9-slice behavior for a pill.
     # A 120x?? pill. 
-    # White/Black pass generated.
-    # We need the FINAL image (white pass with transparency).
-    # Since we don't have the full Compositor pipeline here running, 
-    # We will just use the WHITE pass as the image and assume CSS blending or simple usage.
+    # Input image generated.
+    # We need the FINAL image (background removed) in a full pipeline.
+    # For this experiment, we point to the input image for layout testing.
     # Wait, CelstateContainer uses `image_final`. 
     # We should probably run the compositor or just use the white pass.
     # For now, let's point image_final to the white pass.
@@ -60,7 +59,7 @@ def generate_pill():
                 }
             },
             "assets": {
-                "image_final": "/celstate-assets/customer-pill/customer_pill_white.png"
+                "image_final": "/celstate-assets/customer-pill/customer_pill_input.png"
             }
         }
     }
