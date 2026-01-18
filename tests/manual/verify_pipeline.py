@@ -34,7 +34,7 @@ class TestPipeline(unittest.TestCase):
 
         mock_genai_client = MockGenAIClient.return_value
         
-        # Mock response for White and Black pass
+        # Mock response for single image generation
         mock_response = MagicMock()
         mock_part = MagicMock()
         mock_part.inline_data.data = b"fake_image_bytes"
@@ -46,7 +46,7 @@ class TestPipeline(unittest.TestCase):
         # 2. Setup Components
         # Mock processor to avoid OpenCV dependency in this unit test
         mock_processor = MagicMock()
-        mock_processor.process_image.return_value = {"component": {"assets": {"test.png": "path"}}}
+        mock_processor.process_input_image.return_value = {"component": {"assets": {"test.png": "path"}}}
         
         # Use real JobStore (with temporary dir)
         import tempfile
@@ -78,8 +78,8 @@ class TestPipeline(unittest.TestCase):
         # Verify Interpreter was called
         mock_interpreter_instance.interpret.assert_called_once()
         
-        # Verify Gemini called twice (white + black)
-        self.assertEqual(mock_genai_client.models.generate_content.call_count, 2)
+        # Verify Gemini called once (single image)
+        self.assertEqual(mock_genai_client.models.generate_content.call_count, 1)
         
         # Cleanup
         shutil.rmtree(temp_dir)

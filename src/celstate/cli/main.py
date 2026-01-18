@@ -7,6 +7,7 @@ All jobs are logged to the jobs/ directory for traceability.
 Usage:
     celstate generate "a glowing health potion bottle" -o potion.png
     celstate process white.png black.png -o transparent.png
+    celstate remove-bg input.png -o transparent.png
 """
 
 import json
@@ -25,11 +26,17 @@ from celstate.contract import (
 from celstate.generator import MediaGenerator
 from celstate.job_store import JobStore
 from celstate.orchestrator import Orchestrator
+from celstate.engine.background_remover import (
+    DEFAULT_DENOISE_STEPS,
+    DEFAULT_ENSEMBLE_SIZE,
+    DEFAULT_PROCESSING_RES,
+    DEFAULT_USE_TTA,
+)
 from celstate.processor import MediaProcessor
 
 app = typer.Typer(
     name="celstate",
-    help="Generate transparent images using AI + difference matting.",
+    help="Generate transparent images using AI + DiffDIS background removal.",
     no_args_is_help=True,
 )
 
@@ -250,6 +257,112 @@ def process(
             "generation_time_ms": generation_time_ms
         })
         
+    except Exception as e:
+        output_json(error_response("API_ERROR", str(e)))
+        raise typer.Exit(1)
+
+
+@app.command("remove-bg")
+def remove_bg(
+    input_path: Path = typer.Argument(..., help="Path to the input image."),
+    output: Path = typer.Option(..., "-o", "--output", help="Output path for the transparent PNG."),
+    denoise_steps: int = typer.Option(
+        DEFAULT_DENOISE_STEPS,
+        "--denoise-steps",
+        help="Diffusion denoising steps (higher is higher quality but slower).",
+    ),
+    ensemble_size: int = typer.Option(
+        DEFAULT_ENSEMBLE_SIZE,
+        "--ensemble-size",
+        help="Number of predictions to ensemble (higher is higher quality but slower).",
+    ),
+    processing_res: int = typer.Option(
+        DEFAULT_PROCESSING_RES,
+        "--processing-res",
+        help="Max edge resolution used for DiffDIS processing.",
+    ),
+    use_tta: bool = typer.Option(
+        DEFAULT_USE_TTA,
+        "--use-tta/--no-use-tta",
+        help="Enable test-time augmentation (flip + multi-scale).",
+    ),
+    tta_scales: Optional[str] = typer.Option(
+        None,
+        "--tta-scales",
+        help="Comma-separated scales for TTA (e.g. '0.75,1,1.25').",
+    ),
+    tta_horizontal_flip: bool = typer.Option(
+        True,
+        "--tta-horizontal-flip/--no-tta-horizontal-flip",
+        help="Include horizontal flip in TTA.",
+    ),
+    match_input_res: bool = typer.Option(
+        True,
+        "--match-input-res/--no-match-input-res",
+        help="Resize output back to original input resolution.",
+    ),
+    show_progress_bar: bool = typer.Option(
+        False,
+        "--show-progress/--no-show-progress",
+        help="Show DiffDIS progress bars.",
+    ),
+):
+    """Remove background from a single image using DiffDIS."""
+    start_time = time.time()
+
+    if not input_path.exists():
+        output_json(error_response("VALIDATION_FAILED", f"Input not found: {input_path}"))
+        raise typer.Exit(1)
+
+    try:
+        import tempfile
+
+        processor = MediaProcessor()
+
+        tta_scales_tuple = None
+        if tta_scales is not None:
+            try:
+                tta_scales_tuple = tuple(float(value.strip()) for value in tta_scales.split(",") if value.strip())
+            except ValueError as exc:
+                output_json(error_response("VALIDATION_FAILED", f"Invalid --tta-scales: {exc}"))
+                raise typer.Exit(1)
+            if not tta_scales_tuple:
+                output_json(error_response("VALIDATION_FAILED", "--tta-scales must include at least one value."))
+                raise typer.Exit(1)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            processor.process_input_image(
+                input_path=input_path,
+                name="asset",
+                output_dir=output_dir,
+                denoise_steps=denoise_steps,
+                ensemble_size=ensemble_size,
+                processing_res=processing_res,
+                match_input_res=match_input_res,
+                show_progress_bar=show_progress_bar,
+                use_tta=use_tta,
+                tta_scales=tta_scales_tuple,
+                tta_horizontal_flip=tta_horizontal_flip,
+            )
+
+            output.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(output_dir / "asset.png", output)
+
+        from PIL import Image
+
+        with Image.open(output) as img:
+            width, height = img.size
+
+        generation_time_ms = int((time.time() - start_time) * 1000)
+
+        output_json({
+            "status": "success",
+            "output_path": str(output.absolute()),
+            "dimensions": [width, height],
+            "generation_time_ms": generation_time_ms,
+        })
+
     except Exception as e:
         output_json(error_response("API_ERROR", str(e)))
         raise typer.Exit(1)

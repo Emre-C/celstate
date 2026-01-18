@@ -3,7 +3,9 @@ from typing import Dict, Any
 
 import cv2
 import numpy as np
+from PIL import Image
 
+from celstate.engine.background_remover import DiffDISModel
 from celstate.layout_analyzer import LayoutAnalyzer
 from celstate.snippets import SnippetGenerator
 
@@ -16,6 +18,7 @@ class MediaProcessor:
     def __init__(self):
         self.analyzer = LayoutAnalyzer()
         self.snippet_generator = SnippetGenerator()
+        self.background_remover = DiffDISModel()
 
     def _crop_to_opaque_bounds(self, rgba: np.ndarray) -> np.ndarray:
         """
@@ -42,17 +45,15 @@ class MediaProcessor:
 
     def process_image(self, white_path: Path, black_path: Path, name: str, output_dir: Path) -> Dict[str, Any]:
         """Difference Matting -> single high-fidelity PNG output."""
-        output_dir.mkdir(parents=True, exist_ok=True)
-        
         img_w = cv2.imread(str(white_path))
         img_b = cv2.imread(str(black_path))
-        
+
         if img_w is None or img_b is None:
             raise ValueError(f"Could not read input images: {white_path}, {black_path}")
-            
+
         img_w = img_w.astype(float)
         img_b = img_b.astype(float)
-        
+
         # Alpha recovery: Alpha = 1 - (pixel_distance / 255)
         diff = np.abs(img_w - img_b)
         alpha = 1.0 - (np.mean(diff, axis=2) / 255.0)
@@ -60,55 +61,106 @@ class MediaProcessor:
 
         # Adaptive Noise Gate: Eliminate background noise to enable cleaning cropping
         alpha = self._apply_adaptive_noise_gate(alpha)
-        
+
         # Color recovery (un-premultiply from black)
-        with np.errstate(divide='ignore', invalid='ignore'):
+        with np.errstate(divide="ignore", invalid="ignore"):
             color = img_b / alpha[:, :, np.newaxis]
         color = np.nan_to_num(color, nan=0.0)
-        
-        # Construct RGBA
+
+        # Construct RGBA (OpenCV BGRA ordering)
         final_alpha = (alpha * 255).astype(np.uint8)
         final_bgr = np.clip(color, 0, 255).astype(np.uint8)
-        rgba = cv2.merge([final_bgr[:,:,0], final_bgr[:,:,1], final_bgr[:,:,2], final_alpha])
-        
+        rgba = cv2.merge([final_bgr[:, :, 0], final_bgr[:, :, 1], final_bgr[:, :, 2], final_alpha])
+
+        return self._finalize_output(rgba=rgba, name=name, output_dir=output_dir)
+
+    def process_input_image(
+        self,
+        input_path: Path,
+        name: str,
+        output_dir: Path,
+        *,
+        denoise_steps: int | None = None,
+        ensemble_size: int | None = None,
+        processing_res: int | None = None,
+        match_input_res: bool | None = None,
+        batch_size: int | None = None,
+        show_progress_bar: bool | None = None,
+        use_tta: bool | None = None,
+        tta_scales: tuple[float, ...] | None = None,
+        tta_horizontal_flip: bool | None = None,
+    ) -> Dict[str, Any]:
+        """Single-image DiffDIS background removal."""
+        if not input_path.exists():
+            raise ValueError(f"Input image not found: {input_path}")
+
+        with Image.open(input_path) as image:
+            rgba = self.background_remover.predict(
+                image,
+                denoise_steps=denoise_steps,
+                ensemble_size=ensemble_size,
+                processing_res=processing_res,
+                match_input_res=match_input_res,
+                batch_size=batch_size,
+                show_progress_bar=show_progress_bar,
+                use_tta=use_tta,
+                tta_scales=tta_scales,
+                tta_horizontal_flip=tta_horizontal_flip,
+            )
+
+        rgba_np = np.array(rgba)
+        rgba_bgra = cv2.cvtColor(rgba_np, cv2.COLOR_RGBA2BGRA)
+        rgba_bgra = self._apply_alpha_noise_gate(rgba_bgra)
+
+        return self._finalize_output(rgba=rgba_bgra, name=name, output_dir=output_dir)
+
+    def _apply_alpha_noise_gate(self, rgba: np.ndarray) -> np.ndarray:
+        alpha = rgba[:, :, 3].astype(np.float32) / 255.0
+        filtered = self._apply_adaptive_noise_gate(alpha)
+        rgba[:, :, 3] = (filtered * 255).astype(np.uint8)
+        return rgba
+
+    def _finalize_output(self, rgba: np.ndarray, name: str, output_dir: Path) -> Dict[str, Any]:
+        output_dir.mkdir(parents=True, exist_ok=True)
+
         # Auto-crop to opaque bounding box (eliminates wasted canvas space)
         rgba = self._crop_to_opaque_bounds(rgba)
-        
+
         # Write single high-fidelity PNG (lossless for CV analysis)
         h, w = rgba.shape[:2]
         filename = f"{name}.png"
         filepath = output_dir / filename
         cv2.imwrite(str(filepath), rgba)
-        
+
         # Build manifest-compliant component structure
         width, height = w, h
-        
+
         # Perform full layout analysis for "Smart Asset" metadata (per VISION.md)
         layout_metadata = self.analyzer.analyze_full(rgba)
-        
+
         # Generate mask for organic shapes (per VISION.md)
         mask_filename = None
         if layout_metadata["shape_hint"].get("type") == "organic":
             mask_path = output_dir / f"{name}_mask.png"
             self.analyzer.generate_mask(rgba, mask_path)
             mask_filename = f"{name}_mask.png"
-        
+
         # Generate debug overlay for visual verification (user feedback: "Ghost Overlay")
         debug_path = output_dir / f"{name}_debug.png"
         self.analyzer.generate_debug_overlay(
             rgba,
             layout_metadata["safe_zone"],
             layout_metadata["content_zones"],
-            debug_path
+            debug_path,
         )
-        
+
         # Build assets dict - include mask and debug overlay for URL resolution
         assets = {f"{name}.png": None}
         if mask_filename:
             assets[mask_filename] = None  # URL populated by API layer
         # Debug overlay shows safe_zone (green) and layout_bounds (red) for visual verification
         assets[f"{name}_debug.png"] = None
-        
+
         component = {
             "manifest": {
                 "version": MANIFEST_VERSION,
@@ -124,35 +176,34 @@ class MediaProcessor:
                     "safe_zone": layout_metadata["safe_zone"],
                     "layout_bounds": layout_metadata["layout_bounds"],
                     "mask_asset": mask_filename,  # None if not organic
-                     # Generative Code Snippets (Fat Response)
+                    # Generative Code Snippets (Fat Response)
                     "snippets": self.snippet_generator.generate_all(
-                         safe_zone=layout_metadata["safe_zone"],
-                         layout_bounds=layout_metadata["layout_bounds"],
-                         image_size=(width, height)
-                    )
+                        safe_zone=layout_metadata["safe_zone"],
+                        layout_bounds=layout_metadata["layout_bounds"],
+                        image_size=(width, height),
+                    ),
                 },
                 "states": {
                     "idle": {
                         "clip": f"{name}.png",
-                        "loop": False
+                        "loop": False,
                     }
                 },
                 "transitions": [],
                 "accessibility": {
                     "role": "image",
-                    "label": name.replace("_", " ").title()
-                }
+                    "label": name.replace("_", " ").title(),
+                },
             },
             "assets": assets,  # Now includes mask if present
-            "telemetry": layout_metadata["transparency"]
+            "telemetry": layout_metadata["transparency"],
             # NOTE: No "snippets" field. Per VISION.md Section 4A: "Measurements, not Code"
         }
 
-        
         return {
             "name": name,
             "component": component,
-            "telemetry": layout_metadata["transparency"]
+            "telemetry": layout_metadata["transparency"],
         }
     def _apply_adaptive_noise_gate(self, alpha: np.ndarray) -> np.ndarray:
         """

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import shutil
 import threading
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, File, Form, UploadFile
 from pydantic import BaseModel
 
 from celstate.contract import (
@@ -47,6 +48,22 @@ def _internal_error(details: str) -> Dict[str, str]:
 def _run_job_async(orchestrator: Orchestrator, job_id: str) -> None:
     thread = threading.Thread(target=orchestrator.run_job, args=(job_id,), daemon=True)
     thread.start()
+
+
+def _save_upload_to_job(
+    job_id: str,
+    upload: UploadFile,
+    name: str,
+) -> Path:
+    suffix = Path(upload.filename or "").suffix or ".png"
+    studio_dir = job_store._get_job_dir(job_id) / "studio"
+    studio_dir.mkdir(parents=True, exist_ok=True)
+    input_path = studio_dir / f"{name}_input{suffix}"
+
+    with input_path.open("wb") as buffer:
+        shutil.copyfileobj(upload.file, buffer)
+
+    return input_path
 
 
 def generate_asset(
@@ -90,6 +107,47 @@ def generate_asset(
     return {"job_id": job["id"], "status": "queued"}
 
 
+def generate_asset_from_upload(
+    upload: UploadFile,
+    asset_type: Optional[str] = None,
+    layout_intent: Optional[str] = None,
+    name: Optional[str] = None,
+) -> Dict[str, Any]:
+    resolved_asset_type = asset_type or "image"
+    validation_error = validate_job_create_request(
+        prompt="uploaded image",
+        asset_type=resolved_asset_type,
+        render_size_hint=None,
+    )
+    if validation_error:
+        return _validation_error(validation_error)
+
+    resolved_layout_intent = normalize_layout_intent(layout_intent)
+    resolved_name = name or Path(upload.filename or "asset").stem or "asset"
+
+    try:
+        processor = MediaProcessor()
+        orchestrator = Orchestrator(job_store, None, processor)
+    except Exception as exc:  # pragma: no cover - env dependent
+        return _internal_error(str(exc))
+
+    job = job_store.create_job(
+        asset_type=resolved_asset_type,
+        prompt="uploaded image",
+        style_context="",
+        layout_intent=resolved_layout_intent,
+        name=resolved_name,
+    )
+
+    input_path = _save_upload_to_job(job["id"], upload, resolved_name)
+    job["input_image_path"] = str(input_path)
+    job_store.save_job(job["id"], job)
+
+    _run_job_async(orchestrator, job["id"])
+
+    return {"job_id": job["id"], "status": "queued"}
+
+
 def _map_job_status(job: Dict[str, Any]) -> Dict[str, Any]:
     status = job.get("status")
 
@@ -127,6 +185,21 @@ def get_asset(job_id: str) -> Dict[str, Any]:
 @app.post("/v1/assets")
 def create_asset(request: JobCreateRequest) -> Dict[str, Any]:
     return generate_asset(**request.model_dump())
+
+
+@app.post("/v1/assets/remove-bg")
+def create_asset_from_upload(
+    file: UploadFile = File(...),
+    asset_type: Optional[str] = Form(None),
+    layout_intent: Optional[str] = Form(None),
+    name: Optional[str] = Form(None),
+) -> Dict[str, Any]:
+    return generate_asset_from_upload(
+        upload=file,
+        asset_type=asset_type,
+        layout_intent=layout_intent,
+        name=name,
+    )
 
 
 @app.get("/v1/assets/{job_id}")

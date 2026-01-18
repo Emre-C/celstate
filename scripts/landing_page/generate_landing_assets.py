@@ -47,7 +47,7 @@ def main():
     studio_dir = OUTPUT_DIR / "studio"
     studio_dir.mkdir(parents=True, exist_ok=True)
     
-    # 1. Generate fluffy dog with dual-pass
+    # 1. Generate fluffy dog (single pass)
     dog_prompt = (
         "A fluffy Pomeranian dog with luxurious orange-cream fur, "
         "sitting facing forward, happy expression with tongue slightly out. "
@@ -55,33 +55,31 @@ def main():
         "High detail photography style."
     )
     
-    print("\n[1/2] Generating fluffy dog (white/black passes)...")
+    print("\n[1/2] Generating fluffy dog (single pass)...")
     print(f"    Prompt: {dog_prompt[:60]}...")
     
     try:
-        paths = generator.generate_image_pair(
+        paths = generator.generate_image(
             prompt=dog_prompt,
             name="fluffy_dog",
             studio_dir=studio_dir,
         )
-        print(f"    ✅ White pass: {paths['white']}")
-        print(f"    ✅ Black pass: {paths['black']}")
+        print(f"    ✅ Input image: {paths['image']}")
         
         # Copy white pass as the "original" image (with white background)
         original_path = OUTPUT_DIR / "original.png"
-        shutil.copy2(paths["white"], original_path)
-        print(f"    ✅ Saved original.png (white pass copy)")
+        shutil.copy2(paths["image"], original_path)
+        print(f"    ✅ Saved original.png (input copy)")
         
-        # 2. Process with difference matting for perfect result
-        print("\n[2/2] Processing with difference matting (our result)...")
+        # 2. Process with DiffDIS for perfect result
+        print("\n[2/2] Processing with DiffDIS (our result)...")
         output_dir = OUTPUT_DIR / "matted"
         output_dir.mkdir(parents=True, exist_ok=True)
         
-        result = processor.process_image(
-            white_path=Path(paths["white"]),
-            black_path=Path(paths["black"]),
+        result = processor.process_input_image(
+            input_path=Path(paths["image"]),
             name="our_result",
-            output_dir=output_dir
+            output_dir=output_dir,
         )
         
         # Copy to final location
@@ -95,7 +93,7 @@ def main():
         print("=" * 60)
         print(f"  - {original_path}")
         print(f"  - {our_result_dst}")
-        print(f"\nWhite/Black passes saved in: {studio_dir}")
+        print(f"\nInput image saved in: {studio_dir}")
         print(f"\nNext steps:")
         print(f"  1. Run: uv run scripts/landing_page/generate_competitor_result.py")
         print(f"  2. Run: uv run scripts/landing_page/generate_zoom_crops.py")

@@ -1,6 +1,7 @@
 import logging
 import traceback
 from pathlib import Path
+from typing import Optional
 from google.api_core import exceptions as google_exceptions
 
 import cv2
@@ -16,7 +17,12 @@ from celstate.tracer import Tracer
 logger = logging.getLogger(__name__)
 
 class Orchestrator:
-    def __init__(self, job_store: JobStore, generator: MediaGenerator, processor: MediaProcessor):
+    def __init__(
+        self,
+        job_store: JobStore,
+        generator: Optional[MediaGenerator],
+        processor: MediaProcessor,
+    ):
         self.job_store = job_store
         self.generator = generator
         self.processor = processor
@@ -94,38 +100,45 @@ class Orchestrator:
             self.job_store.save_job(job_id, job)
 
             if job["type"] in ["image", "container", "icon", "texture", "decoration", "effect"]:
-                # 1. Generate white/black pass
-                job["progress_stage"] = "generating_passes"
+                # 1. Generate single image input (or use supplied input)
+                input_image_path = job.get("input_image_path")
+
+                if input_image_path is None:
+                    if self.generator is None:
+                        raise ValueError("Generator is required when no input_image_path is provided.")
+                    job["progress_stage"] = "generating_image"
+                    self.job_store.save_job(job_id, job)
+
+                    # Extract render_size_hint from job (optional)
+                    render_size_hint = job.get("render_size_hint")
+                    if render_size_hint is not None:
+                        try:
+                            render_size_hint = int(render_size_hint)
+                        except (ValueError, TypeError):
+                            logger.warning(
+                                f"Invalid render_size_hint: {render_size_hint}. Ignoring."
+                            )
+                            render_size_hint = None
+
+                    paths = self.generator.generate_image(
+                        prompt=job["prompt"],
+                        name=job["name"],
+                        studio_dir=studio_dir,
+                        asset_type=job["type"],
+                        style_context=job["style_context"],
+                        render_size_hint=render_size_hint,
+                        tracer=tracer,
+                    )
+                    input_image_path = paths["image"]
+
+                # 2. Process (DiffDIS background removal)
+                job["progress_stage"] = "processing_background_removal"
                 self.job_store.save_job(job_id, job)
-                
-                # Extract render_size_hint from job (optional)
-                render_size_hint = job.get("render_size_hint")
-                if render_size_hint is not None:
-                    try:
-                        render_size_hint = int(render_size_hint)
-                    except (ValueError, TypeError):
-                        logger.warning(f"Invalid render_size_hint: {render_size_hint}. Ignoring.")
-                        render_size_hint = None
-                
-                paths = self.generator.generate_image_pair(
-                    prompt=job["prompt"],
+
+                result = self.processor.process_input_image(
+                    input_path=Path(input_image_path),
                     name=job["name"],
-                    studio_dir=studio_dir,
-                    asset_type=job["type"],
-                    style_context=job["style_context"],
-                    render_size_hint=render_size_hint,
-                    tracer=tracer
-                )
-                
-                # 2. Process (difference matting)
-                job["progress_stage"] = "processing_matting"
-                self.job_store.save_job(job_id, job)
-                
-                result = self.processor.process_image(
-                    white_path=Path(paths["white"]),
-                    black_path=Path(paths["black"]),
-                    name=job["name"],
-                    output_dir=output_dir
+                    output_dir=output_dir,
                 )
                 
                 job["component"] = result["component"]
