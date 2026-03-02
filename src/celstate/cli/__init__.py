@@ -1,1 +1,0 @@
-"""Celstate CLI."""
