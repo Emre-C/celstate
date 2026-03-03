@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "skills": {
+    "convex-best-practices": {
+      "source": "waynesutton/convexskills",
+      "sourceType": "github",
+      "computedHash": "1e0008cecaa0bca3b0e1aa8c31a7f59417907088cd9309402739e71f249287c2"
+    },
+    "frontend-design": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "computedHash": "516bd2154eb843a8240e43d5b285229129853114ad7075a5e141e1c08e408c84"
+    }
+  }
+}
