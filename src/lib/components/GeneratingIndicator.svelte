@@ -1,5 +1,29 @@
 <script lang="ts">
-	let { prompt }: { prompt: string } = $props();
+	let {
+		prompt,
+		statusMessage,
+		createdAt
+	}: {
+		prompt: string;
+		statusMessage?: string;
+		createdAt: number;
+	} = $props();
+
+	let elapsed = $state(0);
+
+	$effect(() => {
+		const start = createdAt;
+		const tick = () => {
+			elapsed = Math.floor((Date.now() - start) / 1000);
+		};
+		tick();
+		const interval = setInterval(tick, 1000);
+		return () => clearInterval(interval);
+	});
+
+	const elapsedDisplay = $derived(
+		elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`
+	);
 </script>
 
 <div class="flex flex-col items-center gap-4 py-8">
@@ -18,9 +42,15 @@
 		<span class="generating-text font-mono text-[11px] tracking-[0.2em] uppercase text-accent">
 			Generating
 		</span>
-		<p class="max-w-xs truncate text-center text-xs text-dim">
+		{#if statusMessage}
+			<p class="text-center text-xs text-dim">{statusMessage}</p>
+		{/if}
+		<p class="max-w-xs truncate text-center text-xs text-dim/50">
 			{prompt}
 		</p>
+		<span class="font-mono text-[10px] tracking-[0.15em] text-dim/40">
+			{elapsedDisplay}
+		</span>
 	</div>
 </div>
 

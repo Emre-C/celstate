@@ -5,6 +5,7 @@
 	let {
 		prompt,
 		status,
+		statusMessage,
 		resultUrl,
 		error,
 		createdAt,
@@ -13,6 +14,7 @@
 	}: {
 		prompt: string;
 		status: 'generating' | 'complete' | 'failed';
+		statusMessage?: string;
 		resultUrl?: string;
 		error?: string;
 		createdAt: number;
@@ -63,7 +65,7 @@
 {#if status === 'generating'}
 	<div class="border border-border">
 		<div class="aspect-square flex items-center justify-center bg-bg">
-			<GeneratingIndicator {prompt} />
+			<GeneratingIndicator {prompt} {statusMessage} {createdAt} />
 		</div>
 		<div class="border-t border-border px-4 py-3">
 			<p class="line-clamp-1 text-xs text-dim">{prompt}</p>

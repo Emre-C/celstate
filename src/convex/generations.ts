@@ -1,25 +1,53 @@
 import { v } from "convex/values";
-import { query, mutation, internalMutation } from "./_generated/server.js";
+import { mutation, query, internalMutation, internalQuery } from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { GENERATION_CONFIG } from "./lib/config.js";
 
-export const createGeneration = internalMutation({
+/**
+ * Public mutation: atomically deducts credits, inserts a "generating" row,
+ * and schedules the internal Node action worker. Returns the generation ID
+ * so the reactive query picks up the row immediately.
+ */
+export const requestGeneration = mutation({
   args: {
-    userId: v.id("users"),
     prompt: v.string(),
-    creditsCost: v.number(),
-    aspectRatio: v.string(),
   },
   returns: v.id("generations"),
   handler: async (ctx, args) => {
-    return await ctx.db.insert("generations", {
-      userId: args.userId,
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Authentication required");
+    }
+
+    const creditsCost = GENERATION_CONFIG.creditsPerGeneration;
+
+    // Atomic: check + deduct credits
+    const user = await ctx.db.get(userId);
+    if (!user || (user.credits ?? 0) < creditsCost) {
+      throw new Error("Insufficient credits");
+    }
+    await ctx.db.patch(userId, {
+      credits: (user.credits ?? 0) - creditsCost,
+    });
+
+    // Insert the "generating" row — visible to reactive queries immediately
+    const generationId = await ctx.db.insert("generations", {
+      userId,
       prompt: args.prompt,
-      status: "generating",
-      creditsCost: args.creditsCost,
-      aspectRatio: args.aspectRatio,
+      status: "generating" as const,
+      creditsCost,
+      aspectRatio: GENERATION_CONFIG.defaultAspectRatio,
       createdAt: Date.now(),
     });
+
+    // Schedule the long-running Node action to do actual image generation
+    await ctx.scheduler.runAfter(0, internal.generation.generateWorker, {
+      generationId,
+      prompt: args.prompt,
+    });
+
+    return generationId;
   },
 });
 
@@ -64,24 +92,6 @@ export const failGeneration = internalMutation({
   },
 });
 
-export const deductCredits = internalMutation({
-  args: {
-    userId: v.id("users"),
-    amount: v.number(),
-  },
-  returns: v.boolean(),
-  handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
-    if (!user || (user.credits ?? 0) < args.amount) {
-      return false;
-    }
-    await ctx.db.patch(args.userId, {
-      credits: (user.credits ?? 0) - args.amount,
-    });
-    return true;
-  },
-});
-
 export const refundCredits = internalMutation({
   args: {
     userId: v.id("users"),
@@ -99,7 +109,7 @@ export const refundCredits = internalMutation({
   },
 });
 
-export const getByUser = query({
+export const getByUser = internalQuery({
   args: { userId: v.id("users") },
   returns: v.array(
     v.object({
@@ -112,6 +122,7 @@ export const getByUser = query({
         v.literal("complete"),
         v.literal("failed"),
       ),
+      statusMessage: v.optional(v.string()),
       resultStorageId: v.optional(v.id("_storage")),
       whiteBgStorageId: v.optional(v.id("_storage")),
       blackBgStorageId: v.optional(v.id("_storage")),
@@ -134,7 +145,7 @@ export const getByUser = query({
   },
 });
 
-export const getById = query({
+export const getById = internalQuery({
   args: { generationId: v.id("generations") },
   returns: v.union(
     v.object({
@@ -147,6 +158,7 @@ export const getById = query({
         v.literal("complete"),
         v.literal("failed"),
       ),
+      statusMessage: v.optional(v.string()),
       resultStorageId: v.optional(v.id("_storage")),
       whiteBgStorageId: v.optional(v.id("_storage")),
       blackBgStorageId: v.optional(v.id("_storage")),
@@ -169,20 +181,13 @@ export const getById = query({
 export const getByUserWithUrls = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity?.email) {
-      return [];
-    }
-    const user = await ctx.db
-      .query("users")
-      .withIndex("email", (q) => q.eq("email", identity.email!))
-      .first();
-    if (!user) {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
       return [];
     }
     const generations = await ctx.db
       .query("generations")
-      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .withIndex("by_user", (q) => q.eq("userId", userId))
       .order("desc")
       .collect();
 
@@ -194,6 +199,20 @@ export const getByUserWithUrls = query({
           : null,
       }))
     );
+  },
+});
+
+export const updateStatusMessage = internalMutation({
+  args: {
+    generationId: v.id("generations"),
+    statusMessage: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.generationId, {
+      statusMessage: args.statusMessage,
+    });
+    return null;
   },
 });
 

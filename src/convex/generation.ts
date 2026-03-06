@@ -1,7 +1,7 @@
 "use node";
 
 import { v } from "convex/values";
-import { action } from "./_generated/server.js";
+import { internalAction } from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
 import { PNG } from "pngjs";
 import { GENERATION_CONFIG } from "./lib/config.js";
@@ -99,64 +99,45 @@ function aspectRatioMatches(
   return Math.abs(ratio1 - ratio2) / Math.max(ratio1, ratio2) < 0.05;
 }
 
-export const generate = action({
+/**
+ * Internal worker action scheduled by the requestGeneration mutation.
+ * The generation row and credit deduction already exist when this runs.
+ */
+export const generateWorker = internalAction({
   args: {
+    generationId: v.id("generations"),
     prompt: v.string(),
   },
-  handler: async (ctx, args): Promise<string> => {
+  handler: async (ctx, args) => {
     const startTime = Date.now();
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       throw new Error("GEMINI_API_KEY environment variable not set");
     }
 
-    // 1. Auth check
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Authentication required");
-    }
-
-    // Look up user by email (tokenIdentifier could also be used)
-    const email = identity.email;
-    if (!email) {
-      throw new Error("User email not available");
-    }
-
-    // Find user
-    const user = await ctx.runQuery(internal.users.getByEmail, { email });
-    if (!user) {
-      throw new Error("User not found");
-    }
-
-    // 2. Credit check + deduction (atomic)
-    const creditsCost = GENERATION_CONFIG.creditsPerGeneration;
-    const deducted = await ctx.runMutation(internal.generations.deductCredits, {
-      userId: user._id,
-      amount: creditsCost,
+    // Look up the generation to get userId for potential refund
+    const generation = await ctx.runQuery(internal.generations.getById, {
+      generationId: args.generationId,
     });
-    if (!deducted) {
-      throw new Error("Insufficient credits");
+    if (!generation) {
+      throw new Error("Generation record not found");
     }
-
-    // 3. Create generation record
-    const generationId = await ctx.runMutation(
-      internal.generations.createGeneration,
-      {
-        userId: user._id,
-        prompt: args.prompt,
-        creditsCost,
-        aspectRatio: GENERATION_CONFIG.defaultAspectRatio,
-      },
-    );
 
     let retryCount = 0;
     let dimensionMismatch = false;
 
+    async function updateStatus(message: string) {
+      await ctx.runMutation(internal.generations.updateStatusMessage, {
+        generationId: args.generationId,
+        statusMessage: message,
+      });
+    }
+
     try {
-      // Outer retry loop for total generation flow
       for (let attempt = 0; attempt <= GENERATION_CONFIG.maxRetriesTotal; attempt++) {
         if (attempt > 0) {
           retryCount++;
+          await updateStatus(`Retrying (attempt ${attempt + 1})…`);
           await sleep(
             GENERATION_CONFIG.retryBaseDelayMs * Math.pow(2, attempt - 1),
           );
@@ -164,11 +145,11 @@ export const generate = action({
 
         try {
           const result = await executeGenerationPipeline(
-            ctx, apiKey, args.prompt,
+            ctx, apiKey, args.prompt, updateStatus,
           );
           dimensionMismatch = result.dimensionMismatch;
+          await updateStatus("Storing result…");
 
-          // Store intermediate images
           let whiteBgStorageId;
           let blackBgStorageId;
 
@@ -181,13 +162,11 @@ export const generate = action({
             blackBgStorageId = await ctx.storage.store(blackBlob);
           }
 
-          // Store final RGBA PNG
           const resultBlob = new Blob([new Uint8Array(result.finalPng)], { type: "image/png" });
           const resultStorageId = await ctx.storage.store(resultBlob);
 
-          // 10. Update generation record: complete
           await ctx.runMutation(internal.generations.completeGeneration, {
-            generationId,
+            generationId: args.generationId,
             resultStorageId,
             whiteBgStorageId,
             blackBgStorageId,
@@ -196,34 +175,28 @@ export const generate = action({
             dimensionMismatch,
           });
 
-          return generationId;
+          return;
         } catch (e) {
-          // If this was the last retry, rethrow
           if (attempt === GENERATION_CONFIG.maxRetriesTotal) {
             throw e;
           }
-          // Otherwise continue to next attempt
         }
       }
 
-      // Should not reach here, but TypeScript needs it
       throw new Error("Generation failed after all retries");
     } catch (e) {
-      // Refund credits on failure
+      // Refund credits
       await ctx.runMutation(internal.generations.refundCredits, {
-        userId: user._id,
-        amount: creditsCost,
+        userId: generation.userId,
+        amount: generation.creditsCost,
       });
 
-      // Update generation record: failed
       const errorMessage =
         e instanceof Error ? e.message : "Unknown error occurred";
       await ctx.runMutation(internal.generations.failGeneration, {
-        generationId,
+        generationId: args.generationId,
         error: errorMessage,
       });
-
-      throw e;
     }
   },
 });
@@ -239,12 +212,17 @@ async function executeGenerationPipeline(
   ctx: { storage: { store: (blob: Blob) => Promise<string> } },
   apiKey: string,
   prompt: string,
+  updateStatus: (message: string) => Promise<void>,
 ): Promise<PipelineResult> {
   const session = createChatSession(apiKey);
 
   // === Pass 1: White background ===
+  await updateStatus("Generating white background pass…");
   let whiteBgResult: GeminiImageResult | null = null;
   for (let retry = 0; retry <= GENERATION_CONFIG.maxRetriesPerPass; retry++) {
+    if (retry > 0) {
+      await updateStatus(`White background pass (retry ${retry})…`);
+    }
     const whiteBgPrompt =
       retry === 0
         ? buildWhiteBgPrompt(prompt)
@@ -277,8 +255,12 @@ async function executeGenerationPipeline(
   }
 
   // === Pass 2: Black background (same chat session) ===
+  await updateStatus("Generating black background pass…");
   let blackBgResult: GeminiImageResult | null = null;
   for (let retry = 0; retry <= GENERATION_CONFIG.maxRetriesPerPass; retry++) {
+    if (retry > 0) {
+      await updateStatus(`Black background pass (retry ${retry})…`);
+    }
     const blackBgPrompt =
       retry === 0 ? buildBlackBgPrompt() : buildBlackBgRetryPrompt();
 
@@ -313,6 +295,7 @@ async function executeGenerationPipeline(
   }
 
   // === Decode both for matte ===
+  await updateStatus("Processing transparency matte…");
   let white = decodePng(whiteBgResult.imageBase64);
   let black = decodePng(blackBgResult.imageBase64);
 
@@ -370,6 +353,7 @@ async function executeGenerationPipeline(
   });
 
   // === Encode final RGBA PNG ===
+  await updateStatus("Encoding final image…");
   const finalPng = encodePng(matteOutput.pixels, matteOutput.width, matteOutput.height);
 
   // Re-encode intermediates for storage

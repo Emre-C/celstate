@@ -21,4 +21,5 @@ export const GENERATION_CONFIG = {
 
   // Credits
   creditsPerGeneration: 1,
+  initialCredits: 3,
 } as const;

@@ -1,7 +1,8 @@
 import { getContext, setContext } from 'svelte';
 import { useConvexClient } from 'convex-svelte';
 import { ConvexHttpClient } from 'convex/browser';
-import { goto } from '$app/navigation';
+import { goto, replaceState } from '$app/navigation';
+import { browser } from '$app/environment';
 import { PUBLIC_CONVEX_URL } from '$env/static/public';
 
 const AUTH_CONTEXT_KEY = '$$_convexAuth';
@@ -17,14 +18,17 @@ function storageKey(key: string): string {
 }
 
 function storageGet(key: string): string | null {
+	if (!browser) return null;
 	return localStorage.getItem(storageKey(key));
 }
 
 function storageSet(key: string, value: string): void {
+	if (!browser) return;
 	localStorage.setItem(storageKey(key), value);
 }
 
 function storageRemove(key: string): void {
+	if (!browser) return;
 	localStorage.removeItem(storageKey(key));
 }
 
@@ -41,7 +45,7 @@ export function setupConvexAuth(): ConvexAuthState {
 
 	// Detect OAuth callback synchronously to avoid flash of landing page
 	const hasCallbackCode =
-		typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('code');
+		browser && new URLSearchParams(window.location.search).has('code');
 
 	// Only show loading state when processing an OAuth callback.
 	// Normal visits resolve auth synchronously from localStorage (no loading flash).
@@ -59,6 +63,8 @@ export function setupConvexAuth(): ConvexAuthState {
 				storageRemove(REFRESH_TOKEN_KEY);
 			}
 		}
+		// Re-register auth provider so the Convex client re-fetches the updated token
+		client.setAuth(fetchAccessToken);
 		isLoading = false;
 	}
 
@@ -96,7 +102,7 @@ export function setupConvexAuth(): ConvexAuthState {
 
 			const url = new URL(window.location.href);
 			url.searchParams.delete('code');
-			window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+			replaceState(url.pathname + url.search + url.hash, {});
 
 			const httpClient = new ConvexHttpClient(PUBLIC_CONVEX_URL);
 			httpClient
