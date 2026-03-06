@@ -27,6 +27,7 @@ export default defineSchema({
       v.literal("complete"),
       v.literal("failed")
     ),
+    statusMessage: v.optional(v.string()),
     resultStorageId: v.optional(v.id("_storage")),
     whiteBgStorageId: v.optional(v.id("_storage")),
     blackBgStorageId: v.optional(v.id("_storage")),

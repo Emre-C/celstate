@@ -8,20 +8,21 @@
 	const user = useQuery(api.users.getMe, {});
 	const generations = useQuery(api.generations.getByUserWithUrls, {});
 
-	let generating = $state(false);
 	let errorMessage = $state('');
+
+	const activeGeneration = $derived(
+		generations.data?.find((g) => g.status === 'generating')
+	);
+	const generating = $derived(!!activeGeneration);
 
 	async function handleGenerate(prompt: string) {
 		if (generating) return;
-		generating = true;
 		errorMessage = '';
 
 		try {
-			await client.action(api.generation.generate, { prompt });
+			await client.mutation(api.generations.requestGeneration, { prompt });
 		} catch (e) {
 			errorMessage = e instanceof Error ? e.message : 'Generation failed. Please try again.';
-		} finally {
-			generating = false;
 		}
 	}
 
@@ -90,6 +91,7 @@
 					<GenerationCard
 						prompt={gen.prompt}
 						status={gen.status}
+						statusMessage={gen.statusMessage}
 						resultUrl={gen.resultUrl ?? undefined}
 						error={gen.error}
 						createdAt={gen.createdAt}

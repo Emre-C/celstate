@@ -1,6 +1,7 @@
 import { v } from "convex/values";
-import { query, internalQuery } from "./_generated/server.js";
+import { query, internalQuery, internalMutation } from "./_generated/server.js";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { GENERATION_CONFIG } from "./lib/config.js";
 
 export const getByEmail = internalQuery({
   args: { email: v.string() },
@@ -35,5 +36,23 @@ export const getMe = query({
       return null;
     }
     return await ctx.db.get(userId);
+  },
+});
+
+export const seedCredits = internalMutation({
+  args: { email: v.string() },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", args.email))
+      .first();
+    if (!user) {
+      return false;
+    }
+    await ctx.db.patch(user._id, {
+      credits: GENERATION_CONFIG.initialCredits,
+    });
+    return true;
   },
 });
