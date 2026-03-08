@@ -9,7 +9,8 @@
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"test:auth": "npx tsx scripts/test-auth-contract.ts"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-auto": "^7.0.0",
@@ -23,8 +24,8 @@
 		"vite": "^7.3.1"
 	},
 	"dependencies": {
-		"@auth/core": "^0.37.0",
-		"@convex-dev/auth": "^0.0.91",
+		"@auth/core": "0.37.0",
+		"@convex-dev/auth": "0.0.91",
 		"@google/genai": "^1.43.0",
 		"@tailwindcss/vite": "^4.2.1",
 		"convex": "^1.32.0",

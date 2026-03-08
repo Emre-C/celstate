@@ -44,15 +44,12 @@
 				<Logo class="h-6 w-6" />
 				<span class="text-lg font-light tracking-tight">celstate</span>
 			</a>
-			<div class="flex items-center gap-4">
-				<a href="/sign-in" class="text-sm text-dim transition-colors hover:text-text">Sign In</a>
-				<a
-					href="/sign-up"
-					class="border border-accent bg-accent/10 px-4 py-1.5 text-sm font-medium text-accent transition-colors hover:bg-accent hover:text-bg"
-				>
-					Get Started
-				</a>
-			</div>
+			<a
+				href="/app"
+				class="border border-accent bg-accent/10 px-4 py-1.5 text-sm font-medium text-accent transition-colors hover:bg-accent hover:text-bg"
+			>
+				Start Generating
+			</a>
 		</div>
 	</nav>
 
@@ -74,16 +71,10 @@
 				</p>
 				<div class="flex items-center gap-4">
 					<a
-						href="/sign-up"
+						href="/app"
 						class="border border-accent bg-accent px-6 py-2.5 text-sm font-medium text-bg transition-colors hover:bg-accent/90"
 					>
 						Start Generating
-					</a>
-					<a
-						href="#features"
-						class="border border-dim/30 px-6 py-2.5 text-sm text-dim transition-colors hover:border-accent/40 hover:text-text"
-					>
-						Learn more
 					</a>
 				</div>
 			</div>
@@ -206,36 +197,12 @@
 					</li>
 				</ul>
 				<a
-					href="/sign-up"
+					href="/app"
 					class="block w-full border border-accent bg-accent py-2.5 text-center text-sm font-medium text-bg transition-colors hover:bg-accent/90"
 				>
-					Get Started
+					Start Generating
 				</a>
 			</div>
-		</div>
-	</section>
-
-	<!-- Final CTA -->
-	<section class="relative overflow-hidden border-t border-border px-6 py-24 sm:px-16 md:px-24 lg:px-32">
-		<!-- Radial glow -->
-		<div class="pointer-events-none absolute inset-0 flex items-center justify-center">
-			<div class="h-[300px] w-[500px] rounded-full bg-accent/[0.06] blur-[100px]"></div>
-		</div>
-
-		<div class="relative mx-auto max-w-6xl text-center">
-			<h2 class="mb-4 text-2xl font-light tracking-tight text-text sm:text-3xl">
-				Ready to see the difference?
-			</h2>
-			<p class="mx-auto mb-8 max-w-md text-sm leading-relaxed text-dim">
-				Type your first prompt and experience transparent-background generation done right.
-			</p>
-			<a
-				href="/sign-up"
-				class="inline-flex items-center gap-2 border border-accent bg-accent px-8 py-3 text-sm font-medium text-bg transition-colors hover:bg-accent/90"
-			>
-				Get Started
-				<span aria-hidden="true">→</span>
-			</a>
 		</div>
 	</section>
 

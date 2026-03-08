@@ -497,9 +497,6 @@ Each module is independently testable. No module depends on a module below it in
 - ✅ Google OAuth sign-in flow — `/app` → Google consent → callback → token exchange → redirect back to `/app` authenticated
 - ✅ Authenticated app shell — nav bar shows credit balance + sign out, generation workspace renders
 - ✅ Sign out works — clears tokens, returns to sign-in screen
-
-### What's Next — Resume Here
-
 1. **Seed credits for test user** — the authenticated user has `credits: undefined` (no credits). Manually set credits in Convex dashboard or add a mutation to seed initial credits (e.g., 10 credits for new users). Without credits, `generation.generate` will fail with "Insufficient credits".
 2. **End-to-end generation test** — type a prompt, verify the full pipeline: Gemini dual-pass → validation → difference matte → storage → real-time UI update with checkerboard preview + download
 3. **Iterate on prompt templates** — tune `lib/prompts.ts` based on empirical Gemini output quality (background purity, subject consistency across white/black passes)
