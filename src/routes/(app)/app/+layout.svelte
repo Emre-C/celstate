@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { useQuery } from 'convex-svelte';
-	import { api } from '../../convex/_generated/api.js';
-	import { useConvexAuth } from '$lib/auth.svelte';
+	import { api } from '../../../convex/_generated/api.js';
+	import { useConvexAuth } from '$lib/auth/auth.svelte';
 	import Logo from '$lib/components/Logo.svelte';
 
 	let { children } = $props();

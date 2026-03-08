@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { useQuery, useConvexClient } from 'convex-svelte';
-	import { api } from '../../convex/_generated/api.js';
+	import { api } from '../../../convex/_generated/api.js';
 	import PromptInput from '$lib/components/PromptInput.svelte';
 	import GenerationCard from '$lib/components/GenerationCard.svelte';
 
