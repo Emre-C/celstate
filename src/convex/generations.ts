@@ -55,6 +55,7 @@ export const completeGeneration = internalMutation({
   args: {
     generationId: v.id("generations"),
     resultStorageId: v.id("_storage"),
+    optimizedStorageId: v.optional(v.id("_storage")),
     whiteBgStorageId: v.optional(v.id("_storage")),
     blackBgStorageId: v.optional(v.id("_storage")),
     generationTimeMs: v.number(),
@@ -66,6 +67,7 @@ export const completeGeneration = internalMutation({
     await ctx.db.patch(args.generationId, {
       status: "complete",
       resultStorageId: args.resultStorageId,
+      optimizedStorageId: args.optimizedStorageId,
       whiteBgStorageId: args.whiteBgStorageId,
       blackBgStorageId: args.blackBgStorageId,
       completedAt: Date.now(),
@@ -126,6 +128,7 @@ export const getByUser = internalQuery({
       resultStorageId: v.optional(v.id("_storage")),
       whiteBgStorageId: v.optional(v.id("_storage")),
       blackBgStorageId: v.optional(v.id("_storage")),
+      optimizedStorageId: v.optional(v.id("_storage")),
       creditsCost: v.number(),
       aspectRatio: v.string(),
       createdAt: v.number(),
@@ -162,6 +165,7 @@ export const getById = internalQuery({
       resultStorageId: v.optional(v.id("_storage")),
       whiteBgStorageId: v.optional(v.id("_storage")),
       blackBgStorageId: v.optional(v.id("_storage")),
+      optimizedStorageId: v.optional(v.id("_storage")),
       creditsCost: v.number(),
       aspectRatio: v.string(),
       createdAt: v.number(),
@@ -196,6 +200,9 @@ export const getByUserWithUrls = query({
         ...gen,
         resultUrl: gen.resultStorageId
           ? await ctx.storage.getUrl(gen.resultStorageId)
+          : null,
+        optimizedUrl: gen.optimizedStorageId
+          ? await ctx.storage.getUrl(gen.optimizedStorageId)
           : null,
       }))
     );

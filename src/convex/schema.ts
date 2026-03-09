@@ -31,6 +31,7 @@ export default defineSchema({
     resultStorageId: v.optional(v.id("_storage")),
     whiteBgStorageId: v.optional(v.id("_storage")),
     blackBgStorageId: v.optional(v.id("_storage")),
+    optimizedStorageId: v.optional(v.id("_storage")),
     creditsCost: v.number(),
     aspectRatio: v.string(),
     createdAt: v.number(),

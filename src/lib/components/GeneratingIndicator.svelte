@@ -38,14 +38,14 @@
 	</div>
 
 	<!-- Status text -->
-	<div class="flex flex-col items-center gap-1.5">
+	<div class="flex w-full flex-col items-center gap-1.5 px-4">
 		<span class="generating-text font-mono text-[11px] tracking-[0.2em] uppercase text-accent">
 			Generating
 		</span>
 		{#if statusMessage}
 			<p class="text-center text-xs text-dim">{statusMessage}</p>
 		{/if}
-		<p class="max-w-xs truncate text-center text-xs text-dim/50">
+		<p class="w-full truncate text-center text-xs text-dim/50">
 			{prompt}
 		</p>
 		<span class="font-mono text-[10px] tracking-[0.15em] text-dim/40">

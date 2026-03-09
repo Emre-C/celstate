@@ -19,8 +19,8 @@
 	];
 
 	const images: ImageOption[] = [
-		{ src: '/images/dog.png', alt: 'Game character with transparent background', label: 'Character' },
-		{ src: '/images/tank.png', alt: 'Vehicle asset with transparent background', label: 'Vehicle' }
+		{ src: '/images/celstate-a-majestic-phoenix-bird-in-midflight-win.png', alt: 'Phoenix with glowing wisps and semi-transparent flame edges', label: 'Phoenix' },
+		{ src: '/images/celstate-a-large-brilliantcut-gemstone-emerald-gr.png', alt: 'Faceted gemstone with clean hard edges and internal refraction', label: 'Gemstone' }
 	];
 
 	let selectedBg = $state(2);
@@ -59,7 +59,7 @@
 
 		<!-- Bottom bar -->
 		<div
-			class="absolute bottom-0 left-0 right-0 flex items-center justify-between border-t border-white/10 bg-bg/80 px-4 py-2.5 backdrop-blur-sm"
+			class="absolute bottom-0 left-0 right-0 flex items-center justify-between border-t border-white/10 bg-bg px-4 py-2.5"
 		>
 			<!-- Image tabs -->
 			<div class="flex items-center gap-1">
