@@ -21,6 +21,7 @@ import {
   validateDimensionMatch,
 } from "./lib/validation.js";
 import { differenceMatte } from "./lib/matte.js";
+import { optimizeForWeb } from "./lib/optimize.js";
 
 function decodePng(base64: string): { pixels: Uint8ClampedArray; width: number; height: number } {
   const buffer = Buffer.from(base64, "base64");
@@ -165,9 +166,15 @@ export const generateWorker = internalAction({
           const resultBlob = new Blob([new Uint8Array(result.finalPng)], { type: "image/png" });
           const resultStorageId = await ctx.storage.store(resultBlob);
 
+          await updateStatus("Optimizing for web…");
+          const optimizedPng = await optimizeForWeb(result.finalPng);
+          const optimizedBlob = new Blob([new Uint8Array(optimizedPng)], { type: "image/png" });
+          const optimizedStorageId = await ctx.storage.store(optimizedBlob);
+
           await ctx.runMutation(internal.generations.completeGeneration, {
             generationId: args.generationId,
             resultStorageId,
+            optimizedStorageId,
             whiteBgStorageId,
             blackBgStorageId,
             generationTimeMs: Date.now() - startTime,

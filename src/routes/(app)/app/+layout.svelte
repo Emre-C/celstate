@@ -3,6 +3,7 @@
 	import { api } from '../../../convex/_generated/api.js';
 	import { useConvexAuth } from '$lib/auth/auth.svelte';
 	import Logo from '$lib/components/Logo.svelte';
+	import NavBar from '$lib/components/ui/NavBar.svelte';
 
 	let { children } = $props();
 	const auth = useConvexAuth();
@@ -35,28 +36,22 @@
 	</div>
 {:else}
 	<div class="min-h-dvh">
-		<nav class="fixed top-0 left-0 right-0 z-50 border-b border-border bg-bg/80 backdrop-blur-md">
-			<div class="mx-auto flex max-w-6xl items-center justify-between px-6 py-3 sm:px-16 md:px-24 lg:px-32">
-				<a href="/" class="flex items-center gap-2.5 text-text transition-colors hover:text-accent">
-					<Logo class="h-5 w-5" />
-					<span class="text-base font-light tracking-tight">celstate</span>
-				</a>
-				<div class="flex items-center gap-5">
-					{#if user.data}
-						<div class="flex items-center gap-2">
-							<span class="h-1.5 w-1.5 rounded-full bg-accent"></span>
-							<span class="font-mono text-xs tracking-[0.15em] uppercase text-dim">
-								{user.data.credits ?? 0} credits
-							</span>
-						</div>
-					{/if}
-					<button
-						onclick={() => auth.signOut()}
-						class="text-sm text-dim transition-colors hover:text-text"
-					>Sign Out</button>
-				</div>
+		<NavBar compact>
+			<div class="flex items-center gap-5">
+				{#if user.data}
+					<div class="flex items-center gap-2">
+						<span class="h-1.5 w-1.5 rounded-full bg-accent"></span>
+						<span class="font-mono text-xs tracking-[0.15em] uppercase text-dim">
+							{user.data.credits ?? 0} credits
+						</span>
+					</div>
+				{/if}
+				<button
+					onclick={() => auth.signOut()}
+					class="text-sm text-dim transition-colors hover:text-text"
+				>Sign Out</button>
 			</div>
-		</nav>
+		</NavBar>
 
 		<main class="pt-14">
 			{@render children()}

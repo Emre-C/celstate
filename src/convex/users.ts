@@ -56,3 +56,21 @@ export const seedCredits = internalMutation({
     return true;
   },
 });
+
+export const addCredits = internalMutation({
+  args: { email: v.string(), amount: v.number() },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", args.email))
+      .first();
+    if (!user) {
+      return false;
+    }
+    await ctx.db.patch(user._id, {
+      credits: (user.credits ?? 0) + args.amount,
+    });
+    return true;
+  },
+});

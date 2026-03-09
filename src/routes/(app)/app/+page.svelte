@@ -3,6 +3,8 @@
 	import { api } from '../../../convex/_generated/api.js';
 	import PromptInput from '$lib/components/PromptInput.svelte';
 	import GenerationCard from '$lib/components/GenerationCard.svelte';
+	import PageContainer from '$lib/components/ui/PageContainer.svelte';
+	import SectionLabel from '$lib/components/ui/SectionLabel.svelte';
 
 	const client = useConvexClient();
 	const user = useQuery(api.users.getMe, {});
@@ -36,14 +38,10 @@
 	<title>Generate — Celstate</title>
 </svelte:head>
 
-<div class="px-6 py-8 sm:px-16 md:px-24 lg:px-32">
-	<div class="mx-auto max-w-4xl">
+<PageContainer max="4xl" class="py-8">
 		<!-- Header -->
 		<div class="mb-8">
-			<p class="mb-2 font-mono text-xs tracking-[0.15em] uppercase text-dim">
-				<span class="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-accent"></span>
-				Generation workspace
-			</p>
+			<SectionLabel text="Generation workspace" />
 			<h1 class="text-2xl font-light tracking-tight text-text">
 				What do you need?
 			</h1>
@@ -79,10 +77,7 @@
 		{:else if hasGenerations}
 			<!-- Section label -->
 			<div class="mb-6">
-				<p class="font-mono text-xs tracking-[0.15em] uppercase text-dim">
-					<span class="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-accent"></span>
-					Your generations
-				</p>
+				<SectionLabel text="Your generations" />
 			</div>
 
 			<!-- Grid of generation cards -->
@@ -93,6 +88,7 @@
 						status={gen.status}
 						statusMessage={gen.statusMessage}
 						resultUrl={gen.resultUrl ?? undefined}
+						optimizedUrl={gen.optimizedUrl ?? undefined}
 						error={gen.error}
 						createdAt={gen.createdAt}
 						completedAt={gen.completedAt}
@@ -114,8 +110,7 @@
 				</p>
 			</div>
 		{/if}
-	</div>
-</div>
+</PageContainer>
 
 <style>
 	.empty-state-grid {

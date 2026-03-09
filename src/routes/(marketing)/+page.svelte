@@ -1,6 +1,8 @@
 <script lang="ts">
 	import HeroShowcase from '$lib/components/HeroShowcase.svelte';
-	import Logo from '$lib/components/Logo.svelte';
+	import NavBar from '$lib/components/ui/NavBar.svelte';
+	import PageContainer from '$lib/components/ui/PageContainer.svelte';
+	import SectionLabel from '$lib/components/ui/SectionLabel.svelte';
 
 	const features = [
 		{
@@ -38,62 +40,56 @@
 
 <div class="min-h-dvh">
 	<!-- Nav -->
-	<nav class="fixed top-0 left-0 right-0 z-50 border-b border-border bg-bg/80 backdrop-blur-md">
-		<div class="mx-auto flex max-w-6xl items-center justify-between px-6 py-4 sm:px-16 md:px-24 lg:px-32">
-			<a href="/" class="flex items-center gap-2.5 text-text transition-colors hover:text-accent">
-				<Logo class="h-6 w-6" />
-				<span class="text-lg font-light tracking-tight">celstate</span>
-			</a>
-			<a
-				href="/app"
-				class="border border-accent bg-accent/10 px-4 py-1.5 text-sm font-medium text-accent transition-colors hover:bg-accent hover:text-bg"
-			>
-				Start Generating
-			</a>
-		</div>
-	</nav>
+	<NavBar>
+		<a
+			href="/app"
+			class="border border-accent bg-accent/10 px-4 py-1.5 text-sm font-medium text-accent transition-colors hover:bg-accent hover:text-bg"
+		>
+			Start Generating
+		</a>
+	</NavBar>
 
 	<!-- Hero: Split layout — editorial left, interactive proof right -->
-	<section class="px-6 pt-28 pb-20 sm:px-16 md:px-24 lg:px-32">
-		<div class="mx-auto grid max-w-6xl items-start gap-12 lg:grid-cols-[1fr_1.4fr] lg:gap-16">
-			<!-- Left: editorial -->
-			<div class="pt-4 lg:pt-8">
-				<p class="mb-6 font-mono text-xs tracking-[0.15em] uppercase text-dim">
-					<span class="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-accent"></span>
-					Transparent background generation
-				</p>
-				<h1 class="mb-6 text-4xl font-light leading-[1.1] tracking-tight text-text sm:text-5xl">
-					Images with nothing behind them.
-				</h1>
-				<p class="mb-10 max-w-md text-sm leading-relaxed text-dim">
-					Type what you need. Get a production-ready PNG with a transparent background.
-					No background removal. No artifacts. Just the subject, clean and isolated.
-				</p>
-				<div class="flex items-center gap-4">
-					<a
-						href="/app"
-						class="border border-accent bg-accent px-6 py-2.5 text-sm font-medium text-bg transition-colors hover:bg-accent/90"
-					>
-						Start Generating
-					</a>
+	<section class="pt-28 pb-20">
+		<PageContainer>
+			<div class="grid items-start gap-12 lg:grid-cols-[1fr_1.4fr] lg:gap-16">
+				<!-- Left: editorial -->
+				<div class="pt-4 lg:pt-8">
+					<div class="mb-6">
+						<SectionLabel text="Transparent background generation" />
+					</div>
+					<h1 class="mb-6 text-4xl font-light leading-[1.1] tracking-tight text-text sm:text-5xl">
+						Images with nothing behind them.
+					</h1>
+					<p class="mb-10 max-w-md text-sm leading-relaxed text-dim">
+						Type what you need. Get a production-ready PNG with a transparent background.
+						No background removal. No artifacts. Just the subject, clean and isolated.
+					</p>
+					<div class="flex items-center gap-4">
+						<a
+							href="/app"
+							class="border border-accent bg-accent px-6 py-2.5 text-sm font-medium text-bg transition-colors hover:bg-accent/90"
+						>
+							Start Generating
+						</a>
+					</div>
+				</div>
+
+				<!-- Right: interactive showcase -->
+				<div>
+					<HeroShowcase />
 				</div>
 			</div>
-
-			<!-- Right: interactive showcase -->
-			<div>
-				<HeroShowcase />
-			</div>
-		</div>
+		</PageContainer>
 	</section>
 
 	<!-- Features: Bento grid -->
-	<section id="features" class="border-t border-border px-6 py-20 sm:px-16 md:px-24 lg:px-32">
-		<div class="mx-auto max-w-6xl">
+	<section id="features" class="border-t border-border py-20">
+		<PageContainer>
 			<div class="mb-12 max-w-xl">
-				<p class="mb-6 font-mono text-xs tracking-[0.15em] uppercase text-dim">
-					<span class="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-accent"></span>
-					Why it matters
-				</p>
+				<div class="mb-6">
+					<SectionLabel text="Why it matters" />
+				</div>
 				<h2 class="text-2xl font-light tracking-tight text-text">
 					Details that make the difference.
 				</h2>
@@ -114,17 +110,16 @@
 					</div>
 				{/each}
 			</div>
-		</div>
+		</PageContainer>
 	</section>
 
 	<!-- How it Works -->
-	<section class="border-t border-border px-6 py-20 sm:px-16 md:px-24 lg:px-32">
-		<div class="mx-auto max-w-6xl">
+	<section class="border-t border-border py-20">
+		<PageContainer>
 			<div class="mb-12 max-w-xl">
-				<p class="mb-6 font-mono text-xs tracking-[0.15em] uppercase text-dim">
-					<span class="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-accent"></span>
-					How it works
-				</p>
+				<div class="mb-6">
+					<SectionLabel text="How it works" />
+				</div>
 				<h2 class="text-2xl font-light tracking-tight text-text">
 					Three steps. No learning curve.
 				</h2>
@@ -153,17 +148,16 @@
 					</p>
 				</div>
 			</div>
-		</div>
+		</PageContainer>
 	</section>
 
 	<!-- Pricing -->
-	<section class="border-t border-border px-6 py-20 sm:px-16 md:px-24 lg:px-32">
-		<div class="mx-auto max-w-6xl">
+	<section class="border-t border-border py-20">
+		<PageContainer>
 			<div class="mb-12 max-w-xl">
-				<p class="mb-6 font-mono text-xs tracking-[0.15em] uppercase text-dim">
-					<span class="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-accent"></span>
-					Pricing
-				</p>
+				<div class="mb-6">
+					<SectionLabel text="Pricing" />
+				</div>
 				<h2 class="mb-4 text-2xl font-light tracking-tight text-text">
 					Credits. No subscriptions.
 				</h2>
@@ -203,14 +197,16 @@
 					Start Generating
 				</a>
 			</div>
-		</div>
+		</PageContainer>
 	</section>
 
 	<!-- Footer -->
-	<footer class="border-t border-border px-6 py-10 sm:px-16 md:px-24 lg:px-32">
-		<div class="mx-auto flex max-w-6xl items-center justify-between">
-			<span class="text-sm text-dim">© {new Date().getFullYear()} Celstate</span>
-			<span class="text-sm text-dim">Transparent images. Nothing else.</span>
-		</div>
+	<footer class="border-t border-border py-10">
+		<PageContainer>
+			<div class="flex items-center justify-between">
+				<span class="text-sm text-dim">© {new Date().getFullYear()} Celstate</span>
+				<span class="text-sm text-dim">Transparent images. Nothing else.</span>
+			</div>
+		</PageContainer>
 	</footer>
 </div>

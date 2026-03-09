@@ -16,6 +16,7 @@ import type * as http from "../http.js";
 import type * as lib_config from "../lib/config.js";
 import type * as lib_gemini from "../lib/gemini.js";
 import type * as lib_matte from "../lib/matte.js";
+import type * as lib_optimize from "../lib/optimize.js";
 import type * as lib_prompts from "../lib/prompts.js";
 import type * as lib_validation from "../lib/validation.js";
 import type * as users from "../users.js";
@@ -35,6 +36,7 @@ declare const fullApi: ApiFromModules<{
   "lib/config": typeof lib_config;
   "lib/gemini": typeof lib_gemini;
   "lib/matte": typeof lib_matte;
+  "lib/optimize": typeof lib_optimize;
   "lib/prompts": typeof lib_prompts;
   "lib/validation": typeof lib_validation;
   users: typeof users;
