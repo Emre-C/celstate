@@ -63,7 +63,7 @@
 					: 'text-dim/40 cursor-not-allowed'}"
 		>
 			{#if noCredits}
-				No credits
+				<a href="/app/credits" class="text-red-400 hover:text-red-300">Get credits</a>
 			{:else if disabled}
 				Working
 			{:else}

@@ -25,15 +25,23 @@
 
 	let selectedBg = $state(2);
 	let selectedImage = $state(0);
+	let hasSwitchedBackground = $state(false);
+
+	function selectBackground(i: number) {
+		if (i !== selectedBg) hasSwitchedBackground = true;
+		selectedBg = i;
+	}
 </script>
 
 <div class="showcase-wrapper">
 	<!-- Background switcher -->
 	<div class="mb-3 flex flex-wrap items-center gap-1.5">
-		<span class="mr-2 font-mono text-[10px] tracking-[0.15em] uppercase text-dim">Switch background</span>
+		<span
+			class="mr-2 font-mono text-[10px] tracking-[0.15em] uppercase text-dim {!hasSwitchedBackground ? 'showcase-cta-pulse' : ''}"
+		>Switch background</span>
 		{#each backgrounds as bg, i}
 			<button
-				onclick={() => (selectedBg = i)}
+				onclick={() => selectBackground(i)}
 				class="border px-2.5 py-1 font-mono text-[10px] tracking-wider uppercase transition-all duration-200 {selectedBg === i
 					? 'border-accent/60 bg-accent/10 text-accent'
 					: 'border-border text-dim hover:border-accent/30 hover:text-text'}"
@@ -68,7 +76,7 @@
 						onclick={() => (selectedImage = i)}
 						class="px-2.5 py-1 font-mono text-[10px] tracking-wider uppercase transition-all duration-200 {selectedImage === i
 							? 'text-accent'
-							: 'text-dim hover:text-text'}"
+							: 'text-dim hover:text-text'} {hasSwitchedBackground && selectedImage !== i ? 'showcase-cta-pulse' : ''}"
 					>
 						{img.label}
 					</button>
@@ -100,6 +108,25 @@
 </div>
 
 <style>
+	.showcase-cta-pulse {
+		animation: showcase-cta-pulse 2s ease-in-out infinite;
+		display: inline-block;
+	}
+
+	@keyframes showcase-cta-pulse {
+		0%,
+		100% {
+			opacity: 0.9;
+			text-shadow: 0 0 0 transparent;
+			transform: scale(1);
+		}
+		50% {
+			opacity: 1;
+			text-shadow: 0 0 14px var(--color-accent), 0 0 28px var(--color-accent);
+			transform: scale(1.02);
+		}
+	}
+
 	.showcase-checker {
 		background-image: linear-gradient(45deg, #1a1a1a 25%, transparent 25%),
 			linear-gradient(-45deg, #1a1a1a 25%, transparent 25%),

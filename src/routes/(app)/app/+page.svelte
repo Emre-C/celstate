@@ -1,5 +1,7 @@
 <script lang="ts">
-	import { useQuery, useConvexClient } from 'convex-svelte';
+	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
+	import { useQuery, useConvexClient } from '@mmailaender/convex-svelte';
 	import { api } from '../../../convex/_generated/api.js';
 	import PromptInput from '$lib/components/PromptInput.svelte';
 	import GenerationCard from '$lib/components/GenerationCard.svelte';
@@ -11,6 +13,19 @@
 	const generations = useQuery(api.generations.getByUserWithUrls, {});
 
 	let errorMessage = $state('');
+	let successMessage = $state('');
+
+	// Handle Stripe redirect params
+	$effect(() => {
+		const params = $page.url.searchParams;
+		if (params.get('success') === 'true') {
+			successMessage = 'Payment successful! Your credits are being added.';
+			goto('/app', { replaceState: true });
+		} else if (params.get('canceled') === 'true') {
+			errorMessage = 'Payment canceled. No charges were made.';
+			goto('/app', { replaceState: true });
+		}
+	});
 
 	const activeGeneration = $derived(
 		generations.data?.find((g) => g.status === 'generating')
@@ -55,6 +70,27 @@
 				{credits}
 			/>
 		</div>
+
+		<!-- Success message -->
+		{#if successMessage}
+			<div class="mb-6 border border-accent/40 bg-accent/5 px-4 py-3">
+				<div class="flex items-center justify-between">
+					<div class="flex items-center gap-2">
+						<span class="h-1.5 w-1.5 rounded-full bg-accent"></span>
+						<p class="text-sm text-accent">{successMessage}</p>
+					</div>
+					<button
+						onclick={() => (successMessage = '')}
+						aria-label="Dismiss"
+						class="text-dim transition-colors hover:text-text"
+					>
+						<svg class="h-4 w-4" viewBox="0 0 16 16" fill="none">
+							<path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
+						</svg>
+					</button>
+				</div>
+			</div>
+		{/if}
 
 		<!-- Error message -->
 		{#if errorMessage}

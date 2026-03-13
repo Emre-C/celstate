@@ -32,7 +32,7 @@
 		},
 		{
 			title: 'Simple Pricing',
-			description: 'Credits in $10 packs. No subscriptions, no tiers, no expiration. Use when you need them.',
+			description: 'Start free, buy credit packs when you need more. No subscriptions, no expiration.',
 			stat: 'Pay-as-you-go'
 		}
 	];
@@ -158,45 +158,61 @@
 				<div class="mb-6">
 					<SectionLabel text="Pricing" />
 				</div>
-				<h2 class="mb-4 text-2xl font-light tracking-tight text-text">
-					Credits. No subscriptions.
+				<h2 class="text-2xl font-light tracking-tight text-text">
+					Pay for what you use.
 				</h2>
-				<p class="text-sm leading-relaxed text-dim">
-					Buy credits in $10 increments. Use them when you need them.
-					No monthly fees. No tiers. No expiration.
-				</p>
 			</div>
 
-			<div class="max-w-xs border border-border p-6">
-				<div class="mb-4 flex items-baseline gap-1">
-					<span class="text-3xl font-light text-text">$10</span>
-					<span class="text-sm text-dim">/ credit pack</span>
+			<div class="grid grid-cols-1 gap-px border border-border bg-border sm:grid-cols-3">
+				<div class="flex flex-col bg-bg p-6 sm:p-8">
+					<span class="mb-6 block font-mono text-[10px] tracking-[0.2em] uppercase text-accent">Free</span>
+					<span class="mb-2 block text-3xl font-light text-text">$0</span>
+					<p class="mb-8 flex-1 text-sm leading-relaxed text-dim">
+						3 credits on sign-up, plus 1 free credit every week. Enough to try it — not enough to rely on it.
+					</p>
+					<a
+						href="/app"
+						class="block w-full border border-border py-2.5 text-center text-sm text-dim transition-colors hover:border-accent hover:text-text"
+					>
+						Start Free
+					</a>
 				</div>
-				<ul class="mb-6 space-y-2.5">
-					<li class="flex items-start gap-2 text-sm text-dim">
-						<span class="mt-1.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-accent"></span>
-						Pay as you go
-					</li>
-					<li class="flex items-start gap-2 text-sm text-dim">
-						<span class="mt-1.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-accent"></span>
-						Credits never expire
-					</li>
-					<li class="flex items-start gap-2 text-sm text-dim">
-						<span class="mt-1.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-accent"></span>
-						30-day image history
-					</li>
-					<li class="flex items-start gap-2 text-sm text-dim">
-						<span class="mt-1.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-accent"></span>
-						Production-ready PNGs
-					</li>
-				</ul>
-				<a
-					href="/app"
-					class="block w-full border border-accent bg-accent py-2.5 text-center text-sm font-medium text-bg transition-colors hover:bg-accent/90"
-				>
-					Start Generating
-				</a>
+				<div class="flex flex-col bg-bg p-6 sm:p-8">
+					<span class="mb-6 block font-mono text-[10px] tracking-[0.2em] uppercase text-accent">Starter</span>
+					<span class="mb-2 block text-3xl font-light text-text">$5</span>
+					<p class="mb-8 flex-1 text-sm leading-relaxed text-dim">
+						15 credits, one-time. No subscription.
+						Your free weekly drip continues on top.
+					</p>
+					<a
+						href="/app"
+						class="block w-full border border-accent bg-accent/10 py-2.5 text-center text-sm font-medium text-accent transition-colors hover:bg-accent hover:text-bg"
+					>
+						Get Started
+					</a>
+				</div>
+				<div class="flex flex-col bg-bg p-6 sm:p-8">
+					<div class="mb-6 flex items-center gap-3">
+						<span class="font-mono text-[10px] tracking-[0.2em] uppercase text-accent">Pro</span>
+						<span class="font-mono text-[10px] tracking-[0.15em] uppercase text-accent/60">Best value</span>
+					</div>
+					<span class="mb-2 block text-3xl font-light text-text">$10</span>
+					<p class="mb-8 flex-1 text-sm leading-relaxed text-dim">
+						40 credits at $0.25 each — 25% less than Starter.
+						Same deal: one-time, no subscription, weekly drip continues.
+					</p>
+					<a
+						href="/app"
+						class="block w-full border border-accent bg-accent py-2.5 text-center text-sm font-medium text-bg transition-colors hover:bg-accent/90"
+					>
+						Get Pro
+					</a>
+				</div>
 			</div>
+
+			<p class="mt-6 text-sm text-dim">
+				Credits never expire. Buy more packs whenever you need them.
+			</p>
 		</PageContainer>
 	</section>
 
