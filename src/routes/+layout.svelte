@@ -1,7 +1,14 @@
 <script lang="ts">
 	import '../app.css';
+	import { createSvelteAuthClient } from '@mmailaender/convex-better-auth-svelte/svelte';
+	import { authClient } from '$lib/auth-client';
 
-	let { children } = $props();
+	let { children, data } = $props();
+
+	createSvelteAuthClient({
+		authClient,
+		getServerState: () => data.authState
+	});
 </script>
 
 <svelte:head>

@@ -1,42 +1,32 @@
-# sv
+# Celstate
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+SvelteKit + Convex app for image generation and Stripe-based credit purchases.
 
-## Creating a project
-
-If you're seeing this, you've probably already done this step. Congrats!
+## Development
 
 ```sh
-# create a new project
-npx sv create my-app
+pnpm install
+pnpm dev
 ```
 
-To recreate this project with the same configuration:
+Runs Vite dev server and Convex dev in parallel.
+
+## Build & Deploy
 
 ```sh
-# recreate this project
-npx sv@0.12.4 create --template minimal --types ts --no-install temp-scaffold
+pnpm build
+pnpm check
 ```
 
-## Developing
+See [`docs/implementation/PRODUCTION-DEPLOYMENT.md`](docs/implementation/PRODUCTION-DEPLOYMENT.md) for full deployment steps.
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+## Project structure
 
-```sh
-npm run dev
+- `src/convex/` — Convex functions (generations, users, Stripe)
+- `src/lib/` — Shared components
+- `src/routes/` — SvelteKit routes
+- `scripts/` — Utility scripts
 
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
+## Docs
 
-## Building
-
-To create a production version of your app:
-
-```sh
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+- [`docs/implementation/PRODUCTION-DEPLOYMENT.md`](docs/implementation/PRODUCTION-DEPLOYMENT.md) — Deployment master plan

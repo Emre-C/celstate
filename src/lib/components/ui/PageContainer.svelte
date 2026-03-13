@@ -11,7 +11,7 @@
 		class?: string;
 	} = $props();
 
-	const maxClass = max === '4xl' ? 'max-w-4xl' : 'max-w-6xl';
+	const maxClass = $derived(max === '4xl' ? 'max-w-4xl' : 'max-w-6xl');
 </script>
 
 <div class="mx-auto {maxClass} px-6 {className}">

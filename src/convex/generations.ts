@@ -1,8 +1,14 @@
 import { v } from "convex/values";
-import { mutation, query, internalMutation, internalQuery } from "./_generated/server.js";
+import {
+  mutation,
+  query,
+  internalMutation,
+  internalQuery,
+} from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
-import { getAuthUserId } from "@convex-dev/auth/server";
+import type { Id } from "./_generated/dataModel.js";
 import { GENERATION_CONFIG } from "./lib/config.js";
+import { getCurrentAppUser, upsertCurrentUser } from "./users.js";
 
 /**
  * Public mutation: atomically deducts credits, inserts a "generating" row,
@@ -15,20 +21,18 @@ export const requestGeneration = mutation({
   },
   returns: v.id("generations"),
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Authentication required");
-    }
+    const appUser = (await getCurrentAppUser(ctx)) ?? await upsertCurrentUser(ctx);
+    const userId = appUser._id;
 
     const creditsCost = GENERATION_CONFIG.creditsPerGeneration;
 
     // Atomic: check + deduct credits
-    const user = await ctx.db.get(userId);
-    if (!user || (user.credits ?? 0) < creditsCost) {
+    const userRecord = await ctx.db.get(userId);
+    if (!userRecord || (userRecord.credits ?? 0) < creditsCost) {
       throw new Error("Insufficient credits");
     }
     await ctx.db.patch(userId, {
-      credits: (user.credits ?? 0) - creditsCost,
+      credits: (userRecord.credits ?? 0) - creditsCost,
     });
 
     // Insert the "generating" row — visible to reactive queries immediately
@@ -185,13 +189,13 @@ export const getById = internalQuery({
 export const getByUserWithUrls = query({
   args: {},
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
+    const appUser = await getCurrentAppUser(ctx);
+    if (!appUser) {
       return [];
     }
     const generations = await ctx.db
       .query("generations")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .withIndex("by_user", (q) => q.eq("userId", appUser._id))
       .order("desc")
       .collect();
 
