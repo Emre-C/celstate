@@ -32,8 +32,8 @@ export const resolveAuthClientBaseUrl = ({
   publicSiteUrl?: string;
   browserOrigin?: string;
 } = {}) =>
-  toAbsoluteHttpUrl(publicSiteUrl) ??
   toAbsoluteHttpUrl(browserOrigin) ??
+  toAbsoluteHttpUrl(publicSiteUrl) ??
   DEFAULT_LOCAL_SITE_URL;
 
 export const authClient = createAuthClient({

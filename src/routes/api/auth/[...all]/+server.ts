@@ -1,6 +1,7 @@
-import { createSvelteKitHandler } from "@mmailaender/convex-better-auth-svelte/sveltekit";
+import type { RequestHandler } from "@sveltejs/kit";
 import { env } from "$env/dynamic/public";
 import { CANONICAL_AUTH_PUBLIC_ENV } from "$lib/auth/config.js";
+import { proxyAuthRequest } from "$lib/server/auth-proxy.js";
 
 const convexSiteUrl = env.PUBLIC_CONVEX_SITE_URL?.trim();
 
@@ -10,4 +11,9 @@ if (!convexSiteUrl) {
   );
 }
 
-export const { GET, POST } = createSvelteKitHandler({ convexSiteUrl });
+const handleAuthProxy: RequestHandler = async ({ request, locals }) => {
+  return proxyAuthRequest(request, convexSiteUrl, locals.requestId);
+};
+
+export const GET = handleAuthProxy;
+export const POST = handleAuthProxy;

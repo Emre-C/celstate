@@ -8,6 +8,13 @@
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import SectionLabel from '$lib/components/ui/SectionLabel.svelte';
 
+	const AUTH_ERROR_MESSAGES: Record<string, string> = {
+		state_mismatch:
+			'Your sign-in started on a different site origin than the callback. Please try again from the current page.',
+		access_denied: 'Google sign-in was cancelled or denied.',
+		default: 'Authentication failed. Please try again.'
+	};
+
 	const session = authClient.useSession();
 	const providers = getAuthProviderDescriptors(resolveAuthClientBaseUrl());
 	const appleProvider = providers.find((provider) => provider.id === 'apple');
@@ -16,6 +23,7 @@
 
 	const redirectTo = $derived($page.url.searchParams.get('redirectTo') ?? '/app');
 	const authenticated = $derived(!!$session.data);
+	const authError = $derived($page.url.searchParams.get('error'));
 
 	$effect(() => {
 		if (!authenticated) {
@@ -23,6 +31,14 @@
 		}
 
 		void goto(redirectTo, { replaceState: true });
+	});
+
+	$effect(() => {
+		if (activeProvider || !authError) {
+			return;
+		}
+
+		errorMessage = AUTH_ERROR_MESSAGES[authError] ?? AUTH_ERROR_MESSAGES.default;
 	});
 
 	async function handleSocialAuth(providerId: AuthProviderId) {
@@ -68,8 +84,9 @@
 				<h1 class="mt-3 text-2xl font-light tracking-tight text-text">
 					Trusted sign-in only
 				</h1>
+				<!-- TODO: Restore to "Google and Apple" once Apple Sign-In is re-enabled -->
 				<p class="mt-2 text-sm text-dim">
-					Celstate uses Google and Apple for identity. We do not support email/password accounts.
+					Celstate uses Google for identity. Apple Sign-In is coming soon. We do not support email/password accounts.
 				</p>
 			</div>
 
@@ -102,8 +119,11 @@
 									<span class="block text-xs text-dim">{provider.description}</span>
 								</span>
 							</span>
+							<!-- TODO: Remove the `comingSoon` branch once Apple Sign-In is re-enabled -->
 							<span class="text-xs uppercase tracking-[0.15em] text-dim">
-								{#if activeProvider === provider.id}
+								{#if provider.comingSoon}
+									Coming soon
+								{:else if activeProvider === provider.id}
 									Redirecting
 								{:else if provider.available}
 									Continue
@@ -115,13 +135,11 @@
 					{/each}
 				</div>
 
+				<!-- TODO: Restore original info box copy once Apple Sign-In is re-enabled -->
 				<div class="border border-border bg-border/30 px-4 py-3">
 					<p class="text-sm text-dim">
-						Google works in local development. Apple is enabled for production-ready HTTPS deployments.
+						Sign in with Google is available now. Apple Sign-In support is coming soon.
 					</p>
-					{#if appleProvider?.availabilityHint}
-						<p class="mt-2 text-xs text-dim/80">{appleProvider.availabilityHint}</p>
-					{/if}
 				</div>
 
 				{#if errorMessage}

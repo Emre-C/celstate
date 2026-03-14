@@ -8,6 +8,15 @@ describe('auth client base url', () => {
 		);
 	});
 
+	it('prefers the browser origin over the public site url when both are absolute', () => {
+		expect(
+			resolveAuthClientBaseUrl({
+				publicSiteUrl: 'https://www.celstate.com',
+				browserOrigin: 'https://celstate.com'
+			})
+		).toBe('https://celstate.com');
+	});
+
 	it('falls back to the browser origin when the public site url is not absolute', () => {
 		expect(
 			resolveAuthClientBaseUrl({
