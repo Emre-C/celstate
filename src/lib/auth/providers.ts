@@ -10,6 +10,8 @@ export type AuthProviderDescriptor = {
 export type RuntimeAuthProviderDescriptor = AuthProviderDescriptor & {
 	available: boolean;
 	availabilityHint?: string;
+	// TODO: Remove `comingSoon` flag once Apple Sign-In is re-enabled
+	comingSoon?: boolean;
 };
 
 export const AUTH_PROVIDER_DESCRIPTORS: AuthProviderDescriptor[] = [
@@ -38,6 +40,20 @@ export const getAuthProviderDescriptors = (siteUrl: string): RuntimeAuthProvider
 	const https = isHttpsUrl(siteUrl);
 
 	return AUTH_PROVIDER_DESCRIPTORS.map((provider) => {
+		// TODO: Remove this early-return block once Apple Sign-In is re-enabled.
+		// Apple auth is fully implemented but temporarily paused on Apple's side.
+		// The auth config, server logic, and UI are all intact — just flip this flag.
+		if (provider.id === 'apple') {
+			return {
+				...provider,
+				available: false,
+				comingSoon: true,
+				availabilityHint: 'Apple Sign-In is coming soon. Use Google to sign in for now.'
+			};
+		}
+
+		// TODO: This block is temporarily unreachable — remove the comingSoon block above to restore it.
+		// @ts-expect-error: Dead code while Apple comingSoon override is active
 		if (provider.id === 'apple' && !https) {
 			return {
 				...provider,

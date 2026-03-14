@@ -1,24 +1,52 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { api } from '../../convex/_generated/api.js';
 	import { useAuth } from '@mmailaender/convex-better-auth-svelte/svelte';
 	import { useConvexClient } from '@mmailaender/convex-svelte';
+	import {
+		AUTH_SESSION_RECOVERY_GRACE_PERIOD_MS,
+		getProtectedAppRedirectStrategy,
+		getProtectedAppViewState
+	} from '$lib/auth/protected-app.js';
+	import { buildAuthRedirectTarget } from '$lib/auth/redirect.js';
+	import { api } from '../../convex/_generated/api.js';
 
-	let { children } = $props();
+	let { children, data } = $props();
 	const auth = useAuth();
 	const client = useConvexClient();
 
+	let seededFromServer = $state(false);
+	let hasAuthenticatedSession = $state(false);
+	let redirectScheduled = $state(false);
 	let userReady = $state(false);
 	let startedUserSync = $state(false);
 	let syncError = $state('');
+	const viewState = $derived(
+		getProtectedAppViewState({
+			authIsAuthenticated: auth.isAuthenticated,
+			authIsLoading: auth.isLoading,
+			hasAuthenticatedSession,
+			hasSyncError: !!syncError,
+			redirectScheduled,
+			userReady
+		})
+	);
 
 	$effect(() => {
-		if (auth.isLoading || auth.isAuthenticated) {
+		if (seededFromServer || !data.authState?.isAuthenticated) {
 			return;
 		}
 
-		const redirectTo = encodeURIComponent(`${window.location.pathname}${window.location.search}`);
-		void goto(`/auth?redirectTo=${redirectTo}`, { replaceState: true });
+		seededFromServer = true;
+		hasAuthenticatedSession = true;
+	});
+
+	$effect(() => {
+		if (!auth.isAuthenticated) {
+			return;
+		}
+
+		hasAuthenticatedSession = true;
+		redirectScheduled = false;
 	});
 
 	$effect(() => {
@@ -37,18 +65,47 @@
 				syncError = error instanceof Error ? error.message : 'Unable to initialize your account.';
 			});
 	});
+
+	$effect(() => {
+		const redirectTarget = buildAuthRedirectTarget(window.location.pathname, window.location.search);
+		const redirectStrategy = getProtectedAppRedirectStrategy({
+			authIsAuthenticated: auth.isAuthenticated,
+			authIsLoading: auth.isLoading,
+			hasAuthenticatedSession
+		});
+
+		if (redirectStrategy === 'none') {
+			redirectScheduled = false;
+			return;
+		}
+
+		if (redirectStrategy === 'delayed') {
+			const timeoutId = window.setTimeout(() => {
+				hasAuthenticatedSession = false;
+				redirectScheduled = true;
+				void goto(redirectTarget, { replaceState: true });
+			}, AUTH_SESSION_RECOVERY_GRACE_PERIOD_MS);
+
+			return () => {
+				window.clearTimeout(timeoutId);
+			};
+		}
+
+		redirectScheduled = true;
+		void goto(redirectTarget, { replaceState: true });
+	});
 </script>
 
-{#if auth.isLoading || (auth.isAuthenticated && !userReady && !syncError)}
+{#if viewState.shouldShowLoading}
 	<div class="flex min-h-dvh items-center justify-center">
 		<span class="font-mono text-xs tracking-[0.15em] uppercase text-dim">Loading workspace...</span>
 	</div>
-{:else if syncError}
+{:else if viewState.shouldShowSyncError}
 	<div class="flex min-h-dvh items-center justify-center px-6">
 		<div class="w-full max-w-md border border-red-900/40 bg-red-950/10 px-6 py-5">
 			<p class="text-sm text-red-400/80">{syncError}</p>
 		</div>
 	</div>
-{:else if auth.isAuthenticated}
+{:else if viewState.shouldRenderChildren}
 	{@render children()}
 {/if}

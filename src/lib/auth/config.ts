@@ -37,10 +37,31 @@ export type ValidatedCanonicalAuthEnv = {
 	appleAppBundleIdentifier?: string;
 };
 
+const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
+
 const readEnvValue = (value?: string) => {
 	const trimmed = value?.trim();
 	return trimmed ? trimmed : undefined;
 };
+
+const toHttpUrl = (value?: string) => {
+	if (!value) {
+		return undefined;
+	}
+
+	try {
+		const url = new URL(value);
+		return url.protocol === 'http:' || url.protocol === 'https:' ? url : undefined;
+	} catch {
+		return undefined;
+	}
+};
+
+const isIpHostname = (hostname: string) =>
+	/^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname) || hostname.includes(':');
+
+const supportsWwwAlias = (hostname: string) =>
+	hostname.includes('.') && !LOCAL_HOSTNAMES.has(hostname) && !isIpHostname(hostname);
 
 const isHttpsUrl = (value?: string) => {
 	if (!value) {
@@ -52,6 +73,25 @@ const isHttpsUrl = (value?: string) => {
 	} catch {
 		return false;
 	}
+};
+
+export const getCanonicalSiteOrigins = (siteUrl?: string) => {
+	const url = toHttpUrl(siteUrl);
+
+	if (!url) {
+		return [];
+	}
+
+	const origins = new Set([url.origin]);
+
+	if (supportsWwwAlias(url.hostname)) {
+		const alternateHostname = url.hostname.startsWith('www.')
+			? url.hostname.slice(4)
+			: `www.${url.hostname}`;
+		origins.add(`${url.protocol}//${alternateHostname}${url.port ? `:${url.port}` : ''}`);
+	}
+
+	return [...origins];
 };
 
 export const readCanonicalAuthEnv = (env: EnvSource): CanonicalAuthEnv => ({
@@ -91,13 +131,14 @@ export const getMissingCanonicalAuthEnvKeys = (envSource: EnvSource) => {
 		missing.push(CANONICAL_AUTH_SERVER_ENV.googleClientSecret);
 	}
 
-	if (requiresAppleCredentials(env) && !env.appleClientId) {
-		missing.push(CANONICAL_AUTH_SERVER_ENV.appleClientId);
-	}
-
-	if (requiresAppleCredentials(env) && !env.appleClientSecret) {
-		missing.push(CANONICAL_AUTH_SERVER_ENV.appleClientSecret);
-	}
+	// TODO: Re-enable Apple credential requirements once Apple Sign-In is back.
+	// if (requiresAppleCredentials(env) && !env.appleClientId) {
+	// 	missing.push(CANONICAL_AUTH_SERVER_ENV.appleClientId);
+	// }
+	//
+	// if (requiresAppleCredentials(env) && !env.appleClientSecret) {
+	// 	missing.push(CANONICAL_AUTH_SERVER_ENV.appleClientSecret);
+	// }
 
 	return missing;
 };
@@ -122,9 +163,18 @@ export const assertCanonicalAuthEnv = (envSource: EnvSource): ValidatedCanonical
 	};
 };
 
+export const getAllowedAuthHosts = (env: CanonicalAuthEnv) =>
+	getCanonicalSiteOrigins(env.siteUrl).map((origin) => new URL(origin).host);
+
 export const getTrustedOrigins = (env: CanonicalAuthEnv) => {
 	const providers = getAuthProviderAvailability(env);
-	return providers.apple ? [APPLE_TRUSTED_ORIGIN] : [];
+	const trustedOrigins = new Set(getCanonicalSiteOrigins(env.siteUrl));
+
+	if (providers.apple) {
+		trustedOrigins.add(APPLE_TRUSTED_ORIGIN);
+	}
+
+	return [...trustedOrigins];
 };
 
 export const buildSocialProviders = (env: ValidatedCanonicalAuthEnv) => ({
