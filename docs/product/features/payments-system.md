@@ -39,9 +39,9 @@ Config: `src/convex/lib/config.ts` → `initialCredits: 3`.
 
 When the user requests a generation:
 
-1. `generations.requestGeneration` runs.
+1. `generations.requestGeneration` runs (args: `{ prompt, referenceStorageId? }`).
 2. Atomic check: `(user.credits ?? 0) >= creditsCost` (1 credit).
-3. Credits are deducted and a `generations` row is inserted with `status: "generating"`.
+3. Credits are deducted and a `generations` row is inserted with `status: "generating"` (and `referenceStorageId` if provided).
 4. Worker is scheduled; UI updates reactively via `getMe` and generation query.
 
 Double-spend is prevented by doing check-and-deduct in a single mutation.

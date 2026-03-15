@@ -31,6 +31,40 @@ This is exact — not approximate. It handles:
 - **Fully transparent pixels**: `C_w ≈ 255, C_b ≈ 0` → `α ≈ 0`
 - **Semi-transparent pixels** (glass, smoke, thin hair): fractional `α` recovered exactly
 
+## Generation Modes
+
+| Mode | Input | Pass 1 Behavior | Trigger |
+|------|-------|------------------|---------|
+| **Text-only** | `prompt` | `sendMessage(whiteBgPrompt)` | No `referenceStorageId` |
+| **Style reference** | `prompt` + `referenceStorageId` | `sendMessageWithImage(whiteBgPromptWithReference, referenceImage)` | `referenceStorageId` present |
+
+In style-reference mode, the user uploads an image before generating. The reference image guides Gemini's output toward the reference's visual style, color palette, and aesthetic while the prompt controls subject and composition. The matte pipeline is identical in both modes — only the Pass 1 prompt construction and Gemini call differ.
+
+### Reference Image Upload Flow
+
+```
+Client: file → generateUploadUrl() → POST to upload URL → storageId
+Client: requestGeneration(prompt, referenceStorageId)
+Worker: ctx.storage.get(referenceStorageId) → base64 → GeminiImageResult
+```
+
+- `generateUploadUrl` — authenticated mutation, returns a Convex storage upload URL
+- Upload via `POST` with `Content-Type` header matching the file MIME type
+- Response JSON contains `storageId` passed to `requestGeneration`
+
+### Reference Prompt Variants (`src/convex/lib/prompts.ts`)
+
+| Function | Used When |
+|----------|-----------|
+| `buildWhiteBgPrompt(prompt)` | Text-only, first attempt |
+| `buildWhiteBgRetryPrompt(prompt)` | Text-only, retry |
+| `buildWhiteBgPromptWithReference(prompt)` | Style reference, first attempt |
+| `buildWhiteBgRetryPromptWithReference(prompt)` | Style reference, retry |
+| `buildBlackBgPrompt()` | Always (mode-independent) |
+| `buildBlackBgRetryPrompt()` | Always (mode-independent) |
+
+Reference prompts append: "Use the attached reference image as a style and subject guide. Match its visual style, color palette, and aesthetic while following the prompt description."
+
 ## Pipeline Architecture
 
 ### Step 1: Credit Check & Deduction
@@ -39,15 +73,19 @@ This is exact — not approximate. It handles:
 
 ### Step 2: Create Generation Record
 - Insert row with status `generating`
+- `referenceStorageId` stored if provided
 - Immediately visible to reactive queries
 
 ### Step 3: Schedule Worker
 - Convex scheduler runs `generateWorker` internal action
+- Worker args: `{ generationId, prompt, referenceStorageId? }`
+- If `referenceStorageId` present: load from `ctx.storage.get()`, decode to base64 `GeminiImageResult`
 
 ### Step 4: Dual-Pass Generation
 
 **Pass 1 (White Background)**
-- Send user prompt with white-bg instructions to Gemini
+- **Text-only**: `session.sendMessage(whiteBgPrompt)`
+- **Style reference**: `session.sendMessageWithImage(whiteBgPromptWithReference, referenceImage)`
 - Validate corner patches for purity (mean > 245, stddev < 5)
 - Retry up to 2x with reinforced prompt if validation fails
 
@@ -56,6 +94,7 @@ This is exact — not approximate. It handles:
 - Send black-bg prompt + white-bg image as reference
 - Validate corner patches for purity (mean < 10, stddev < 5)
 - Retry up to 2x if validation fails
+- Mode-independent: identical in text-only and style-reference modes
 
 ### Step 5: Dimension Handling
 - If dimensions differ: resize larger to match smaller (bilinear interpolation)
@@ -111,6 +150,8 @@ bgMaxStdDev: 5,
 
 alphaFloorThreshold: 3,
 alphaCeilThreshold: 252,
+
+referenceMaxSizeBytes: 10 * 1024 * 1024, // 10 MB
 ```
 
 ## Performance
@@ -127,12 +168,13 @@ alphaCeilThreshold: 252,
 
 ## Components
 
-- `src/convex/lib/gemini.ts` — Gemini API client
-- `src/convex/lib/prompts.ts` — Prompt templates (white/black bg)
+- `src/convex/lib/gemini.ts` — Gemini API client (`sendMessage`, `sendMessageWithImage`)
+- `src/convex/lib/prompts.ts` — Prompt templates (white/black bg, text-only and reference variants)
 - `src/convex/lib/validation.ts` — Background purity validation
 - `src/convex/lib/matte.ts` — Difference matte engine
-- `src/convex/generation.ts` — Orchestrator action
-- `src/lib/components/PromptInput.svelte` — Terminal-style input
-- `src/lib/components/GenerationCard.svelte` — Result display
+- `src/convex/generation.ts` — Orchestrator action (branches on `referenceStorageId`)
+- `src/convex/generations.ts` — Mutations (`requestGeneration`, `generateUploadUrl`), queries (`getByUserWithUrls`)
+- `src/lib/components/PromptInput.svelte` — Terminal-style input with optional reference image upload
+- `src/lib/components/GenerationCard.svelte` — Result display with reference badge
 - `src/lib/components/GeneratingIndicator.svelte` — Animation during generation
 - `src/lib/components/CheckerboardPreview.svelte` — Transparency preview

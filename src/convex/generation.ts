@@ -14,6 +14,8 @@ import {
   buildBlackBgPrompt,
   buildWhiteBgRetryPrompt,
   buildBlackBgRetryPrompt,
+  buildWhiteBgPromptWithReference,
+  buildWhiteBgRetryPromptWithReference,
 } from "./lib/prompts.js";
 import {
   validateWhiteBackground,
@@ -108,6 +110,8 @@ export const generateWorker = internalAction({
   args: {
     generationId: v.id("generations"),
     prompt: v.string(),
+    referenceStorageId: v.optional(v.id("_storage")),
+    aspectRatio: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const startTime = Date.now();
@@ -122,6 +126,19 @@ export const generateWorker = internalAction({
     });
     if (!generation) {
       throw new Error("Generation record not found");
+    }
+
+    // Load reference image if provided
+    let referenceImage: GeminiImageResult | undefined;
+    if (args.referenceStorageId) {
+      const refBlob = await ctx.storage.get(args.referenceStorageId);
+      if (!refBlob) {
+        throw new Error("Reference image not found in storage");
+      }
+      const refBuffer = Buffer.from(await refBlob.arrayBuffer());
+      const refBase64 = refBuffer.toString("base64");
+      const mimeType = refBlob.type === "image/jpeg" ? "image/jpeg" as const : "image/png" as const;
+      referenceImage = { imageBase64: refBase64, mimeType };
     }
 
     let retryCount = 0;
@@ -146,7 +163,7 @@ export const generateWorker = internalAction({
 
         try {
           const result = await executeGenerationPipeline(
-            ctx, apiKey, args.prompt, updateStatus,
+            ctx, apiKey, args.prompt, updateStatus, referenceImage, args.aspectRatio,
           );
           dimensionMismatch = result.dimensionMismatch;
           await updateStatus("Storing result…");
@@ -220,8 +237,10 @@ async function executeGenerationPipeline(
   apiKey: string,
   prompt: string,
   updateStatus: (message: string) => Promise<void>,
+  referenceImage?: GeminiImageResult,
+  aspectRatio?: string,
 ): Promise<PipelineResult> {
-  const session = createChatSession(apiKey);
+  const session = createChatSession(apiKey, { aspectRatio });
 
   // === Pass 1: White background ===
   await updateStatus("Generating white background pass…");
@@ -230,12 +249,21 @@ async function executeGenerationPipeline(
     if (retry > 0) {
       await updateStatus(`White background pass (retry ${retry})…`);
     }
-    const whiteBgPrompt =
-      retry === 0
-        ? buildWhiteBgPrompt(prompt)
-        : buildWhiteBgRetryPrompt(prompt);
 
-    const result = await session.sendMessage(whiteBgPrompt);
+    let result: GeminiImageResult;
+    if (referenceImage) {
+      const whiteBgPrompt =
+        retry === 0
+          ? buildWhiteBgPromptWithReference(prompt)
+          : buildWhiteBgRetryPromptWithReference(prompt);
+      result = await session.sendMessageWithImage(whiteBgPrompt, referenceImage);
+    } else {
+      const whiteBgPrompt =
+        retry === 0
+          ? buildWhiteBgPrompt(prompt)
+          : buildWhiteBgRetryPrompt(prompt);
+      result = await session.sendMessage(whiteBgPrompt);
+    }
 
     // Decode and validate
     const decoded = decodePng(result.imageBase64);

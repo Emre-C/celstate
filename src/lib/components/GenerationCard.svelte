@@ -9,21 +9,27 @@
 		statusMessage,
 		resultUrl,
 		optimizedUrl,
+		referenceUrl,
 		error,
 		createdAt,
 		completedAt,
-		generationTimeMs
+		generationTimeMs,
+		aspectRatio = '1:1'
 	}: {
 		prompt: string;
 		status: 'generating' | 'complete' | 'failed';
 		statusMessage?: string;
 		resultUrl?: string;
 		optimizedUrl?: string;
+		referenceUrl?: string;
 		error?: string;
 		createdAt: number;
 		completedAt?: number;
 		generationTimeMs?: number;
+		aspectRatio?: string;
 	} = $props();
+
+	const ratioLabel = $derived(aspectRatio !== '1:1' ? aspectRatio : '');
 
 	let downloading = $state<string | false>(false);
 
@@ -85,6 +91,17 @@
 				<p class="line-clamp-2 text-sm text-dim">{prompt}</p>
 			</div>
 			<div class="flex items-center gap-3 px-4 pb-3">
+				{#if referenceUrl}
+					<div class="flex items-center gap-1.5" title="Generated with style reference">
+						<div class="h-4 w-4 shrink-0 overflow-hidden border border-border">
+							<img src={referenceUrl} alt="Ref" class="h-full w-full object-cover" />
+						</div>
+						<MonoLabel>Ref</MonoLabel>
+					</div>
+				{/if}
+				{#if ratioLabel}
+					<MonoLabel>{ratioLabel}</MonoLabel>
+				{/if}
 				{#if generationTimeMs}
 					<MonoLabel>{formatTime(generationTimeMs)}</MonoLabel>
 				{/if}

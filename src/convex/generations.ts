@@ -7,7 +7,7 @@ import {
 } from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
 import type { Id } from "./_generated/dataModel.js";
-import { GENERATION_CONFIG } from "./lib/config.js";
+import { GENERATION_CONFIG, isValidAspectRatio } from "./lib/config.js";
 import { getCurrentAppUser, upsertCurrentUser } from "./users.js";
 
 /**
@@ -18,11 +18,18 @@ import { getCurrentAppUser, upsertCurrentUser } from "./users.js";
 export const requestGeneration = mutation({
   args: {
     prompt: v.string(),
+    referenceStorageId: v.optional(v.id("_storage")),
+    aspectRatio: v.optional(v.string()),
   },
   returns: v.id("generations"),
   handler: async (ctx, args) => {
     const appUser = (await getCurrentAppUser(ctx)) ?? await upsertCurrentUser(ctx);
     const userId = appUser._id;
+
+    const aspectRatio = args.aspectRatio ?? GENERATION_CONFIG.defaultAspectRatio;
+    if (!isValidAspectRatio(aspectRatio)) {
+      throw new Error(`Unsupported aspect ratio: ${aspectRatio}`);
+    }
 
     const creditsCost = GENERATION_CONFIG.creditsPerGeneration;
 
@@ -40,8 +47,9 @@ export const requestGeneration = mutation({
       userId,
       prompt: args.prompt,
       status: "generating" as const,
+      referenceStorageId: args.referenceStorageId,
       creditsCost,
-      aspectRatio: GENERATION_CONFIG.defaultAspectRatio,
+      aspectRatio,
       createdAt: Date.now(),
     });
 
@@ -49,9 +57,20 @@ export const requestGeneration = mutation({
     await ctx.scheduler.runAfter(0, internal.generation.generateWorker, {
       generationId,
       prompt: args.prompt,
+      referenceStorageId: args.referenceStorageId,
+      aspectRatio,
     });
 
     return generationId;
+  },
+});
+
+export const generateUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const appUser = await getCurrentAppUser(ctx);
+    if (!appUser) throw new Error("Unauthorized");
+    return await ctx.storage.generateUploadUrl();
   },
 });
 
@@ -133,6 +152,7 @@ export const getByUser = internalQuery({
       whiteBgStorageId: v.optional(v.id("_storage")),
       blackBgStorageId: v.optional(v.id("_storage")),
       optimizedStorageId: v.optional(v.id("_storage")),
+      referenceStorageId: v.optional(v.id("_storage")),
       creditsCost: v.number(),
       aspectRatio: v.string(),
       createdAt: v.number(),
@@ -170,6 +190,7 @@ export const getById = internalQuery({
       whiteBgStorageId: v.optional(v.id("_storage")),
       blackBgStorageId: v.optional(v.id("_storage")),
       optimizedStorageId: v.optional(v.id("_storage")),
+      referenceStorageId: v.optional(v.id("_storage")),
       creditsCost: v.number(),
       aspectRatio: v.string(),
       createdAt: v.number(),
@@ -207,6 +228,9 @@ export const getByUserWithUrls = query({
           : null,
         optimizedUrl: gen.optimizedStorageId
           ? await ctx.storage.getUrl(gen.optimizedStorageId)
+          : null,
+        referenceUrl: gen.referenceStorageId
+          ? await ctx.storage.getUrl(gen.referenceStorageId)
           : null,
       }))
     );

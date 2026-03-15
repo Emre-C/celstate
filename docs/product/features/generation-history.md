@@ -30,6 +30,9 @@ export const getByUserWithUrls = query({
         optimizedUrl: gen.optimizedStorageId 
           ? await ctx.storage.getUrl(gen.optimizedStorageId) 
           : null,
+        referenceUrl: gen.referenceStorageId
+          ? await ctx.storage.getUrl(gen.referenceStorageId)
+          : null,
       }))
     );
   },
@@ -74,6 +77,7 @@ generations: defineTable({
   whiteBgStorageId: v.optional(v.id("_storage")),
   blackBgStorageId: v.optional(v.id("_storage")),
   optimizedStorageId: v.optional(v.id("_storage")),
+  referenceStorageId: v.optional(v.id("_storage")),
   creditsCost: v.number(),
   aspectRatio: v.string(),
   createdAt: v.number(),
@@ -87,7 +91,7 @@ generations: defineTable({
 
 ## Storage Files
 
-Each generation stores up to 4 files:
+Each generation stores up to 5 files:
 
 | File | Purpose | Retention |
 |------|---------|-----------|
@@ -95,18 +99,23 @@ Each generation stores up to 4 files:
 | `optimizedStorageId` | Web-optimized PNG | 30 days |
 | `whiteBgStorageId` | Debug: white-bg pass | 30 days |
 | `blackBgStorageId` | Debug: black-bg pass | 30 days |
+| `referenceStorageId` | User-uploaded style reference (optional) | 30 days |
 
 ## UI Components
 
 ### GenerationCard
 
-Three-state card component:
+Three-state card component. Accepts optional `referenceUrl` prop.
 
 ```svelte
 {#if status === 'generating'}
   <GeneratingIndicator {prompt} {statusMessage} {createdAt} />
 {:else if status === 'complete' && resultUrl}
   <CheckerboardPreview src={resultUrl} alt={prompt} />
+  <!-- Reference badge: shown when referenceUrl is present -->
+  {#if referenceUrl}
+    <img src={referenceUrl} alt="Ref" /> <MonoLabel>Ref</MonoLabel>
+  {/if}
   <button onclick={() => handleDownload(optimizedUrl ?? resultUrl)}>
     Download
   </button>

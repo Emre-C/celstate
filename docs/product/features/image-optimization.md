@@ -85,6 +85,7 @@ generations: defineTable({
   optimizedStorageId: v.optional(v.id("_storage")),  // Optimized (web)
   whiteBgStorageId: v.optional(v.id("_storage")),     // Debug: white pass
   blackBgStorageId: v.optional(v.id("_storage")),     // Debug: black pass
+  referenceStorageId: v.optional(v.id("_storage")),  // User style reference (optional)
   // ...
 }),
 ```
