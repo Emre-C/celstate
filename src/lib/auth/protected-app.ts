@@ -6,7 +6,6 @@ export type ProtectedAppViewState = {
 	hasAuthenticatedSession: boolean;
 	hasSyncError: boolean;
 	redirectScheduled: boolean;
-	userReady: boolean;
 };
 
 export const getProtectedAppRedirectStrategy = ({
@@ -26,8 +25,7 @@ export const getProtectedAppViewState = ({
 	authIsLoading,
 	hasAuthenticatedSession,
 	hasSyncError,
-	redirectScheduled,
-	userReady
+	redirectScheduled
 }: ProtectedAppViewState) => {
 	const isEffectivelyAuthenticated = hasAuthenticatedSession || authIsAuthenticated;
 
@@ -39,12 +37,8 @@ export const getProtectedAppViewState = ({
 				authIsLoading,
 				hasAuthenticatedSession
 			}) === 'immediate',
-		shouldRenderChildren:
-			isEffectivelyAuthenticated && userReady && !hasSyncError && !redirectScheduled,
-		shouldShowLoading:
-			redirectScheduled ||
-			(!isEffectivelyAuthenticated && authIsLoading) ||
-			(isEffectivelyAuthenticated && !userReady && !hasSyncError),
+		shouldRenderChildren: isEffectivelyAuthenticated && !hasSyncError && !redirectScheduled,
+		shouldShowLoading: redirectScheduled || (!isEffectivelyAuthenticated && authIsLoading),
 		shouldShowSyncError: hasSyncError && !redirectScheduled
 	};
 };

@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { useAuth } from '@mmailaender/convex-better-auth-svelte/svelte';
+	import { PUBLIC_CONVEX_URL } from '$env/static/public';
+	import { createSvelteAuthClient, useAuth } from '@mmailaender/convex-better-auth-svelte/svelte';
 	import { useConvexClient } from '@mmailaender/convex-svelte';
+	import { authClient } from '$lib/auth-client';
 	import {
 		AUTH_SESSION_RECOVERY_GRACE_PERIOD_MS,
 		getProtectedAppRedirectStrategy,
@@ -11,13 +13,19 @@
 	import { api } from '../../convex/_generated/api.js';
 
 	let { children, data } = $props();
+
+	createSvelteAuthClient({
+		authClient,
+		convexUrl: PUBLIC_CONVEX_URL,
+		getServerState: () => data.authState
+	});
+
 	const auth = useAuth();
 	const client = useConvexClient();
 
 	let seededFromServer = $state(false);
 	let hasAuthenticatedSession = $state(false);
 	let redirectScheduled = $state(false);
-	let userReady = $state(false);
 	let startedUserSync = $state(false);
 	let syncError = $state('');
 	const viewState = $derived(
@@ -26,8 +34,7 @@
 			authIsLoading: auth.isLoading,
 			hasAuthenticatedSession,
 			hasSyncError: !!syncError,
-			redirectScheduled,
-			userReady
+			redirectScheduled
 		})
 	);
 
@@ -59,7 +66,7 @@
 		void client
 			.mutation(api.users.storeUser, {})
 			.then(() => {
-				userReady = true;
+				syncError = '';
 			})
 			.catch((error) => {
 				syncError = error instanceof Error ? error.message : 'Unable to initialize your account.';

@@ -12,8 +12,7 @@ describe('protected app auth state', () => {
 				authIsLoading: true,
 				hasAuthenticatedSession: true,
 				hasSyncError: false,
-				redirectScheduled: false,
-				userReady: true
+				redirectScheduled: false
 			})
 		).toMatchObject({
 			isEffectivelyAuthenticated: true,
@@ -30,8 +29,7 @@ describe('protected app auth state', () => {
 				authIsLoading: false,
 				hasAuthenticatedSession: true,
 				hasSyncError: false,
-				redirectScheduled: false,
-				userReady: true
+				redirectScheduled: false
 			})
 		).toMatchObject({
 			isEffectivelyAuthenticated: true,
@@ -55,8 +53,7 @@ describe('protected app auth state', () => {
 				authIsLoading: false,
 				hasAuthenticatedSession: false,
 				hasSyncError: false,
-				redirectScheduled: false,
-				userReady: false
+				redirectScheduled: false
 			})
 		).toMatchObject({
 			isEffectivelyAuthenticated: false,
@@ -73,20 +70,19 @@ describe('protected app auth state', () => {
 		).toBe('immediate');
 	});
 
-	it('shows the workspace loading shell while the authenticated user bootstrap is incomplete', () => {
+	it('renders the workspace while authenticated user bootstrap runs in the background', () => {
 		expect(
 			getProtectedAppViewState({
 				authIsAuthenticated: true,
 				authIsLoading: false,
 				hasAuthenticatedSession: true,
 				hasSyncError: false,
-				redirectScheduled: false,
-				userReady: false
+				redirectScheduled: false
 			})
 		).toMatchObject({
 			isEffectivelyAuthenticated: true,
-			shouldRenderChildren: false,
-			shouldShowLoading: true,
+			shouldRenderChildren: true,
+			shouldShowLoading: false,
 			shouldRedirectImmediately: false
 		});
 	});
