@@ -34,7 +34,7 @@
 		"@mmailaender/convex-svelte": "^0.17.0",
 		"@tailwindcss/vite": "^4.2.1",
 		"better-auth": "1.5.5",
-		"convex": "^1.32.0",
+		"convex": "^1.33.1",
 		"pngjs": "^7.0.0",
 		"sharp": "^0.34.5",
 		"tailwindcss": "^4.2.1"

@@ -87,8 +87,8 @@ Celstate does not want to own password storage, reset flows, breach handling, or
   - Feeds initial auth state from cookies into the root layout.
 
 - `src/routes/+layout.svelte`
-  - Passes the SSR auth snapshot into `createSvelteAuthClient(...)`.
-  - Prevents the initial hydration loading flash.
+  - Root layout only owns global app chrome and the SSR auth snapshot payload.
+  - Does not initialize the Convex Better Auth client globally anymore.
 
 - `src/hooks.server.ts`
   - Extracts the Convex auth token from Better Auth cookies and stores it in `event.locals.token`.
@@ -101,7 +101,8 @@ Celstate does not want to own password storage, reset flows, breach handling, or
 
 - `src/routes/(app)/+layout.svelte`
   - Owns the protected-app client UX after hydration.
-  - Starts the `users.storeUser` bootstrap.
+  - Initializes `createSvelteAuthClient(...)` explicitly for protected routes with `PUBLIC_CONVEX_URL`.
+  - Starts the `users.storeUser` bootstrap without blocking first paint of the protected app.
   - Preserves the current workspace during brief auth revalidation churn and only redirects after a short confirmed unauthenticated window.
 
 - `src/routes/auth/+page.svelte`
@@ -116,7 +117,7 @@ Celstate does not want to own password storage, reset flows, breach handling, or
 | `better-auth` | `1.5.5` | Core auth framework |
 | `@mmailaender/convex-better-auth-svelte` | `^0.6.2` | SvelteKit handler + Svelte client helpers |
 | `@mmailaender/convex-svelte` | `^0.17.0` | Convex Svelte client |
-| `convex` | `^1.32.0` | Core Convex client |
+| `convex` | `^1.33.1` | Core Convex client |
 
 ## Request flow
 
@@ -128,8 +129,9 @@ Celstate does not want to own password storage, reset flows, breach handling, or
 4. `src/lib/server/auth-proxy.ts` forwards the original browser host/protocol headers to Convex so Better Auth resolves callbacks against the real public origin.
 5. Better Auth completes the provider flow and writes the Better Auth session cookie plus the Convex JWT cookie.
 6. SSR reads the Better Auth Convex JWT cookie to derive initial auth state.
-7. The root layout passes that SSR auth snapshot into `createSvelteAuthClient(...)`.
-8. Client hydration exchanges the Better Auth session for Convex auth state and initializes the app shell.
+7. The root layout passes the SSR auth snapshot down to the protected app.
+8. The protected app layout initializes `createSvelteAuthClient(...)` with the explicit `PUBLIC_CONVEX_URL`.
+9. Client hydration exchanges the Better Auth session for Convex auth state and initializes the protected app shell.
 
 ### Protected route flow
 
@@ -137,7 +139,8 @@ Celstate does not want to own password storage, reset flows, breach handling, or
 2. `src/hooks.server.ts` reads the Better Auth Convex JWT cookie.
 3. `src/routes/(app)/+layout.server.ts` redirects unauthenticated users to `/auth?redirectTo=...`.
 4. `src/routes/(app)/+layout.svelte` only manages post-hydration UX and must not eagerly override the server guard during transient client revalidation.
-5. After successful sign-in, the auth page returns the user to the original route.
+5. The protected app shell renders as soon as the user is effectively authenticated; `users.storeUser` continues in the background.
+6. After successful sign-in, the auth page returns the user to the original route.
 
 ## Cookies and SSR
 
@@ -180,6 +183,25 @@ SSR uses cookie presence only to derive the initial auth state. Full auth valida
    - Cookie presence is enough to prevent hydration flashes.
    - Full session validation still belongs to Better Auth + Convex after hydration.
 
+7. Do not block protected-route rendering on post-auth user synchronization.
+   - `users.storeUser` is an application-data bootstrap concern, not an authorization concern.
+   - Rendering `/app` should depend on effective authentication, not on whether the user row has finished syncing.
+   - Queries that read app-specific user data must tolerate a short window where the user record is not available yet.
+
+8. Scope auth/bootstrap work to the routes that actually need it.
+   - Initializing the Convex Better Auth browser bridge globally increases the amount of work done on public pages.
+   - Protected-route bootstrap should be explicit and local to the `(app)` layout.
+
+9. Pass the Convex deployment URL explicitly when wiring the client.
+   - `createSvelteAuthClient(...)` should receive `PUBLIC_CONVEX_URL` directly.
+   - Explicit bootstrap avoids accidental reliance on implicit environment resolution and makes local-vs-production behavior easier to reason about.
+
+10. Local Convex development and production Convex development are separate concerns.
+   - `PUBLIC_CONVEX_URL` controls the realtime client target.
+   - `PUBLIC_CONVEX_SITE_URL` controls the Better Auth proxy target.
+   - A localhost web app pointing at a cloud Convex deployment is valid, but it will still open cloud websocket connections by design.
+   - Switching to a local Convex deployment must be validated independently from the app auth code.
+
 ## Observability
 
 Current server-side auth observability lives in `src/hooks.server.ts`.
@@ -211,6 +233,8 @@ The auth regression suite should always cover:
 - cookie-based SSR auth bootstrap
 - immutable response header handling in hooks
 - protected app auth-state stabilization during client revalidation
+- non-blocking protected-app rendering while `users.storeUser` is still in flight
+- protected-route-scoped auth bootstrap with explicit `PUBLIC_CONVEX_URL`
 
 Relevant tests:
 
@@ -221,6 +245,12 @@ Relevant tests:
 - `src/lib/server/auth.test.ts`
 - `src/lib/server/canonical-site.test.ts`
 - `src/lib/server/response.test.ts`
+
+Additional areas to keep covered:
+
+- protected route hydration after a successful social login
+- first authenticated render when the Convex user row does not exist yet
+- local development env selection when changing between cloud dev and local Convex
 
 ## Environment variable contract
 
@@ -253,6 +283,20 @@ These variables must be set in the web app environment:
 - `PUBLIC_CONVEX_URL` — Convex deployment URL
 - `PUBLIC_CONVEX_SITE_URL` — Convex HTTP actions URL
 - `PUBLIC_SITE_URL` — Canonical public site origin
+
+### Local development note
+
+When running locally:
+
+- `PUBLIC_SITE_URL` and `SITE_URL` should remain `http://localhost:5173`
+- `PUBLIC_CONVEX_URL` may point to either:
+  - a cloud dev deployment, or
+  - a local Convex deployment such as `http://127.0.0.1:3210`
+- `PUBLIC_CONVEX_SITE_URL` must point to the matching Better Auth HTTP actions target for that same deployment
+
+Do not mix a local realtime URL with a cloud HTTP actions URL or vice versa.
+
+At the time of writing, Convex local deployment on Windows has shown an upstream path-handling failure during local push in this repo (`InvalidExternalModules` with duplicated drive-letter paths like `C:\C:\...`). Treat local Convex switching as an operational concern to validate separately from auth code changes.
 
 ## Apple Sign-In — current status and re-enablement
 
@@ -296,6 +340,30 @@ When rotating auth secrets or provider credentials:
 
 Convex env vars are managed via `pnpm exec convex env set KEY VALUE --prod`.
 Vercel env vars are managed via `pnpm exec vercel env add KEY production --value VALUE --yes`.
+
+## Future hardening
+
+These are not current correctness bugs, but they are the next auth hardening opportunities worth documenting:
+
+1. Add end-to-end auth smoke coverage.
+   - Exercise Google sign-in initiation, callback completion, protected-route entry, sign-out, and tab-return behavior with browser automation.
+
+2. Add targeted client-side auth transition instrumentation.
+   - Keep server logs as-is, but add temporary or structured client metrics around protected-app auth churn, redirect scheduling, and `users.storeUser` latency when debugging regressions.
+
+3. Add explicit regression coverage for the non-blocking user bootstrap contract.
+   - Assert that protected routes render before `users.storeUser` completes.
+   - Assert that user-dependent queries degrade gracefully until the user row exists.
+
+4. Revisit local Convex development on Windows.
+   - Retry once Convex ships a fix for the duplicated-drive-path local deployment failure.
+   - Document the validated local-dev workflow after it is stable.
+
+5. Tighten auth deployment verification.
+   - Add a release checklist that verifies canonical origin, same-origin `/api/auth` requests, protected-route entry, callback success, and no redirect loops on both apex and `www` hosts if aliases remain configured.
+
+6. Expand auth failure taxonomy.
+   - Standardize how we log and classify callback failures, proxy failures, cookie-bootstrap failures, and protected-app client churn so incidents are easier to triage.
 
 ### Adding another provider later
 
