@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { useQuery, useConvexClient } from '@mmailaender/convex-svelte';
 	import { api } from '../../../convex/_generated/api.js';
+	import type { Id } from '../../../convex/_generated/dataModel.js';
 	import PromptInput from '$lib/components/PromptInput.svelte';
 	import GenerationCard from '$lib/components/GenerationCard.svelte';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
@@ -32,12 +33,16 @@
 	);
 	const generating = $derived(!!activeGeneration);
 
-	async function handleGenerate(prompt: string) {
+	async function handleGenerate(prompt: string, referenceStorageId?: string, aspectRatio?: string) {
 		if (generating) return;
 		errorMessage = '';
 
 		try {
-			await client.mutation(api.generations.requestGeneration, { prompt });
+			await client.mutation(api.generations.requestGeneration, {
+				prompt,
+				referenceStorageId: referenceStorageId as Id<'_storage'> | undefined,
+				aspectRatio,
+			});
 		} catch (e) {
 			errorMessage = e instanceof Error ? e.message : 'Generation failed. Please try again.';
 		}
@@ -125,10 +130,12 @@
 						statusMessage={gen.statusMessage}
 						resultUrl={gen.resultUrl ?? undefined}
 						optimizedUrl={gen.optimizedUrl ?? undefined}
+						referenceUrl={gen.referenceUrl ?? undefined}
 						error={gen.error}
 						createdAt={gen.createdAt}
 						completedAt={gen.completedAt}
 						generationTimeMs={gen.generationTimeMs}
+						aspectRatio={gen.aspectRatio}
 					/>
 				{/each}
 			</div>

@@ -39,13 +39,15 @@ Users authenticate to access the generation tool and manage their credits.
 
 ### 3. Image Generation
 
-The core experience. A single text input. Nothing else competing for attention.
+The core experience. A single text input with optional style reference. Nothing else competing for attention.
 
 - User types a description of what they want
+- Optionally attaches a reference image to guide visual style, color palette, and aesthetic
 - Hits generate (or Enter)
 - A processing indicator communicates that work is happening — not a generic spinner, something that feels alive and intentional
 - The generated image appears on a checkerboard transparency preview (so they can actually see the transparency)
 - Download button gives them a production-ready PNG with alpha channel
+- Generation cards show a "Ref" badge with thumbnail when a style reference was used
 
 ### 4. Credit System
 
