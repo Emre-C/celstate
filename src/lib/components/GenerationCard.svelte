@@ -75,8 +75,8 @@
 </script>
 
 {#if status === 'generating'}
-	<div class="overflow-hidden border border-border">
-		<div class="aspect-square flex items-center justify-center overflow-hidden bg-bg">
+	<div class="border border-border">
+		<div class="aspect-square flex items-center justify-center bg-bg">
 			<GeneratingIndicator {prompt} {statusMessage} {createdAt} />
 		</div>
 		<div class="border-t border-border px-4 py-3">

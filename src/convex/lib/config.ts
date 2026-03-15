@@ -52,6 +52,7 @@ export const GENERATION_CONFIG = {
   // Credits
   creditsPerGeneration: 1,
   initialCredits: 3,
+  weeklyDripCap: 1,
 
   // Reference image constraints
   referenceMaxSizeBytes: 10 * 1024 * 1024, // 10 MB

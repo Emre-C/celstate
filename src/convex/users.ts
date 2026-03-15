@@ -224,15 +224,24 @@ export const grantWeeklyCredit = internalMutation({
   args: {},
   handler: async (ctx) => {
     const users = await ctx.db.query("users").collect();
+    const cap = GENERATION_CONFIG.weeklyDripCap;
 
     for (const user of users) {
+      const current = user.credits ?? 0;
+
+      if (current >= cap) {
+        continue;
+      }
+
+      const grant = cap - current;
+
       await ctx.db.patch(user._id, {
-        credits: (user.credits ?? 0) + 1,
+        credits: cap,
       });
 
       await ctx.db.insert("creditGrants", {
         userId: user._id,
-        amount: 1,
+        amount: grant,
         reason: "weekly_drip",
         createdAt: Date.now(),
       });

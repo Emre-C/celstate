@@ -72,7 +72,7 @@
 			<span class="mb-2 block text-3xl font-light text-text">$5</span>
 			<p class="mb-8 flex-1 text-sm leading-relaxed text-dim">
 				15 credits, one-time. No subscription.
-				Your free weekly drip continues on top.
+				You'll always get 1 free credit each Monday if you're at zero.
 			</p>
 			<button
 				onclick={() => priceIds.data && handlePurchase(priceIds.data.starter)}
@@ -90,7 +90,7 @@
 			<span class="mb-2 block text-3xl font-light text-text">$10</span>
 			<p class="mb-8 flex-1 text-sm leading-relaxed text-dim">
 				40 credits at $0.25 each — 25% less than Starter.
-				Same deal: one-time, no subscription, weekly drip continues.
+				One-time, no subscription. Free weekly credit replenishes when you hit zero.
 			</p>
 			<button
 				onclick={() => priceIds.data && handlePurchase(priceIds.data.pro)}

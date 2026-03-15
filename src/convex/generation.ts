@@ -155,7 +155,7 @@ export const generateWorker = internalAction({
       for (let attempt = 0; attempt <= GENERATION_CONFIG.maxRetriesTotal; attempt++) {
         if (attempt > 0) {
           retryCount++;
-          await updateStatus(`Retrying (attempt ${attempt + 1})…`);
+          await updateStatus(`Still working on it (attempt ${attempt + 1})…`);
           await sleep(
             GENERATION_CONFIG.retryBaseDelayMs * Math.pow(2, attempt - 1),
           );
@@ -166,7 +166,7 @@ export const generateWorker = internalAction({
             ctx, apiKey, args.prompt, updateStatus, referenceImage, args.aspectRatio,
           );
           dimensionMismatch = result.dimensionMismatch;
-          await updateStatus("Storing result…");
+          await updateStatus("Saving your image…");
 
           let whiteBgStorageId;
           let blackBgStorageId;
@@ -183,7 +183,7 @@ export const generateWorker = internalAction({
           const resultBlob = new Blob([new Uint8Array(result.finalPng)], { type: "image/png" });
           const resultStorageId = await ctx.storage.store(resultBlob);
 
-          await updateStatus("Optimizing for web…");
+          await updateStatus("Optimizing for download…");
           const optimizedPng = await optimizeForWeb(result.finalPng);
           const optimizedBlob = new Blob([new Uint8Array(optimizedPng)], { type: "image/png" });
           const optimizedStorageId = await ctx.storage.store(optimizedBlob);
@@ -243,11 +243,11 @@ async function executeGenerationPipeline(
   const session = createChatSession(apiKey, { aspectRatio });
 
   // === Pass 1: White background ===
-  await updateStatus("Generating white background pass…");
+  await updateStatus("Creating your image…");
   let whiteBgResult: GeminiImageResult | null = null;
   for (let retry = 0; retry <= GENERATION_CONFIG.maxRetriesPerPass; retry++) {
     if (retry > 0) {
-      await updateStatus(`White background pass (retry ${retry})…`);
+      await updateStatus(`Refining details…`);
     }
 
     let result: GeminiImageResult;
@@ -290,11 +290,11 @@ async function executeGenerationPipeline(
   }
 
   // === Pass 2: Black background (same chat session) ===
-  await updateStatus("Generating black background pass…");
+  await updateStatus("Enhancing quality…");
   let blackBgResult: GeminiImageResult | null = null;
   for (let retry = 0; retry <= GENERATION_CONFIG.maxRetriesPerPass; retry++) {
     if (retry > 0) {
-      await updateStatus(`Black background pass (retry ${retry})…`);
+      await updateStatus(`Fine-tuning output…`);
     }
     const blackBgPrompt =
       retry === 0 ? buildBlackBgPrompt() : buildBlackBgRetryPrompt();
@@ -330,7 +330,7 @@ async function executeGenerationPipeline(
   }
 
   // === Decode both for matte ===
-  await updateStatus("Processing transparency matte…");
+  await updateStatus("Extracting transparency…");
   let white = decodePng(whiteBgResult.imageBase64);
   let black = decodePng(blackBgResult.imageBase64);
 
@@ -388,7 +388,7 @@ async function executeGenerationPipeline(
   });
 
   // === Encode final RGBA PNG ===
-  await updateStatus("Encoding final image…");
+  await updateStatus("Preparing final image…");
   const finalPng = encodePng(matteOutput.pixels, matteOutput.width, matteOutput.height);
 
   // Re-encode intermediates for storage

@@ -103,10 +103,27 @@
 		</div>
 	{/if}
 
+	<!-- Zero-credit inline CTA -->
+	{#if noCredits}
+		<div class="mb-2 flex items-center justify-between px-1">
+			<span class="font-mono text-[10px] tracking-[0.15em] uppercase text-red-400/70">
+				Out of credits
+			</span>
+			<a
+				href="/app/credits"
+				class="font-mono text-[10px] tracking-[0.15em] uppercase text-accent transition-colors hover:text-text"
+			>
+				15 for $5, 40 for $10 · Get more →
+			</a>
+		</div>
+	{/if}
+
 	<div
-		class="flex items-center border transition-all duration-200 {focused
-			? 'border-accent/40 shadow-[0_0_12px_-4px_var(--color-accent)]'
-			: 'border-border'}"
+		class="flex items-center border transition-all duration-200 {noCredits
+			? 'border-red-900/30'
+			: focused
+				? 'border-accent/40 shadow-[0_0_12px_-4px_var(--color-accent)]'
+				: 'border-border'}"
 	>
 		<!-- Reference upload button -->
 		<button
@@ -158,9 +175,7 @@
 					? 'bg-accent/5 text-accent hover:bg-accent hover:text-bg'
 					: 'text-dim/40 cursor-not-allowed'}"
 		>
-			{#if noCredits}
-				<a href="/app/credits" class="text-red-400 hover:text-red-300">Get credits</a>
-			{:else if uploading}
+			{#if uploading}
 				Uploading
 			{:else if disabled}
 				Working
@@ -185,7 +200,17 @@
 	<!-- Helper text -->
 	<div class="mt-2 flex items-center justify-between px-1">
 		<span class="font-mono text-[10px] tracking-[0.15em] uppercase text-dim/50">
-			1 credit per generation
+			{#if credits !== undefined && credits > 0}
+				1 of {credits} {credits === 1 ? 'credit' : 'credits'}
+				{#if credits === 1}
+					·
+					<a href="/app/credits" class="text-accent transition-colors hover:text-text">Stock up →</a>
+				{/if}
+			{:else if noCredits}
+				<span class="text-red-400/70">0 credits</span>
+			{:else}
+				1 credit per generation
+			{/if}
 		</span>
 		<span class="font-mono text-[10px] tracking-[0.15em] uppercase text-dim/50">
 			Enter ↵ to generate

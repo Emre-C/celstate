@@ -15,6 +15,8 @@
 
 	let errorMessage = $state('');
 	let successMessage = $state('');
+	let creditNudge = $state(false);
+	let creditNudgeTimer: ReturnType<typeof setTimeout> | undefined;
 
 	// Handle Stripe redirect params
 	$effect(() => {
@@ -32,6 +34,24 @@
 		generations.data?.find((g) => g.status === 'generating')
 	);
 	const generating = $derived(!!activeGeneration);
+
+	// Track completed generation count to detect new completions
+	const completedCount = $derived(
+		generations.data?.filter((g) => g.status === 'complete').length ?? 0
+	);
+	let prevCompletedCount = $state(0);
+
+	// Show credit nudge when a generation completes and credits are low
+	$effect(() => {
+		if (completedCount > prevCompletedCount && prevCompletedCount > 0) {
+			if (credits !== undefined && credits <= 2) {
+				creditNudge = true;
+				clearTimeout(creditNudgeTimer);
+				creditNudgeTimer = setTimeout(() => (creditNudge = false), 8000);
+			}
+		}
+		prevCompletedCount = completedCount;
+	});
 
 	async function handleGenerate(prompt: string, referenceStorageId?: string, aspectRatio?: string) {
 		if (generating) return;
@@ -75,6 +95,25 @@
 				{credits}
 			/>
 		</div>
+
+		<!-- Post-generation credit nudge -->
+		{#if creditNudge}
+			<div class="mb-6 flex items-center justify-between px-1">
+				<span class="font-mono text-[10px] tracking-[0.15em] uppercase text-dim">
+					Image ready · {credits} {credits === 1 ? 'credit' : 'credits'} left ·
+					<a href="/app/credits" class="text-accent transition-colors hover:text-text">Get more →</a>
+				</span>
+				<button
+					onclick={() => (creditNudge = false)}
+					aria-label="Dismiss"
+					class="text-dim/40 transition-colors hover:text-dim"
+				>
+					<svg class="h-3 w-3" viewBox="0 0 12 12" fill="none">
+						<path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
+					</svg>
+				</button>
+			</div>
+		{/if}
 
 		<!-- Success message -->
 		{#if successMessage}

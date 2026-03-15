@@ -8,6 +8,9 @@
 	let { children } = $props();
 	const user = useQuery(api.users.getMe, {});
 	const credits = $derived(user.data?.credits ?? 0);
+	const creditColor = $derived(
+		credits === 0 ? 'text-red-400' : credits <= 2 ? 'text-accent' : 'text-dim'
+	);
 	let signingOut = $state(false);
 
 	async function handleSignOut() {
@@ -24,7 +27,7 @@
 		<div class="flex items-center gap-4">
 			<a href="/app/credits" class="flex items-center gap-2 transition-colors hover:text-accent">
 				<span class="h-1.5 w-1.5 rounded-full bg-accent"></span>
-				<span class="font-mono text-xs tracking-[0.15em] uppercase text-dim">
+				<span class="font-mono text-xs tracking-[0.15em] uppercase {creditColor}">
 					{credits} {credits === 1 ? 'credit' : 'credits'}
 				</span>
 			</a>
