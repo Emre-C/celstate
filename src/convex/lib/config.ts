@@ -1,7 +1,8 @@
 /**
  * Aspect ratio definitions for image generation.
  * Grouped by user-facing category for UI rendering.
- * Complete set supported by gemini-3.1-flash-image-preview.
+ * Only ratios supported by gemini-3.1-flash-image-preview:
+ * 1:1, 3:2, 2:3, 3:4, 4:1, 4:3, 4:5, 5:4, 8:1, 9:16, 16:9, 21:9
  */
 export const ASPECT_RATIOS = {
   "1:1":  { label: "Square",     category: "common" },

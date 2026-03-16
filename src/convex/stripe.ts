@@ -5,6 +5,7 @@ import { authComponent } from "./auth.js";
 import { action } from "./_generated/server.js";
 import { components, internal } from "./_generated/api.js";
 import { StripeSubscriptions } from "@convex-dev/stripe";
+import { assertStripeEnv } from "./lib/stripeEnv.js";
 
 const stripeClient = new StripeSubscriptions(components.stripe, {});
 
@@ -15,6 +16,8 @@ export const createPaymentCheckout = action({
     url: v.union(v.string(), v.null()),
   }),
   handler: async (ctx, args): Promise<{ sessionId: string; url: string | null }> => {
+    const stripeEnv = assertStripeEnv();
+
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new Error("Unauthorized");
@@ -57,15 +60,14 @@ export const createPaymentCheckout = action({
       name: appUser.name ?? authUser.name,
     });
 
-    const hostingUrl = process.env.SITE_URL ?? "http://localhost:5173";
     const userId: string = String(appUser._id);
 
     return await stripeClient.createCheckoutSession(ctx, {
       priceId: args.priceId,
       customerId: customer.customerId,
       mode: "payment",
-      successUrl: `${hostingUrl}/app?success=true`,
-      cancelUrl: `${hostingUrl}/app?canceled=true`,
+      successUrl: `${stripeEnv.siteUrl}/app?success=true`,
+      cancelUrl: `${stripeEnv.siteUrl}/app?canceled=true`,
       paymentIntentMetadata: { priceId: args.priceId, userId },
       metadata: { priceId: args.priceId, userId },
     });

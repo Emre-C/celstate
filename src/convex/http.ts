@@ -4,10 +4,13 @@ import type { Id } from "./_generated/dataModel.js";
 import { registerRoutes } from "@convex-dev/stripe";
 import type Stripe from "stripe";
 import { authComponent, createAuth } from "./auth.js";
+import { assertStripeEnv } from "./lib/stripeEnv.js";
+
+const stripeEnv = assertStripeEnv();
 
 const CREDIT_PACKS: Record<string, number> = {
-  [process.env.STRIPE_PRICE_STARTER!]: 15,
-  [process.env.STRIPE_PRICE_PRO!]: 40,
+  [stripeEnv.stripePriceStarter]: 15,
+  [stripeEnv.stripePricePro]: 40,
 };
 
 const http = httpRouter();

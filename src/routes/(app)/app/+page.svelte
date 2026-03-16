@@ -2,6 +2,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { useQuery, useConvexClient } from '@mmailaender/convex-svelte';
+	import { ConvexError } from 'convex/values';
 	import { api } from '../../../convex/_generated/api.js';
 	import type { Id } from '../../../convex/_generated/dataModel.js';
 	import PromptInput from '$lib/components/PromptInput.svelte';
@@ -64,7 +65,11 @@
 				aspectRatio,
 			});
 		} catch (e) {
-			errorMessage = e instanceof Error ? e.message : 'Generation failed. Please try again.';
+			if (e instanceof ConvexError) {
+				errorMessage = String(e.data);
+			} else {
+				errorMessage = e instanceof Error ? e.message : 'Generation failed. Please try again.';
+			}
 		}
 	}
 

@@ -19,6 +19,7 @@ import type * as lib_gemini from "../lib/gemini.js";
 import type * as lib_matte from "../lib/matte.js";
 import type * as lib_optimize from "../lib/optimize.js";
 import type * as lib_prompts from "../lib/prompts.js";
+import type * as lib_stripeEnv from "../lib/stripeEnv.js";
 import type * as lib_validation from "../lib/validation.js";
 import type * as stripe from "../stripe.js";
 import type * as users from "../users.js";
@@ -41,6 +42,7 @@ declare const fullApi: ApiFromModules<{
   "lib/matte": typeof lib_matte;
   "lib/optimize": typeof lib_optimize;
   "lib/prompts": typeof lib_prompts;
+  "lib/stripeEnv": typeof lib_stripeEnv;
   "lib/validation": typeof lib_validation;
   stripe: typeof stripe;
   users: typeof users;

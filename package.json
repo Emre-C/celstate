@@ -12,7 +12,8 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"test": "vitest run",
-		"test:watch": "vitest"
+		"test:watch": "vitest",
+		"check:stripe-env": "npx tsx scripts/check-stripe-env.ts"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-vercel": "^6.3.3",

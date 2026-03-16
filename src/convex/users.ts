@@ -9,6 +9,7 @@ import {
   type QueryCtx,
 } from "./_generated/server.js";
 import { GENERATION_CONFIG } from "./lib/config.js";
+import { assertStripeEnv } from "./lib/stripeEnv.js";
 
 const userDoc = v.object({
   _id: v.id("users"),
@@ -213,9 +214,10 @@ export const getStripePriceIds = query({
     pro: v.string(),
   }),
   handler: async () => {
+    const stripeEnv = assertStripeEnv();
     return {
-      starter: process.env.STRIPE_PRICE_STARTER!,
-      pro: process.env.STRIPE_PRICE_PRO!,
+      starter: stripeEnv.stripePriceStarter,
+      pro: stripeEnv.stripePricePro,
     };
   },
 });

@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import {
   mutation,
   query,
@@ -28,7 +28,7 @@ export const requestGeneration = mutation({
 
     const aspectRatio = args.aspectRatio ?? GENERATION_CONFIG.defaultAspectRatio;
     if (!isValidAspectRatio(aspectRatio)) {
-      throw new Error(`Unsupported aspect ratio: ${aspectRatio}`);
+      throw new ConvexError(`Unsupported aspect ratio: ${aspectRatio}`);
     }
 
     const creditsCost = GENERATION_CONFIG.creditsPerGeneration;
@@ -36,7 +36,7 @@ export const requestGeneration = mutation({
     // Atomic: check + deduct credits
     const userRecord = await ctx.db.get(userId);
     if (!userRecord || (userRecord.credits ?? 0) < creditsCost) {
-      throw new Error("Insufficient credits");
+      throw new ConvexError("Insufficient credits");
     }
     await ctx.db.patch(userId, {
       credits: (userRecord.credits ?? 0) - creditsCost,
