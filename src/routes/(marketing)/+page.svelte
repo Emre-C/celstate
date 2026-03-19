@@ -1,8 +1,11 @@
 <script lang="ts">
 	import HeroShowcase from '$lib/components/HeroShowcase.svelte';
+	import ZoomInspector from '$lib/components/ZoomInspector.svelte';
 	import NavBar from '$lib/components/ui/NavBar.svelte';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import SectionLabel from '$lib/components/ui/SectionLabel.svelte';
+
+	const heroImageSrc = '/images/celstate-a-majestic-phoenix-bird-in-midflight-win.png';
 
 	const features = [
 		{
@@ -38,6 +41,10 @@
 	];
 </script>
 
+<svelte:head>
+	<link rel="preload" as="image" href={heroImageSrc} />
+</svelte:head>
+
 <div class="min-h-dvh">
 	<!-- Nav -->
 	<NavBar>
@@ -56,14 +63,15 @@
 				<!-- Left: editorial -->
 				<div class="pt-4 lg:pt-8">
 					<div class="mb-6">
-						<SectionLabel text="Transparent background generation" />
+						<SectionLabel text="AI image generation" />
 					</div>
 					<h1 class="mb-6 text-4xl font-light leading-[1.1] tracking-tight text-text sm:text-5xl">
-						Images with nothing behind them.
+						Describe it. Generate it.<br />Already transparent.
 					</h1>
 					<p class="mb-10 max-w-md text-sm leading-relaxed text-dim">
-						Type what you need. Get a production-ready PNG with a transparent background.
-						No background removal. No artifacts. Just the subject, clean and isolated.
+						Imagine any image — a logo, a character, a product shot — and Celstate generates it
+						in seconds, already on a transparent background. No background removal step.
+						No halos or artifacts. Just your vision, clean and ready to use.
 					</p>
 					<div class="flex items-center gap-4">
 						<a
@@ -79,6 +87,40 @@
 				<div>
 					<HeroShowcase />
 				</div>
+			</div>
+		</PageContainer>
+	</section>
+
+	<!-- Edge Quality: Zoom inspector -->
+	<section class="border-t border-border py-20">
+		<PageContainer>
+			<div class="mb-12 max-w-xl">
+				<div class="mb-6">
+					<SectionLabel text="Edge quality" />
+				</div>
+				<h2 class="mb-3 text-2xl font-light tracking-tight text-text">
+					See what others blur.
+				</h2>
+				<p class="text-sm leading-relaxed text-dim">
+					Flame wisps, wood splinters, dust particles — Celstate preserves every semi-transparent edge. Hover to zoom in and inspect the alpha channel yourself.
+				</p>
+			</div>
+
+			<div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+				<ZoomInspector
+					src="/images/celstate-a-majestic-phoenix-bird-in-midflight-win.png"
+					alt="Phoenix with transparent flame wisps and spark particles"
+					label="Flame wisps & spark particles"
+					focusPoint={{ x: 0.75, y: 0.2 }}
+					lazy
+				/>
+				<ZoomInspector
+					src="/images/celstate-an-exploding-wooden-statue-thats-signifi.png"
+					alt="Exploding wooden statue with splinters and dust on transparent background"
+					label="Wood splinters & dust particles"
+					focusPoint={{ x: 0.3, y: 0.25 }}
+					lazy
+				/>
 			</div>
 		</PageContainer>
 	</section>
@@ -109,44 +151,6 @@
 						</p>
 					</div>
 				{/each}
-			</div>
-		</PageContainer>
-	</section>
-
-	<!-- How it Works -->
-	<section class="border-t border-border py-20">
-		<PageContainer>
-			<div class="mb-12 max-w-xl">
-				<div class="mb-6">
-					<SectionLabel text="How it works" />
-				</div>
-				<h2 class="text-2xl font-light tracking-tight text-text">
-					Three steps. No learning curve.
-				</h2>
-			</div>
-
-			<div class="grid grid-cols-1 gap-px border border-border bg-border sm:grid-cols-3">
-				<div class="bg-bg p-6 sm:p-8">
-					<span class="mb-4 block font-mono text-xs tracking-[0.15em] text-accent">01</span>
-					<h3 class="mb-2 text-sm font-medium text-text">Describe</h3>
-					<p class="text-sm leading-relaxed text-dim">
-						Type what you need. A logo, a character sprite, a product shot — plain language, no prompt engineering.
-					</p>
-				</div>
-				<div class="bg-bg p-6 sm:p-8">
-					<span class="mb-4 block font-mono text-xs tracking-[0.15em] text-accent">02</span>
-					<h3 class="mb-2 text-sm font-medium text-text">Generate</h3>
-					<p class="text-sm leading-relaxed text-dim">
-						Hit enter. Celstate generates the image natively on a transparent background in under two seconds.
-					</p>
-				</div>
-				<div class="bg-bg p-6 sm:p-8">
-					<span class="mb-4 block font-mono text-xs tracking-[0.15em] text-accent">03</span>
-					<h3 class="mb-2 text-sm font-medium text-text">Download</h3>
-					<p class="text-sm leading-relaxed text-dim">
-						Preview your result. Download a production-ready 32-bit PNG with a proper alpha channel. Done.
-					</p>
-				</div>
 			</div>
 		</PageContainer>
 	</section>

@@ -9,7 +9,7 @@
 		statusMessage,
 		resultUrl,
 		optimizedUrl,
-		referenceUrl,
+		referenceUrls = [],
 		error,
 		createdAt,
 		completedAt,
@@ -21,7 +21,7 @@
 		statusMessage?: string;
 		resultUrl?: string;
 		optimizedUrl?: string;
-		referenceUrl?: string;
+		referenceUrls?: string[];
 		error?: string;
 		createdAt: number;
 		completedAt?: number;
@@ -91,12 +91,16 @@
 				<p class="line-clamp-2 text-sm text-dim">{prompt}</p>
 			</div>
 			<div class="flex items-center gap-3 px-4 pb-3">
-				{#if referenceUrl}
+				{#if referenceUrls.length > 0}
 					<div class="flex items-center gap-1.5" title="Generated with style reference">
-						<div class="h-4 w-4 shrink-0 overflow-hidden border border-border">
-							<img src={referenceUrl} alt="Ref" class="h-full w-full object-cover" />
+						<div class="flex -space-x-1">
+							{#each referenceUrls.slice(0, 3) as url}
+								<div class="h-4 w-4 shrink-0 overflow-hidden border border-border">
+									<img src={url} alt="Ref" class="h-full w-full object-cover" />
+								</div>
+							{/each}
 						</div>
-						<MonoLabel>Ref</MonoLabel>
+						<MonoLabel>{referenceUrls.length > 1 ? `${referenceUrls.length} Refs` : 'Ref'}</MonoLabel>
 					</div>
 				{/if}
 				{#if ratioLabel}

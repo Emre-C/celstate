@@ -55,8 +55,13 @@ export const GENERATION_CONFIG = {
   initialCredits: 3,
   weeklyDripCap: 1,
 
+  // Abuse prevention
+  maxConcurrentGenerations: 3,
+  maxPromptLength: 20_000,
+
   // Reference image constraints
   referenceMaxSizeBytes: 10 * 1024 * 1024, // 10 MB
+  maxReferenceImages: 14,
 
   // Image optimization (Normal Resolution variant)
   optimizedMaxDimension: 1024,

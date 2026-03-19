@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { GENERATION_CONFIG } from "./config.js";
 
 export interface GeminiImageResult {
@@ -8,9 +8,9 @@ export interface GeminiImageResult {
 
 export interface GeminiChatSession {
   sendMessage(prompt: string): Promise<GeminiImageResult>;
-  sendMessageWithImage(
+  sendMessageWithImages(
     prompt: string,
-    image: GeminiImageResult,
+    images: GeminiImageResult[],
   ): Promise<GeminiImageResult>;
 }
 
@@ -67,6 +67,10 @@ export function createChatSession(
         aspectRatio,
         imageSize,
       },
+      thinkingConfig: {
+        thinkingLevel: ThinkingLevel.HIGH,
+        includeThoughts: false,
+      },
     },
   });
 
@@ -76,20 +80,23 @@ export function createChatSession(
       return extractImageFromResponse(response);
     },
 
-    async sendMessageWithImage(
+    async sendMessageWithImages(
       prompt: string,
-      image: GeminiImageResult,
+      images: GeminiImageResult[],
     ): Promise<GeminiImageResult> {
+      const messageParts: Array<
+        | { inlineData: { data: string; mimeType: string } }
+        | { text: string }
+      > = images.map((img) => ({
+        inlineData: {
+          data: img.imageBase64,
+          mimeType: img.mimeType,
+        },
+      }));
+      messageParts.push({ text: prompt });
+
       const response = await chat.sendMessage({
-        message: [
-          {
-            inlineData: {
-              data: image.imageBase64,
-              mimeType: image.mimeType,
-            },
-          },
-          { text: prompt },
-        ],
+        message: messageParts,
       });
       return extractImageFromResponse(response);
     },

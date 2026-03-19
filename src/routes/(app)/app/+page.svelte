@@ -54,14 +54,14 @@
 		prevCompletedCount = completedCount;
 	});
 
-	async function handleGenerate(prompt: string, referenceStorageId?: string, aspectRatio?: string) {
+	async function handleGenerate(prompt: string, referenceStorageIds?: string[], aspectRatio?: string) {
 		if (generating) return;
 		errorMessage = '';
 
 		try {
 			await client.mutation(api.generations.requestGeneration, {
 				prompt,
-				referenceStorageId: referenceStorageId as Id<'_storage'> | undefined,
+				referenceStorageIds: referenceStorageIds as Id<'_storage'>[] | undefined,
 				aspectRatio,
 			});
 		} catch (e) {
@@ -174,7 +174,7 @@
 						statusMessage={gen.statusMessage}
 						resultUrl={gen.resultUrl ?? undefined}
 						optimizedUrl={gen.optimizedUrl ?? undefined}
-						referenceUrl={gen.referenceUrl ?? undefined}
+						referenceUrls={gen.referenceUrls}
 						error={gen.error}
 						createdAt={gen.createdAt}
 						completedAt={gen.completedAt}

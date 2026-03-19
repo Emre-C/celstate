@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+
 	interface BackgroundOption {
 		label: string;
 		class: string;
@@ -11,40 +13,72 @@
 	}
 
 	const backgrounds: BackgroundOption[] = [
+		{ label: 'Transparent', class: 'showcase-checker' },
 		{ label: 'White', class: 'bg-white' },
 		{ label: 'Dark', class: 'bg-[#0f172a]' },
 		{ label: 'Emerald', class: 'bg-gradient-to-br from-emerald-900 to-emerald-600' },
-		{ label: 'Checker', class: 'showcase-checker' },
 		{ label: 'Mesh', class: 'showcase-mesh' }
 	];
 
 	const images: ImageOption[] = [
 		{ src: '/images/celstate-a-majestic-phoenix-bird-in-midflight-win.png', alt: 'Phoenix with glowing wisps and semi-transparent flame edges', label: 'Phoenix' },
-		{ src: '/images/celstate-a-large-brilliantcut-gemstone-emerald-gr.png', alt: 'Faceted gemstone with clean hard edges and internal refraction', label: 'Gemstone' }
+		{ src: '/images/celstate-an-exploding-wooden-statue-thats-signifi.png', alt: 'Wooden deity disintegrating in an explosion of splinters, pagodas, and dragon heads on a transparent background', label: 'Statue' }
 	];
 
-	let selectedBg = $state(2);
+	// Start on Transparent (checker) — index 0 now
+	let selectedBg = $state(0);
 	let selectedImage = $state(0);
-	let hasSwitchedBackground = $state(false);
+	let userHasInteracted = $state(false);
+	let autoCycling = $state(false);
+
+	// Auto-cycle: white → dark → emerald → mesh → back to transparent (settle)
+	const autoCycleSequence = [1, 2, 3, 4, 0];
 
 	function selectBackground(i: number) {
-		if (i !== selectedBg) hasSwitchedBackground = true;
+		userHasInteracted = true;
+		autoCycling = false;
 		selectedBg = i;
 	}
+
+	onMount(() => {
+		if (userHasInteracted) return;
+
+		let step = 0;
+		let timeoutId: ReturnType<typeof setTimeout>;
+
+		// Start auto-cycling after 1.8s
+		timeoutId = setTimeout(() => {
+			autoCycling = true;
+
+			function nextStep() {
+				if (userHasInteracted || step >= autoCycleSequence.length) {
+					autoCycling = false;
+					return;
+				}
+				selectedBg = autoCycleSequence[step];
+				step++;
+				timeoutId = setTimeout(nextStep, 1400);
+			}
+
+			nextStep();
+		}, 1800);
+
+		return () => clearTimeout(timeoutId);
+	});
 </script>
 
 <div class="showcase-wrapper">
 	<!-- Background switcher -->
 	<div class="mb-3 flex flex-wrap items-center gap-1.5">
 		<span
-			class="mr-2 font-mono text-[10px] tracking-[0.15em] uppercase text-dim {!hasSwitchedBackground ? 'showcase-cta-pulse' : ''}"
-		>Switch background</span>
+			class="mr-2 font-mono text-[10px] tracking-[0.15em] uppercase text-dim"
+		>Background</span>
 		{#each backgrounds as bg, i}
 			<button
 				onclick={() => selectBackground(i)}
-				class="border px-2.5 py-1 font-mono text-[10px] tracking-wider uppercase transition-all duration-200 {selectedBg === i
+				class="showcase-bg-btn border px-2.5 py-1 font-mono text-[10px] tracking-wider uppercase transition-all duration-200 {selectedBg === i
 					? 'border-accent/60 bg-accent/10 text-accent'
-					: 'border-border text-dim hover:border-accent/30 hover:text-text'}"
+					: 'border-border text-dim hover:border-accent/30 hover:text-text'} {autoCycling && selectedBg === i ? 'showcase-active-sweep' : ''}"
 			>
 				{bg.label}
 			</button>
@@ -55,13 +89,15 @@
 	<div class="relative overflow-hidden border border-border">
 		<!-- Background layer -->
 		<div
-			class="aspect-[4/3] transition-all duration-500 ease-out {backgrounds[selectedBg].class}"
+			class="aspect-[4/3] transition-all duration-700 ease-[cubic-bezier(0.25,1,0.5,1)] {backgrounds[selectedBg].class}"
 		>
 			<!-- Image -->
 			<img
 				src={images[selectedImage].src}
 				alt={images[selectedImage].alt}
 				class="h-full w-full object-contain p-6 transition-opacity duration-300"
+				fetchpriority={selectedImage === 0 ? 'high' : 'auto'}
+				decoding="async"
 			/>
 		</div>
 
@@ -73,10 +109,10 @@
 			<div class="flex items-center gap-1">
 				{#each images as img, i}
 					<button
-						onclick={() => (selectedImage = i)}
+						onclick={() => { selectedImage = i; userHasInteracted = true; }}
 						class="px-2.5 py-1 font-mono text-[10px] tracking-wider uppercase transition-all duration-200 {selectedImage === i
 							? 'text-accent'
-							: 'text-dim hover:text-text'} {hasSwitchedBackground && selectedImage !== i ? 'showcase-cta-pulse' : ''}"
+							: 'text-dim hover:text-text'}"
 					>
 						{img.label}
 					</button>
@@ -108,22 +144,26 @@
 </div>
 
 <style>
-	.showcase-cta-pulse {
-		animation: showcase-cta-pulse 2s ease-in-out infinite;
-		display: inline-block;
+	/* Sweep highlight on the currently-active button during auto-cycle */
+	.showcase-active-sweep {
+		animation: showcase-sweep 600ms cubic-bezier(0.25, 1, 0.5, 1) forwards;
 	}
 
-	@keyframes showcase-cta-pulse {
-		0%,
-		100% {
-			opacity: 0.9;
-			text-shadow: 0 0 0 transparent;
-			transform: scale(1);
+	@keyframes showcase-sweep {
+		0% {
+			border-color: var(--color-border);
+			background-color: transparent;
+			color: var(--color-dim);
 		}
-		50% {
-			opacity: 1;
-			text-shadow: 0 0 14px var(--color-accent), 0 0 28px var(--color-accent);
-			transform: scale(1.02);
+		40% {
+			border-color: var(--color-accent);
+			background-color: oklch(from var(--color-accent) l c h / 0.15);
+			color: var(--color-accent);
+		}
+		100% {
+			border-color: oklch(from var(--color-accent) l c h / 0.6);
+			background-color: oklch(from var(--color-accent) l c h / 0.1);
+			color: var(--color-accent);
 		}
 	}
 
@@ -143,5 +183,11 @@
 
 	.showcase-mesh {
 		background: linear-gradient(135deg, #1e1b4b 0%, #312e81 25%, #1e3a5f 50%, #0f172a 75%, #1a1a2e 100%);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.showcase-active-sweep {
+			animation: none;
+		}
 	}
 </style>

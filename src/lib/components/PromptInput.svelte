@@ -8,7 +8,7 @@
 		disabled = false,
 		credits
 	}: {
-		onsubmit: (prompt: string, referenceStorageId?: string, aspectRatio?: string) => void;
+		onsubmit: (prompt: string, referenceStorageIds?: string[], aspectRatio?: string) => void;
 		disabled?: boolean;
 		credits?: number;
 	} = $props();
@@ -17,8 +17,8 @@
 
 	let value = $state('');
 	let focused = $state(false);
-	let referenceFile = $state<File | null>(null);
-	let referencePreviewUrl = $state<string | null>(null);
+	let referenceFiles = $state<File[]>([]);
+	let referencePreviewUrls = $state<string[]>([]);
 	let uploading = $state(false);
 	let aspectRatio = $state('1:1');
 
@@ -26,20 +26,29 @@
 
 	function handleFileSelect(e: Event) {
 		const input = e.target as HTMLInputElement;
-		const file = input.files?.[0];
-		if (!file) return;
+		const files = input.files;
+		if (!files || files.length === 0) return;
 
-		referenceFile = file;
-		referencePreviewUrl = URL.createObjectURL(file);
+		const remaining = 14 - referenceFiles.length;
+		const newFiles = Array.from(files).slice(0, remaining);
+		referenceFiles = [...referenceFiles, ...newFiles];
+		referencePreviewUrls = [
+			...referencePreviewUrls,
+			...newFiles.map((f) => URL.createObjectURL(f)),
+		];
 		input.value = '';
 	}
 
-	function clearReference() {
-		if (referencePreviewUrl) {
-			URL.revokeObjectURL(referencePreviewUrl);
-		}
-		referenceFile = null;
-		referencePreviewUrl = null;
+	function removeReference(index: number) {
+		URL.revokeObjectURL(referencePreviewUrls[index]);
+		referenceFiles = referenceFiles.filter((_, i) => i !== index);
+		referencePreviewUrls = referencePreviewUrls.filter((_, i) => i !== index);
+	}
+
+	function clearAllReferences() {
+		referencePreviewUrls.forEach((url) => URL.revokeObjectURL(url));
+		referenceFiles = [];
+		referencePreviewUrls = [];
 	}
 
 	async function handleSubmit() {
@@ -48,19 +57,23 @@
 
 		const selectedRatio = aspectRatio === '1:1' ? undefined : aspectRatio;
 
-		if (referenceFile) {
+		if (referenceFiles.length > 0) {
 			uploading = true;
 			try {
-				const uploadUrl = await client.mutation(api.generations.generateUploadUrl, {});
-				const uploadResponse = await fetch(uploadUrl, {
-					method: 'POST',
-					headers: { 'Content-Type': referenceFile.type },
-					body: referenceFile,
-				});
-				const { storageId } = await uploadResponse.json();
+				const storageIds: string[] = [];
+				for (const file of referenceFiles) {
+					const uploadUrl = await client.mutation(api.generations.generateUploadUrl, {});
+					const uploadResponse = await fetch(uploadUrl, {
+						method: 'POST',
+						headers: { 'Content-Type': file.type },
+						body: file,
+					});
+					const { storageId } = await uploadResponse.json();
+					storageIds.push(storageId);
+				}
 				value = '';
-				clearReference();
-				onsubmit(trimmed, storageId, selectedRatio);
+				clearAllReferences();
+				onsubmit(trimmed, storageIds, selectedRatio);
 			} finally {
 				uploading = false;
 			}
@@ -82,23 +95,27 @@
 </script>
 
 <div class="prompt-input-wrapper">
-	<!-- Reference image preview -->
-	{#if referencePreviewUrl}
+	<!-- Reference image previews -->
+	{#if referencePreviewUrls.length > 0}
 		<div class="mb-2 flex items-center gap-2 px-1">
-			<div class="relative h-10 w-10 shrink-0 overflow-hidden border border-border">
-				<img src={referencePreviewUrl} alt="Reference" class="h-full w-full object-cover" />
-				<button
-					onclick={clearReference}
-					class="absolute -right-px -top-px flex h-4 w-4 items-center justify-center bg-bg text-dim transition-colors hover:text-text"
-					aria-label="Remove reference image"
-				>
-					<svg class="h-2.5 w-2.5" viewBox="0 0 10 10" fill="none">
-						<path d="M2 2l6 6M8 2l-6 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
-					</svg>
-				</button>
+			<div class="flex gap-1.5">
+				{#each referencePreviewUrls as url, i}
+					<div class="relative h-10 w-10 shrink-0 overflow-hidden border border-border">
+						<img src={url} alt="Reference {i + 1}" class="h-full w-full object-cover" />
+						<button
+							onclick={() => removeReference(i)}
+							class="absolute -right-px -top-px flex h-4 w-4 items-center justify-center bg-bg text-dim transition-colors hover:text-text"
+							aria-label="Remove reference image {i + 1}"
+						>
+							<svg class="h-2.5 w-2.5" viewBox="0 0 10 10" fill="none">
+								<path d="M2 2l6 6M8 2l-6 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
+							</svg>
+						</button>
+					</div>
+				{/each}
 			</div>
 			<span class="font-mono text-[10px] tracking-[0.15em] uppercase text-dim/60">
-				Style reference
+				{referencePreviewUrls.length === 1 ? 'Style reference' : `${referencePreviewUrls.length} references`}
 			</span>
 		</div>
 	{/if}
@@ -128,10 +145,10 @@
 		<!-- Reference upload button -->
 		<button
 			onclick={() => fileInput.click()}
-			disabled={disabled}
+			disabled={disabled || referenceFiles.length >= 14}
 			class="flex shrink-0 items-center px-3 text-dim transition-colors hover:text-accent disabled:opacity-50"
-			title="Add style reference image"
-			aria-label="Add style reference image"
+			title="Add style reference images (up to 14)"
+			aria-label="Add style reference images"
 		>
 			<svg class="h-4 w-4" viewBox="0 0 16 16" fill="none">
 				<rect x="1.5" y="1.5" width="13" height="13" rx="1" stroke="currentColor" stroke-width="1.2" />
@@ -144,6 +161,7 @@
 			bind:this={fileInput}
 			type="file"
 			accept="image/png,image/jpeg,image/webp"
+			multiple
 			onchange={handleFileSelect}
 			class="hidden"
 			aria-hidden="true"

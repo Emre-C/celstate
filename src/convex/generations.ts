@@ -18,7 +18,7 @@ import { getCurrentAppUser, upsertCurrentUser } from "./users.js";
 export const requestGeneration = mutation({
   args: {
     prompt: v.string(),
-    referenceStorageId: v.optional(v.id("_storage")),
+    referenceStorageIds: v.optional(v.array(v.id("_storage"))),
     aspectRatio: v.optional(v.string()),
   },
   returns: v.id("generations"),
@@ -26,9 +26,31 @@ export const requestGeneration = mutation({
     const appUser = (await getCurrentAppUser(ctx)) ?? await upsertCurrentUser(ctx);
     const userId = appUser._id;
 
+    if (args.prompt.length > GENERATION_CONFIG.maxPromptLength) {
+      throw new ConvexError(
+        `Prompt too long (max ${GENERATION_CONFIG.maxPromptLength} characters)`,
+      );
+    }
+
     const aspectRatio = args.aspectRatio ?? GENERATION_CONFIG.defaultAspectRatio;
     if (!isValidAspectRatio(aspectRatio)) {
       throw new ConvexError(`Unsupported aspect ratio: ${aspectRatio}`);
+    }
+
+    const referenceStorageIds = args.referenceStorageIds ?? [];
+    if (referenceStorageIds.length > GENERATION_CONFIG.maxReferenceImages) {
+      throw new ConvexError(
+        `Maximum ${GENERATION_CONFIG.maxReferenceImages} reference images allowed`,
+      );
+    }
+
+    const inFlight = await ctx.db
+      .query("generations")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .filter((q) => q.eq(q.field("status"), "generating"))
+      .collect();
+    if (inFlight.length >= GENERATION_CONFIG.maxConcurrentGenerations) {
+      throw new ConvexError("Too many generations in progress. Please wait for one to finish.");
     }
 
     const creditsCost = GENERATION_CONFIG.creditsPerGeneration;
@@ -47,7 +69,7 @@ export const requestGeneration = mutation({
       userId,
       prompt: args.prompt,
       status: "generating" as const,
-      referenceStorageId: args.referenceStorageId,
+      referenceStorageIds: referenceStorageIds.length > 0 ? referenceStorageIds : undefined,
       creditsCost,
       aspectRatio,
       createdAt: Date.now(),
@@ -57,7 +79,7 @@ export const requestGeneration = mutation({
     await ctx.scheduler.runAfter(0, internal.generation.generateWorker, {
       generationId,
       prompt: args.prompt,
-      referenceStorageId: args.referenceStorageId,
+      referenceStorageIds: referenceStorageIds.length > 0 ? referenceStorageIds : undefined,
       aspectRatio,
     });
 
@@ -70,6 +92,9 @@ export const generateUploadUrl = mutation({
   handler: async (ctx) => {
     const appUser = await getCurrentAppUser(ctx);
     if (!appUser) throw new Error("Unauthorized");
+    if ((appUser.credits ?? 0) < GENERATION_CONFIG.creditsPerGeneration) {
+      throw new ConvexError("Insufficient credits");
+    }
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -153,6 +178,7 @@ export const getByUser = internalQuery({
       blackBgStorageId: v.optional(v.id("_storage")),
       optimizedStorageId: v.optional(v.id("_storage")),
       referenceStorageId: v.optional(v.id("_storage")),
+      referenceStorageIds: v.optional(v.array(v.id("_storage"))),
       creditsCost: v.number(),
       aspectRatio: v.string(),
       createdAt: v.number(),
@@ -191,6 +217,7 @@ export const getById = internalQuery({
       blackBgStorageId: v.optional(v.id("_storage")),
       optimizedStorageId: v.optional(v.id("_storage")),
       referenceStorageId: v.optional(v.id("_storage")),
+      referenceStorageIds: v.optional(v.array(v.id("_storage"))),
       creditsCost: v.number(),
       aspectRatio: v.string(),
       createdAt: v.number(),
@@ -221,18 +248,24 @@ export const getByUserWithUrls = query({
       .collect();
 
     return Promise.all(
-      generations.map(async (gen) => ({
-        ...gen,
-        resultUrl: gen.resultStorageId
-          ? await ctx.storage.getUrl(gen.resultStorageId)
-          : null,
-        optimizedUrl: gen.optimizedStorageId
-          ? await ctx.storage.getUrl(gen.optimizedStorageId)
-          : null,
-        referenceUrl: gen.referenceStorageId
-          ? await ctx.storage.getUrl(gen.referenceStorageId)
-          : null,
-      }))
+      generations.map(async (gen) => {
+        // Resolve reference URLs from new array field, falling back to legacy single field
+        const refIds = gen.referenceStorageIds ?? (gen.referenceStorageId ? [gen.referenceStorageId] : []);
+        const referenceUrls = await Promise.all(
+          refIds.map((id) => ctx.storage.getUrl(id)),
+        );
+
+        return {
+          ...gen,
+          resultUrl: gen.resultStorageId
+            ? await ctx.storage.getUrl(gen.resultStorageId)
+            : null,
+          optimizedUrl: gen.optimizedStorageId
+            ? await ctx.storage.getUrl(gen.optimizedStorageId)
+            : null,
+          referenceUrls: referenceUrls.filter((url): url is string => url !== null),
+        };
+      })
     );
   },
 });

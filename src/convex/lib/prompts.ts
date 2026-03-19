@@ -14,7 +14,7 @@ export function buildBlackBgPrompt(): string {
 export function buildWhiteBgPromptWithReference(userPrompt: string): string {
   return `${userPrompt}.
 
-Use the attached reference image as a style and subject guide. Match its visual style, color palette, and aesthetic while following the prompt description.
+Use the attached reference images as style and subject guides. Match their visual style, color palette, and aesthetic while following the prompt description.
 The subject is centered with comfortable margins from all edges.
 The background is pure solid white (#FFFFFF).
 No shadows cast onto the background. No gradients. No textures.
@@ -24,7 +24,7 @@ No ground plane. The subject floats against a perfectly flat white field.`;
 export function buildWhiteBgRetryPromptWithReference(userPrompt: string): string {
   return `${userPrompt}.
 
-Use the attached reference image as a style and subject guide. Match its visual style, color palette, and aesthetic while following the prompt description.
+Use the attached reference images as style and subject guides. Match their visual style, color palette, and aesthetic while following the prompt description.
 The subject is centered with comfortable margins from all edges.
 The background MUST be pure white #FFFFFF with absolutely no texture, shadow, or gradient. The entire background area must be a single flat color.
 No shadows cast onto the background. No gradients. No textures.

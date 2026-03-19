@@ -110,7 +110,7 @@ export const generateWorker = internalAction({
   args: {
     generationId: v.id("generations"),
     prompt: v.string(),
-    referenceStorageId: v.optional(v.id("_storage")),
+    referenceStorageIds: v.optional(v.array(v.id("_storage"))),
     aspectRatio: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -128,17 +128,19 @@ export const generateWorker = internalAction({
       throw new Error("Generation record not found");
     }
 
-    // Load reference image if provided
-    let referenceImage: GeminiImageResult | undefined;
-    if (args.referenceStorageId) {
-      const refBlob = await ctx.storage.get(args.referenceStorageId);
-      if (!refBlob) {
-        throw new Error("Reference image not found in storage");
+    // Load reference images if provided
+    const referenceImages: GeminiImageResult[] = [];
+    if (args.referenceStorageIds && args.referenceStorageIds.length > 0) {
+      for (const storageId of args.referenceStorageIds) {
+        const refBlob = await ctx.storage.get(storageId);
+        if (!refBlob) {
+          throw new Error("Reference image not found in storage");
+        }
+        const refBuffer = Buffer.from(await refBlob.arrayBuffer());
+        const refBase64 = refBuffer.toString("base64");
+        const mimeType = refBlob.type === "image/jpeg" ? "image/jpeg" as const : "image/png" as const;
+        referenceImages.push({ imageBase64: refBase64, mimeType });
       }
-      const refBuffer = Buffer.from(await refBlob.arrayBuffer());
-      const refBase64 = refBuffer.toString("base64");
-      const mimeType = refBlob.type === "image/jpeg" ? "image/jpeg" as const : "image/png" as const;
-      referenceImage = { imageBase64: refBase64, mimeType };
     }
 
     let retryCount = 0;
@@ -163,7 +165,7 @@ export const generateWorker = internalAction({
 
         try {
           const result = await executeGenerationPipeline(
-            ctx, apiKey, args.prompt, updateStatus, referenceImage, args.aspectRatio,
+            ctx, apiKey, args.prompt, updateStatus, referenceImages, args.aspectRatio,
           );
           dimensionMismatch = result.dimensionMismatch;
           await updateStatus("Saving your image…");
@@ -237,10 +239,11 @@ async function executeGenerationPipeline(
   apiKey: string,
   prompt: string,
   updateStatus: (message: string) => Promise<void>,
-  referenceImage?: GeminiImageResult,
+  referenceImages: GeminiImageResult[],
   aspectRatio?: string,
 ): Promise<PipelineResult> {
   const session = createChatSession(apiKey, { aspectRatio });
+  const hasReferences = referenceImages.length > 0;
 
   // === Pass 1: White background ===
   await updateStatus("Creating your image…");
@@ -251,12 +254,12 @@ async function executeGenerationPipeline(
     }
 
     let result: GeminiImageResult;
-    if (referenceImage) {
+    if (hasReferences) {
       const whiteBgPrompt =
         retry === 0
           ? buildWhiteBgPromptWithReference(prompt)
           : buildWhiteBgRetryPromptWithReference(prompt);
-      result = await session.sendMessageWithImage(whiteBgPrompt, referenceImage);
+      result = await session.sendMessageWithImages(whiteBgPrompt, referenceImages);
     } else {
       const whiteBgPrompt =
         retry === 0
@@ -300,9 +303,9 @@ async function executeGenerationPipeline(
       retry === 0 ? buildBlackBgPrompt() : buildBlackBgRetryPrompt();
 
     // Send with white-bg image as reference for stronger fidelity
-    const result = await session.sendMessageWithImage(
+    const result = await session.sendMessageWithImages(
       blackBgPrompt,
-      whiteBgResult,
+      [whiteBgResult],
     );
 
     // Decode and validate
