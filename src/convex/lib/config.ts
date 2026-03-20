@@ -60,7 +60,7 @@ export const GENERATION_CONFIG = {
   maxPromptLength: 20_000,
 
   // Reference image constraints
-  referenceMaxSizeBytes: 10 * 1024 * 1024, // 10 MB
+  referenceMaxSizeBytes: 7 * 1024 * 1024, // 7 MB
   maxReferenceImages: 14,
 
   // Image optimization (Normal Resolution variant)

@@ -32,7 +32,7 @@ Per [VERCEL-DEPLOYMENT.md](docs/implementation/VERCEL-DEPLOYMENT.md) §2, you mu
 - Namecheap: either Vercel nameservers (Option A) or A + CNAME records (Option B) for `celstate.com` / `www`.
 - Stripe production: live Price IDs and (for Convex) live secret key + webhook to Convex.
 - Convex production: `npx convex deploy --prod` already run; production URL known.
-- Convex dashboard: prod env vars set (`GEMINI_API_KEY`, `STRIPE_PRICE_*`, `HOSTING_URL`, `CONVEX_SITE_URL`).
+- Convex dashboard: prod env vars set (Vertex AI per [VERTEX-AI-CONVEX-SETUP.md](./VERTEX-AI-CONVEX-SETUP.md), `STRIPE_PRICE_*`, `HOSTING_URL`, `CONVEX_SITE_URL`).
 
 When starting implementation, paste this block (with real values) for env steps:
 

@@ -1,8 +1,10 @@
 /**
- * Stripe environment variable validation.
+ * Stripe environment variable validation (presence + format).
  *
- * Guards against misconfigured Convex env vars (wrong keys, test-vs-live
- * mismatch, localhost in production) that silently break the payment flow.
+ * Convex dev and prod deployments set env vars independently; the same
+ * SITE_URL may appear on dev (Stripe test) and prod (Stripe live). Cross-checks
+ * against SITE_URL caused spurious failures on dev and are intentionally omitted.
+ * Ensure your **production** deployment uses live Stripe keys in the dashboard.
  */
 
 export interface StripeEnv {
@@ -25,22 +27,6 @@ const LIVE_WEBHOOK_PREFIX = "whsec_";
 
 const isLiveStripeKey = (key: string) => key.startsWith(LIVE_KEY_PREFIX);
 const isTestStripeKey = (key: string) => key.startsWith(TEST_KEY_PREFIX);
-const isProductionSiteUrl = (url: string) => {
-  try {
-    return new URL(url).protocol === "https:";
-  } catch {
-    return false;
-  }
-};
-
-const isLocalhostUrl = (url: string) => {
-  try {
-    const hostname = new URL(url).hostname;
-    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-  } catch {
-    return false;
-  }
-};
 
 function readStripeEnv(): StripeEnv {
   return {
@@ -98,31 +84,6 @@ function validateStripeEnv(env: StripeEnv): EnvError[] {
     errors.push({
       variable: "STRIPE_WEBHOOK_SECRET",
       message: `Must start with "${LIVE_WEBHOOK_PREFIX}"`,
-    });
-  }
-
-  // --- cross-variable consistency ---
-  const siteIsProduction = isProductionSiteUrl(env.siteUrl);
-  const keyIsTest = isTestStripeKey(env.stripeSecretKey);
-
-  if (siteIsProduction && keyIsTest) {
-    errors.push({
-      variable: "STRIPE_SECRET_KEY",
-      message: "Production SITE_URL (https) but STRIPE_SECRET_KEY is a test key (sk_test_). Use a live key.",
-    });
-  }
-
-  if (siteIsProduction && isLocalhostUrl(env.siteUrl)) {
-    errors.push({
-      variable: "SITE_URL",
-      message: "SITE_URL points to localhost, which is invalid for production",
-    });
-  }
-
-  if (!siteIsProduction && isLiveStripeKey(env.stripeSecretKey)) {
-    errors.push({
-      variable: "STRIPE_SECRET_KEY",
-      message: "Non-production SITE_URL (http) but STRIPE_SECRET_KEY is a live key (sk_live_). Possible mismatch.",
     });
   }
 

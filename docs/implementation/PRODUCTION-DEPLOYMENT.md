@@ -4,7 +4,8 @@
 > **Last Updated**: 2026-03-11  
 > **References**:  
 > - [`PAYMENT-IMPLEMENTATION.md`](./PAYMENT-IMPLEMENTATION.md) — Stripe gaps, testing checklists  
-> - [`VERCEL-DEPLOYMENT.md`](./VERCEL-DEPLOYMENT.md) — SvelteKit adapter swap, Vercel CLI steps
+> - [`VERCEL-DEPLOYMENT.md`](./VERCEL-DEPLOYMENT.md) — SvelteKit adapter swap, Vercel CLI steps  
+> - [`VERTEX-AI-CONVEX-SETUP.md`](./VERTEX-AI-CONVEX-SETUP.md) — Vertex AI env on Convex (no Gemini API key)
 
 ---
 
@@ -24,7 +25,7 @@
 |----------|--------|-------|
 | `AUTH_GOOGLE_ID` | ✅ Set | `1033853...` (dev OAuth client) |
 | `AUTH_GOOGLE_SECRET` | ✅ Set | (redacted) |
-| `GEMINI_API_KEY` | ✅ Set | (redacted) |
+| `VERTEX_AI_PROJECT_ID`, `VERTEX_AI_SERVICE_ACCOUNT_JSON`, `VERTEX_AI_LOCATION` | ✅ Set | Vertex AI (see [VERTEX-AI-CONVEX-SETUP.md](./VERTEX-AI-CONVEX-SETUP.md)) |
 | `HOSTING_URL` | ✅ Set | `http://localhost:5173` |
 | `STRIPE_SECRET_KEY` | ✅ Set | `sk_test_...` |
 | `STRIPE_WEBHOOK_SECRET` | ✅ Set | `whsec_...` (test) |
@@ -46,7 +47,7 @@
 | `SERVICE_KEY` | ✅ Set | (auto-generated) |
 | `SITE_URL` | ✅ Set | `https://www.celstate.com` |
 | `CONVEX_SITE_URL` | ✅ Set | `https://original-jackal-530.convex.site` |
-| `GEMINI_API_KEY` | ❌ **Missing** | |
+| Vertex AI vars (see [VERTEX-AI-CONVEX-SETUP.md](./VERTEX-AI-CONVEX-SETUP.md)) | ⚠️ **Set when deploying generation** | |
 | `STRIPE_SECRET_KEY` | ❌ **Missing** | |
 | `STRIPE_WEBHOOK_SECRET` | ❌ **Missing** | |
 | `STRIPE_PRICE_STARTER` | ❌ **Missing** | |
@@ -193,9 +194,11 @@ VERCEL_LOGGED_IN=yes
 # === GOOGLE OAUTH ===
 GOOGLE_OAUTH_PROD_REDIRECT_VERIFIED=yes
 
-# === GEMINI ===
-# Same API key as dev, or a separate prod key if you have one:
-GEMINI_API_KEY_PROD=...
+# === VERTEX AI (Convex env — not Vercel) ===
+# Service account JSON via Convex CLI --from-file; project/location vars.
+# See VERTEX-AI-CONVEX-SETUP.md
+VERTEX_AI_PROJECT_ID_PROD=...
+# VERTEX_AI_SERVICE_ACCOUNT_JSON set via: convex env set ... --from-file key.json --prod
 
 # === DOMAIN ===
 # DNS will be handled interactively during Phase 2
@@ -277,12 +280,14 @@ Then set the missing env vars:
 npx convex env set AUTH_GOOGLE_ID "1033853029965-k172lrd09s3saq0tgdnl6ku52jhdmr4b.apps.googleusercontent.com" --prod
 npx convex env set AUTH_GOOGLE_SECRET "<same secret as dev>" --prod
 
-# Stripe + Gemini
+# Stripe + Vertex AI (see docs/implementation/VERTEX-AI-CONVEX-SETUP.md)
 npx convex env set STRIPE_SECRET_KEY "sk_live_..." --prod
 npx convex env set STRIPE_PRICE_STARTER "price_..." --prod
 npx convex env set STRIPE_PRICE_PRO "price_..." --prod
 npx convex env set HOSTING_URL "https://www.celstate.com" --prod
-npx convex env set GEMINI_API_KEY "..." --prod
+npx convex env set VERTEX_AI_PROJECT_ID "your-gcp-project-id" --prod
+npx convex env set VERTEX_AI_SERVICE_ACCOUNT_JSON --from-file ./path-to-sa-key.json --prod
+npx convex env set VERTEX_AI_LOCATION "global" --prod
 # STRIPE_WEBHOOK_SECRET set after step 2.3
 ```
 

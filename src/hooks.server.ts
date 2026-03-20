@@ -1,63 +1,65 @@
+import {sequence} from "@sveltejs/kit/hooks";
+import * as Sentry from "@sentry/sveltekit";
 import type { Handle } from "@sveltejs/kit";
 import { PUBLIC_SITE_URL } from "$env/static/public";
 import { getConvexJwtToken } from "$lib/server/auth.js";
 import {
-	createCanonicalRedirectResponse,
-	getCanonicalRedirectUrl
+				createCanonicalRedirectResponse,
+				getCanonicalRedirectUrl
 } from "$lib/server/canonical-site.js";
 import { withResponseHeader } from "$lib/server/response.js";
 
 const AUTH_LOG_SCOPE = "auth";
 
 const toConsoleMethod = (level: "info" | "warn" | "error") => {
-	switch (level) {
-		case "error":
-			return console.error;
-		case "warn":
-			return console.warn;
-		default:
-			return console.info;
-	}
+				switch (level) {
+								case "error":
+												return console.error;
+								case "warn":
+												return console.warn;
+								default:
+												return console.info;
+				}
 };
 
 const getRedirectSummary = (location: string | null, baseUrl: URL) => {
-	if (!location) {
-		return undefined;
-	}
+				if (!location) {
+								return undefined;
+				}
 
-	try {
-		const target = new URL(location, baseUrl);
-		return {
-			host: target.host,
-			pathname: target.pathname,
-			error: target.searchParams.get("error") ?? undefined
-		};
-	} catch {
-		return {
-			value: location
-		};
-	}
+				try {
+								const target = new URL(location, baseUrl);
+								return {
+												host: target.host,
+												pathname: target.pathname,
+												error: target.searchParams.get("error") ?? undefined
+								};
+				} catch {
+								return {
+												value: location
+								};
+				}
 };
 
 const isAuthObservedRequest = (url: URL) =>
-	url.pathname.startsWith("/api/auth") || url.pathname === "/auth" || url.searchParams.has("error");
+				url.pathname.startsWith("/api/auth") || url.pathname === "/auth" || url.searchParams.has("error");
 
 const logAuthRequestEvent = (
-	level: "info" | "warn" | "error",
-	event: string,
-	data: Record<string, unknown>
+				level: "info" | "warn" | "error",
+				event: string,
+				data: Record<string, unknown>
 ) => {
-	toConsoleMethod(level)(
-		JSON.stringify({
-			scope: AUTH_LOG_SCOPE,
-			event,
-			timestamp: new Date().toISOString(),
-			...data
-		})
-	);
+				toConsoleMethod(level)(
+								JSON.stringify({
+												scope: AUTH_LOG_SCOPE,
+												event,
+												timestamp: new Date().toISOString(),
+												...data
+								})
+				);
 };
 
-export const handle: Handle = async ({ event, resolve }) => {
+export const handle: Handle = sequence(Sentry.sentryHandle(), async ({ event, resolve }) => {
 	event.locals.requestId = crypto.randomUUID();
 	const canonicalRedirectUrl = getCanonicalRedirectUrl({
 		requestUrl: event.url,
@@ -117,4 +119,5 @@ export const handle: Handle = async ({ event, resolve }) => {
 		});
 		throw error;
 	}
-};
+});
+export const handleError = Sentry.handleErrorWithSentry();

@@ -16,6 +16,11 @@ Thumbs.db
 .env
 .env.*
 
+# Google Cloud — service account key downloads (never commit)
+celstate-*-*.json
+*-sa-key.json
+.env.convex.vertex.local
+
 # Playwright
 .playwright-cli/
 
@@ -27,3 +32,6 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
 .vercel
+
+# Sentry Config File
+.env.sentry-build-plugin

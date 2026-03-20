@@ -8,6 +8,7 @@ import { GENERATION_CONFIG } from "./lib/config.js";
 import {
   createChatSession,
   type GeminiImageResult,
+  readGeminiRuntimeConfigFromEnv,
 } from "./lib/gemini.js";
 import {
   buildWhiteBgPrompt,
@@ -131,10 +132,7 @@ export const generateWorker = internalAction({
   },
   handler: async (ctx, args) => {
     const startTime = Date.now();
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error("GEMINI_API_KEY environment variable not set");
-    }
+    const runtimeConfig = readGeminiRuntimeConfigFromEnv();
 
     // Look up the generation to get userId for potential refund
     const generation = await ctx.runQuery(internal.generations.getById, {
@@ -181,7 +179,7 @@ export const generateWorker = internalAction({
 
         try {
           const result = await executeGenerationPipeline(
-            ctx, apiKey, args.prompt, updateStatus, referenceImages, args.aspectRatio,
+            ctx, runtimeConfig, args.prompt, updateStatus, referenceImages, args.aspectRatio,
           );
           dimensionMismatch = result.dimensionMismatch;
           await updateStatus("Saving your image…");
@@ -254,13 +252,13 @@ interface PipelineResult {
 
 async function executeGenerationPipeline(
   ctx: { storage: { store: (blob: Blob) => Promise<string> } },
-  apiKey: string,
+  runtimeConfig: ReturnType<typeof readGeminiRuntimeConfigFromEnv>,
   prompt: string,
   updateStatus: (message: string) => Promise<void>,
   referenceImages: GeminiImageResult[],
   aspectRatio?: string,
 ): Promise<PipelineResult> {
-  const session = createChatSession(apiKey, { aspectRatio });
+  const session = createChatSession(runtimeConfig, { aspectRatio });
   const hasReferences = referenceImages.length > 0;
 
   // === Pass 1: White background ===

@@ -43,34 +43,6 @@ describe("stripe-env validation", () => {
     expect(variables).toContain("SITE_URL");
   });
 
-  it("detects test key with production SITE_URL", () => {
-    const errors = validateStripeEnv({
-      ...validLiveEnv,
-      stripeSecretKey: "sk_test_abc123",
-    });
-
-    expect(errors).toContainEqual(
-      expect.objectContaining({
-        variable: "STRIPE_SECRET_KEY",
-        message: expect.stringContaining("test key"),
-      }),
-    );
-  });
-
-  it("detects live key with non-production SITE_URL", () => {
-    const errors = validateStripeEnv({
-      ...validTestEnv,
-      stripeSecretKey: "sk_live_abc123",
-    });
-
-    expect(errors).toContainEqual(
-      expect.objectContaining({
-        variable: "STRIPE_SECRET_KEY",
-        message: expect.stringContaining("live key"),
-      }),
-    );
-  });
-
   it("detects invalid secret key prefix", () => {
     const errors = validateStripeEnv({
       ...validLiveEnv,
@@ -113,17 +85,4 @@ describe("stripe-env validation", () => {
     );
   });
 
-  it("detects localhost in production SITE_URL", () => {
-    const errors = validateStripeEnv({
-      ...validLiveEnv,
-      siteUrl: "https://localhost:5173",
-    });
-
-    expect(errors).toContainEqual(
-      expect.objectContaining({
-        variable: "SITE_URL",
-        message: expect.stringContaining("localhost"),
-      }),
-    );
-  });
 });

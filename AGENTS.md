@@ -9,6 +9,7 @@
 - Produce code with minimal cyclomatic complexity and clear separation of concerns.
 - Treat every interface and function signature as a strict mathematical contract.
 - DO NOT use npm, use pnpm instead.
+- **Convex + Stripe**: Live keys only on prod; `convex env set` defaults to dev (`--prod` for production)—`docs/implementation/STRIPE-CONVEX-ENVIRONMENTS.md`.
 
 ## Common Svelte 5 Mistakes
 1. Using `let` without `$state` - Variables are not reactive without `$state()`
