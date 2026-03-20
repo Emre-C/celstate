@@ -3,7 +3,7 @@
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
-import { PNG } from "pngjs";
+import sharp from "sharp";
 import { GENERATION_CONFIG } from "./lib/config.js";
 import {
   createChatSession,
@@ -25,76 +25,81 @@ import {
 import { differenceMatte } from "./lib/matte.js";
 import { optimizeForWeb } from "./lib/optimize.js";
 
-/** PNG IEND chunk bytes: length(4) + "IEND"(4) + CRC(4) = 12 bytes total */
-const PNG_IEND_MARKER = Buffer.from([0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82]);
-
-function truncateAfterIend(buffer: Buffer): Buffer {
-  const idx = buffer.indexOf(PNG_IEND_MARKER);
-  if (idx === -1) return buffer;
-  const end = idx + PNG_IEND_MARKER.length;
-  return end < buffer.length ? buffer.subarray(0, end) : buffer;
-}
-
-function decodePng(base64: string): { pixels: Uint8ClampedArray; width: number; height: number } {
+/**
+ * Decode any image format Gemini returns (PNG, JPEG, WebP, etc.) into raw RGBA
+ * pixels via sharp. This eliminates the pngjs "unrecognized content at end of
+ * stream" error class entirely — sharp handles trailing bytes, format
+ * mismatches, and malformed chunks that pngjs cannot.
+ */
+async function decodeImage(
+  base64: string,
+  mimeType?: string,
+): Promise<{ pixels: Uint8ClampedArray; width: number; height: number }> {
   const raw = Buffer.from(base64, "base64");
-  const buffer = truncateAfterIend(raw);
-  const png = PNG.sync.read(buffer);
-  return {
-    pixels: new Uint8ClampedArray(png.data),
-    width: png.width,
-    height: png.height,
-  };
+
+  if (raw.length === 0) {
+    throw new Error(
+      `Gemini returned empty image payload (reported mimeType=${mimeType ?? "unknown"})`,
+    );
+  }
+
+  // Log diagnostic info for production debugging
+  const signature = raw.subarray(0, 8).toString("hex");
+  const isPng = raw.length >= 8 && raw[0] === 0x89 && raw[1] === 0x50 && raw[2] === 0x4e && raw[3] === 0x47;
+  const isJpeg = raw.length >= 2 && raw[0] === 0xff && raw[1] === 0xd8;
+  const detectedFormat = isPng ? "png" : isJpeg ? "jpeg" : "other";
+  console.log(
+    `[decodeImage] mimeType=${mimeType ?? "unknown"} detectedFormat=${detectedFormat} ` +
+    `bufferLength=${raw.length} signature=${signature}`,
+  );
+
+  try {
+    const { data, info } = await sharp(raw)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    return {
+      pixels: new Uint8ClampedArray(data),
+      width: info.width,
+      height: info.height,
+    };
+  } catch (sharpErr) {
+    const msg = sharpErr instanceof Error ? sharpErr.message : String(sharpErr);
+    throw new Error(
+      `Failed to decode image: ${msg} (mimeType=${mimeType ?? "unknown"}, ` +
+      `detectedFormat=${detectedFormat}, bufferLength=${raw.length})`,
+    );
+  }
 }
 
-function encodePng(
+async function encodePng(
   pixels: Uint8ClampedArray,
   width: number,
   height: number,
-): Buffer {
-  const png = new PNG({ width, height });
-  png.data = Buffer.from(pixels);
-  return PNG.sync.write(png);
+): Promise<Buffer> {
+  return sharp(Buffer.from(pixels), {
+    raw: { width, height, channels: 4 },
+  })
+    .png()
+    .toBuffer();
 }
 
-function resizeToMatch(
+async function resizeToMatch(
   pixels: Uint8ClampedArray,
   srcWidth: number,
   srcHeight: number,
   dstWidth: number,
   dstHeight: number,
-): Uint8ClampedArray {
-  // Lanczos-like resize via bilinear interpolation (pure JS fallback)
-  // For production quality, sharp would be preferred, but this handles
-  // the typical case of minor dimension mismatches (a few pixels off)
-  const output = new Uint8ClampedArray(dstWidth * dstHeight * 4);
-  const xRatio = srcWidth / dstWidth;
-  const yRatio = srcHeight / dstHeight;
+): Promise<Uint8ClampedArray> {
+  const { data } = await sharp(Buffer.from(pixels), {
+    raw: { width: srcWidth, height: srcHeight, channels: 4 },
+  })
+    .resize(dstWidth, dstHeight)
+    .raw()
+    .toBuffer({ resolveWithObject: true });
 
-  for (let y = 0; y < dstHeight; y++) {
-    for (let x = 0; x < dstWidth; x++) {
-      const srcX = x * xRatio;
-      const srcY = y * yRatio;
-      const x0 = Math.floor(srcX);
-      const y0 = Math.floor(srcY);
-      const x1 = Math.min(x0 + 1, srcWidth - 1);
-      const y1 = Math.min(y0 + 1, srcHeight - 1);
-      const xFrac = srcX - x0;
-      const yFrac = srcY - y0;
-
-      const dstIdx = (y * dstWidth + x) * 4;
-      for (let c = 0; c < 4; c++) {
-        const topLeft = pixels[(y0 * srcWidth + x0) * 4 + c];
-        const topRight = pixels[(y0 * srcWidth + x1) * 4 + c];
-        const bottomLeft = pixels[(y1 * srcWidth + x0) * 4 + c];
-        const bottomRight = pixels[(y1 * srcWidth + x1) * 4 + c];
-
-        const top = topLeft + (topRight - topLeft) * xFrac;
-        const bottom = bottomLeft + (bottomRight - bottomLeft) * xFrac;
-        output[dstIdx + c] = Math.round(top + (bottom - top) * yFrac);
-      }
-    }
-  }
-  return output;
+  return new Uint8ClampedArray(data);
 }
 
 function sleep(ms: number): Promise<void> {
@@ -228,11 +233,13 @@ export const generateWorker = internalAction({
         amount: generation.creditsCost,
       });
 
-      const errorMessage =
+      const rawError =
         e instanceof Error ? e.message : "Unknown error occurred";
+      console.error(`[generateWorker] generationId=${args.generationId} error=${rawError}`);
+      const userMessage = "Something went wrong generating your image. Your credit has been refunded — please try again.";
       await ctx.runMutation(internal.generations.failGeneration, {
         generationId: args.generationId,
-        error: errorMessage,
+        error: userMessage,
       });
     }
   },
@@ -280,7 +287,7 @@ async function executeGenerationPipeline(
     }
 
     // Decode and validate
-    const decoded = decodePng(result.imageBase64);
+    const decoded = await decodeImage(result.imageBase64, result.mimeType);
     const validation = validateWhiteBackground(
       decoded.pixels,
       decoded.width,
@@ -320,7 +327,7 @@ async function executeGenerationPipeline(
     );
 
     // Decode and validate
-    const decoded = decodePng(result.imageBase64);
+    const decoded = await decodeImage(result.imageBase64, result.mimeType);
     const validation = validateBlackBackground(
       decoded.pixels,
       decoded.width,
@@ -345,8 +352,8 @@ async function executeGenerationPipeline(
 
   // === Decode both for matte ===
   await updateStatus("Extracting transparency…");
-  let white = decodePng(whiteBgResult.imageBase64);
-  let black = decodePng(blackBgResult.imageBase64);
+  let white = await decodeImage(whiteBgResult.imageBase64, whiteBgResult.mimeType);
+  let black = await decodeImage(blackBgResult.imageBase64, blackBgResult.mimeType);
 
   // === Dimension check + resize ===
   let hadDimensionMismatch = false;
@@ -366,7 +373,7 @@ async function executeGenerationPipeline(
 
     if (white.width !== targetWidth || white.height !== targetHeight) {
       white = {
-        pixels: resizeToMatch(
+        pixels: await resizeToMatch(
           white.pixels,
           white.width,
           white.height,
@@ -380,7 +387,7 @@ async function executeGenerationPipeline(
 
     if (black.width !== targetWidth || black.height !== targetHeight) {
       black = {
-        pixels: resizeToMatch(
+        pixels: await resizeToMatch(
           black.pixels,
           black.width,
           black.height,
@@ -403,11 +410,11 @@ async function executeGenerationPipeline(
 
   // === Encode final RGBA PNG ===
   await updateStatus("Preparing final image…");
-  const finalPng = encodePng(matteOutput.pixels, matteOutput.width, matteOutput.height);
+  const finalPng = await encodePng(matteOutput.pixels, matteOutput.width, matteOutput.height);
 
   // Re-encode intermediates for storage
-  const whiteBgPng = encodePng(white.pixels, white.width, white.height);
-  const blackBgPng = encodePng(black.pixels, black.width, black.height);
+  const whiteBgPng = await encodePng(white.pixels, white.width, white.height);
+  const blackBgPng = await encodePng(black.pixels, black.width, black.height);
 
   return {
     finalPng,
