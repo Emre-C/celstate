@@ -4,6 +4,7 @@ import {
   query,
   internalMutation,
   internalQuery,
+  type MutationCtx,
 } from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
 import type { Id } from "./_generated/dataModel.js";
@@ -40,6 +41,98 @@ async function scheduleGenerationStage(
       });
       return;
   }
+}
+
+function getGenerationDurationMs(generation: { createdAt: number }, now: number): number {
+  return Math.max(0, now - generation.createdAt);
+}
+
+function getGenerationAttemptDurationMs(
+  generation: {
+    createdAt: number;
+    lastProgressAt?: number;
+    stageStartedAt?: number;
+  },
+  now: number,
+): number {
+  return Math.max(0, now - (generation.stageStartedAt ?? generation.lastProgressAt ?? generation.createdAt));
+}
+
+function getStageRetryCount(
+  generation: {
+    blackBgRetryCount?: number;
+    finalizeRetryCount?: number;
+    whiteBgRetryCount?: number;
+  },
+  stage: GenerationStage | undefined,
+): number | undefined {
+  switch (stage) {
+    case "white_background":
+      return generation.whiteBgRetryCount ?? 0;
+    case "black_background":
+      return generation.blackBgRetryCount ?? 0;
+    case "finalizing":
+      return generation.finalizeRetryCount ?? 0;
+    default:
+      return undefined;
+  }
+}
+
+async function insertGenerationOpsEvent(
+  ctx: Pick<MutationCtx, "db">,
+  args: {
+    attemptDurationMs?: number;
+    error?: string;
+    eventType:
+      | "generation_requested"
+      | "stage_succeeded"
+      | "stage_retry_scheduled"
+      | "generation_completed"
+      | "generation_failed"
+      | "generation_stalled";
+    generationDurationMs?: number;
+    generationId: Id<"generations">;
+    retryCount?: number;
+    severity?: "info" | "warning" | "critical";
+    stage?: GenerationStage;
+    statusMessage?: string;
+    totalRetryCount?: number;
+    userEmail?: string;
+    userId: Id<"users">;
+  },
+): Promise<void> {
+  await ctx.db.insert("generationOpsEvents", {
+    attemptDurationMs: args.attemptDurationMs,
+    createdAt: Date.now(),
+    error: args.error,
+    eventType: args.eventType,
+    generationDurationMs: args.generationDurationMs,
+    generationId: args.generationId,
+    retryCount: args.retryCount,
+    severity: args.severity,
+    stage: args.stage,
+    statusMessage: args.statusMessage,
+    totalRetryCount: args.totalRetryCount,
+    userEmail: args.userEmail,
+    userId: args.userId,
+  });
+}
+
+async function scheduleGenerationAlert(
+  ctx: { scheduler: { runAfter: (...args: any[]) => Promise<unknown> } },
+  args: {
+    alertType: "generation_failed" | "generation_stalled";
+    error?: string;
+    generationDurationMs?: number;
+    generationId: Id<"generations">;
+    retryCount?: number;
+    severity: "warning" | "critical";
+    stage?: GenerationStage;
+    statusMessage?: string;
+    totalRetryCount?: number;
+  },
+): Promise<void> {
+  await ctx.scheduler.runAfter(0, internal.ops.sendGenerationAlert, args);
 }
 
 /**
@@ -115,6 +208,19 @@ export const requestGeneration = mutation({
       finalizeRetryCount: 0,
     });
 
+    await insertGenerationOpsEvent(ctx, {
+      eventType: "generation_requested",
+      generationDurationMs: 0,
+      generationId,
+      retryCount: 0,
+      severity: "info",
+      stage: "white_background",
+      statusMessage: getGenerationStageStatusMessage("white_background"),
+      totalRetryCount: 0,
+      userEmail: appUser.email,
+      userId,
+    });
+
     await scheduleGenerationStage(ctx, generationId, "white_background");
 
     return generationId;
@@ -134,17 +240,13 @@ export const generateUploadUrl = mutation({
 });
 
 async function failGenerationRecord(
-  ctx: {
-    db: {
-      get: (id: Id<"generations"> | Id<"users">) => Promise<any>;
-      patch: (id: Id<"generations"> | Id<"users">, value: Record<string, unknown>) => Promise<unknown>;
-    };
-  },
+  ctx: Pick<MutationCtx, "db" | "scheduler">,
   generationId: Id<"generations">,
   error: string,
+  internalError?: string,
 ): Promise<void> {
   const generation = await ctx.db.get(generationId);
-  if (!generation || generation.status === "complete") {
+  if (!generation || generation.status !== "generating") {
     return;
   }
 
@@ -154,15 +256,45 @@ async function failGenerationRecord(
     error,
     lastProgressAt: now,
     stage: undefined,
+    stageStartedAt: undefined,
     status: "failed",
     statusMessage: undefined,
+  });
+
+  const user = await ctx.db.get(generation.userId);
+  const alertError = internalError ?? error;
+
+  await insertGenerationOpsEvent(ctx, {
+    attemptDurationMs: getGenerationAttemptDurationMs(generation, now),
+    error: alertError,
+    eventType: "generation_failed",
+    generationDurationMs: getGenerationDurationMs(generation, now),
+    generationId,
+    retryCount: getStageRetryCount(generation, generation.stage),
+    severity: "critical",
+    stage: generation.stage,
+    statusMessage: generation.statusMessage,
+    totalRetryCount: generation.retryCount ?? 0,
+    userEmail: user?.email,
+    userId: generation.userId,
+  });
+
+  await scheduleGenerationAlert(ctx, {
+    alertType: "generation_failed",
+    error: alertError,
+    generationDurationMs: getGenerationDurationMs(generation, now),
+    generationId,
+    retryCount: getStageRetryCount(generation, generation.stage),
+    severity: "critical",
+    stage: generation.stage,
+    statusMessage: generation.statusMessage,
+    totalRetryCount: generation.retryCount ?? 0,
   });
 
   if (generation.creditRefundedAt) {
     return;
   }
 
-  const user = await ctx.db.get(generation.userId);
   if (!user) {
     return;
   }
@@ -194,6 +326,7 @@ export const completeGeneration = internalMutation({
     }
 
     const now = Date.now();
+    const user = await ctx.db.get(generation.userId);
     await ctx.db.patch(args.generationId, {
       blackBgStorageId: args.blackBgStorageId,
       completedAt: now,
@@ -204,9 +337,49 @@ export const completeGeneration = internalMutation({
       resultStorageId: args.resultStorageId,
       retryCount: args.retryCount,
       stage: undefined,
+      stageStartedAt: undefined,
       status: "complete",
       statusMessage: undefined,
       whiteBgStorageId: args.whiteBgStorageId,
+    });
+
+    await insertGenerationOpsEvent(ctx, {
+      attemptDurationMs: getGenerationAttemptDurationMs(generation, now),
+      eventType: "generation_completed",
+      generationDurationMs: args.generationTimeMs,
+      generationId: args.generationId,
+      retryCount: getStageRetryCount(generation, generation.stage),
+      severity: "info",
+      stage: generation.stage,
+      statusMessage: generation.statusMessage,
+      totalRetryCount: args.retryCount,
+      userEmail: user?.email,
+      userId: generation.userId,
+    });
+    return null;
+  },
+});
+
+export const markStageAttemptStarted = internalMutation({
+  args: {
+    generationId: v.id("generations"),
+    stage: v.union(
+      v.literal("white_background"),
+      v.literal("black_background"),
+      v.literal("finalizing"),
+    ),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const generation = await ctx.db.get(args.generationId);
+    if (!generation || generation.status !== "generating" || generation.stage !== args.stage) {
+      return null;
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(args.generationId, {
+      lastProgressAt: now,
+      stageStartedAt: now,
     });
     return null;
   },
@@ -229,10 +402,24 @@ export const recordWhiteBackgroundSuccess = internalMutation({
     await ctx.db.patch(args.generationId, {
       lastProgressAt: now,
       stage: "black_background",
+      stageStartedAt: undefined,
       statusMessage: getGenerationStageStatusMessage("black_background"),
       whiteBgRetryCount: args.retryCount,
       whiteBgStorageId: args.whiteBgStorageId,
     });
+
+    await insertGenerationOpsEvent(ctx, {
+      attemptDurationMs: getGenerationAttemptDurationMs(generation, now),
+      eventType: "stage_succeeded",
+      generationDurationMs: getGenerationDurationMs(generation, now),
+      generationId: args.generationId,
+      retryCount: args.retryCount,
+      severity: "info",
+      stage: "white_background",
+      totalRetryCount: generation.retryCount ?? 0,
+      userId: generation.userId,
+    });
+
     await scheduleGenerationStage(ctx, args.generationId, "black_background");
     return null;
   },
@@ -257,8 +444,22 @@ export const recordBlackBackgroundSuccess = internalMutation({
       blackBgStorageId: args.blackBgStorageId,
       lastProgressAt: now,
       stage: "finalizing",
+      stageStartedAt: undefined,
       statusMessage: getGenerationStageStatusMessage("finalizing"),
     });
+
+    await insertGenerationOpsEvent(ctx, {
+      attemptDurationMs: getGenerationAttemptDurationMs(generation, now),
+      eventType: "stage_succeeded",
+      generationDurationMs: getGenerationDurationMs(generation, now),
+      generationId: args.generationId,
+      retryCount: args.retryCount,
+      severity: "info",
+      stage: "black_background",
+      totalRetryCount: generation.retryCount ?? 0,
+      userId: generation.userId,
+    });
+
     await scheduleGenerationStage(ctx, args.generationId, "finalizing");
     return null;
   },
@@ -282,6 +483,8 @@ export const scheduleStageRetry = internalMutation({
     }
 
     const now = Date.now();
+    const totalRetryCount = (generation.retryCount ?? 0) + 1;
+    const statusMessage = getGenerationRetryStatusMessage(args.stage, args.retryCount);
     await ctx.db.patch(args.generationId, {
       blackBgRetryCount:
         args.stage === "black_background"
@@ -292,13 +495,27 @@ export const scheduleStageRetry = internalMutation({
           ? args.retryCount
           : generation.finalizeRetryCount,
       lastProgressAt: now,
-      retryCount: (generation.retryCount ?? 0) + 1,
+      retryCount: totalRetryCount,
       stage: args.stage,
-      statusMessage: getGenerationRetryStatusMessage(args.stage, args.retryCount),
+      stageStartedAt: undefined,
+      statusMessage,
       whiteBgRetryCount:
         args.stage === "white_background"
           ? args.retryCount
           : generation.whiteBgRetryCount,
+    });
+
+    await insertGenerationOpsEvent(ctx, {
+      attemptDurationMs: getGenerationAttemptDurationMs(generation, now),
+      eventType: "stage_retry_scheduled",
+      generationDurationMs: getGenerationDurationMs(generation, now),
+      generationId: args.generationId,
+      retryCount: args.retryCount,
+      severity: "warning",
+      stage: args.stage,
+      statusMessage,
+      totalRetryCount,
+      userId: generation.userId,
     });
 
     await scheduleGenerationStage(
@@ -316,10 +533,11 @@ export const failGeneration = internalMutation({
   args: {
     generationId: v.id("generations"),
     error: v.string(),
+    internalError: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await failGenerationRecord(ctx, args.generationId, args.error);
+    await failGenerationRecord(ctx, args.generationId, args.error, args.internalError);
     return null;
   },
 });
@@ -365,6 +583,7 @@ export const getByUser = internalQuery({
       aspectRatio: v.string(),
       createdAt: v.number(),
       lastProgressAt: v.optional(v.number()),
+      stageStartedAt: v.optional(v.number()),
       completedAt: v.optional(v.number()),
       error: v.optional(v.string()),
       generationTimeMs: v.optional(v.number()),
@@ -373,6 +592,7 @@ export const getByUser = internalQuery({
       blackBgRetryCount: v.optional(v.number()),
       finalizeRetryCount: v.optional(v.number()),
       dimensionMismatch: v.optional(v.boolean()),
+      stalledAlertedAt: v.optional(v.number()),
       creditRefundedAt: v.optional(v.number()),
       stage: v.optional(v.union(
         v.literal("white_background"),
@@ -414,6 +634,7 @@ export const getById = internalQuery({
       aspectRatio: v.string(),
       createdAt: v.number(),
       lastProgressAt: v.optional(v.number()),
+      stageStartedAt: v.optional(v.number()),
       completedAt: v.optional(v.number()),
       error: v.optional(v.string()),
       generationTimeMs: v.optional(v.number()),
@@ -422,6 +643,7 @@ export const getById = internalQuery({
       blackBgRetryCount: v.optional(v.number()),
       finalizeRetryCount: v.optional(v.number()),
       dimensionMismatch: v.optional(v.boolean()),
+      stalledAlertedAt: v.optional(v.number()),
       creditRefundedAt: v.optional(v.number()),
       stage: v.optional(v.union(
         v.literal("white_background"),
@@ -481,6 +703,7 @@ export const updateStatusMessage = internalMutation({
   handler: async (ctx, args) => {
     await ctx.db.patch(args.generationId, {
       lastProgressAt: Date.now(),
+      stalledAlertedAt: undefined,
       statusMessage: args.statusMessage,
     });
     return null;
@@ -491,19 +714,59 @@ export const cleanupStaleGenerations = internalMutation({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
-    const staleThreshold = Date.now() - GENERATION_CONFIG.staleGenerationTimeoutMs;
+    const now = Date.now();
+    const warningThreshold = now - GENERATION_CONFIG.stalledGenerationWarningMs;
+    const staleThreshold = now - GENERATION_CONFIG.staleGenerationTimeoutMs;
     const stale = await ctx.db
       .query("generations")
       .withIndex("by_status", (q) => q.eq("status", "generating"))
       .collect();
 
     for (const gen of stale) {
-      if (getGenerationLastProgressAt(gen) < staleThreshold) {
+      const lastProgressAt = getGenerationLastProgressAt(gen);
+
+      if (lastProgressAt < staleThreshold) {
         await failGenerationRecord(
           ctx,
           gen._id,
           "Generation timed out before completion. Your credit has been refunded — please try again.",
+          `Generation exceeded ${GENERATION_CONFIG.staleGenerationTimeoutMs}ms without progress`,
         );
+        continue;
+      }
+
+      if (!gen.stalledAlertedAt && lastProgressAt < warningThreshold) {
+        const stallError = `Generation exceeded ${GENERATION_CONFIG.stalledGenerationWarningMs}ms without progress`;
+
+        await ctx.db.patch(gen._id, {
+          stalledAlertedAt: now,
+        });
+
+        await insertGenerationOpsEvent(ctx, {
+          attemptDurationMs: getGenerationAttemptDurationMs(gen, now),
+          error: stallError,
+          eventType: "generation_stalled",
+          generationDurationMs: getGenerationDurationMs(gen, now),
+          generationId: gen._id,
+          retryCount: getStageRetryCount(gen, gen.stage),
+          severity: "warning",
+          stage: gen.stage,
+          statusMessage: gen.statusMessage,
+          totalRetryCount: gen.retryCount ?? 0,
+          userId: gen.userId,
+        });
+
+        await scheduleGenerationAlert(ctx, {
+          alertType: "generation_stalled",
+          error: stallError,
+          generationDurationMs: getGenerationDurationMs(gen, now),
+          generationId: gen._id,
+          retryCount: getStageRetryCount(gen, gen.stage),
+          severity: "warning",
+          stage: gen.stage,
+          statusMessage: gen.statusMessage,
+          totalRetryCount: gen.retryCount ?? 0,
+        });
       }
     }
     return null;

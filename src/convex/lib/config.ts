@@ -40,6 +40,7 @@ export const GENERATION_CONFIG = {
   maxRetriesTotal: 0,
   maxFinalizeRetries: 1,
   retryBaseDelayMs: 1500,
+  stalledGenerationWarningMs: 5 * 60 * 1000,
   staleGenerationTimeoutMs: 15 * 60 * 1000,
 
   // Background purity validation

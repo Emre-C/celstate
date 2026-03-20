@@ -22,6 +22,7 @@ import type * as lib_optimize from "../lib/optimize.js";
 import type * as lib_prompts from "../lib/prompts.js";
 import type * as lib_stripeEnv from "../lib/stripeEnv.js";
 import type * as lib_validation from "../lib/validation.js";
+import type * as ops from "../ops.js";
 import type * as pendingCheckouts from "../pendingCheckouts.js";
 import type * as stripe from "../stripe.js";
 import type * as users from "../users.js";
@@ -47,6 +48,7 @@ declare const fullApi: ApiFromModules<{
   "lib/prompts": typeof lib_prompts;
   "lib/stripeEnv": typeof lib_stripeEnv;
   "lib/validation": typeof lib_validation;
+  ops: typeof ops;
   pendingCheckouts: typeof pendingCheckouts;
   stripe: typeof stripe;
   users: typeof users;

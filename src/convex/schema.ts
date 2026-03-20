@@ -38,6 +38,7 @@ export default defineSchema({
     aspectRatio: v.string(),
     createdAt: v.number(),
     lastProgressAt: v.optional(v.number()),
+    stageStartedAt: v.optional(v.number()),
     completedAt: v.optional(v.number()),
     error: v.optional(v.string()),
     generationTimeMs: v.optional(v.number()),
@@ -46,10 +47,47 @@ export default defineSchema({
     blackBgRetryCount: v.optional(v.number()),
     finalizeRetryCount: v.optional(v.number()),
     dimensionMismatch: v.optional(v.boolean()),
+    stalledAlertedAt: v.optional(v.number()),
     creditRefundedAt: v.optional(v.number()),
   })
     .index("by_user", ["userId", "createdAt"])
     .index("by_status", ["status"]),
+
+  generationOpsEvents: defineTable({
+    generationId: v.id("generations"),
+    userId: v.id("users"),
+    userEmail: v.optional(v.string()),
+    eventType: v.union(
+      v.literal("generation_requested"),
+      v.literal("stage_succeeded"),
+      v.literal("stage_retry_scheduled"),
+      v.literal("generation_completed"),
+      v.literal("generation_failed"),
+      v.literal("generation_stalled"),
+      v.literal("alert_sent"),
+      v.literal("alert_failed")
+    ),
+    severity: v.optional(v.union(
+      v.literal("info"),
+      v.literal("warning"),
+      v.literal("critical")
+    )),
+    stage: v.optional(v.union(
+      v.literal("white_background"),
+      v.literal("black_background"),
+      v.literal("finalizing")
+    )),
+    attemptDurationMs: v.optional(v.number()),
+    generationDurationMs: v.optional(v.number()),
+    retryCount: v.optional(v.number()),
+    totalRetryCount: v.optional(v.number()),
+    statusMessage: v.optional(v.string()),
+    error: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_generation", ["generationId", "createdAt"])
+    .index("by_createdAt", ["createdAt"])
+    .index("by_eventType_createdAt", ["eventType", "createdAt"]),
 
   creditGrants: defineTable({
     userId: v.id("users"),

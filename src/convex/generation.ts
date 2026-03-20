@@ -218,6 +218,7 @@ async function handleStageFailure(
   await ctx.runMutation(internal.generations.failGeneration, {
     generationId,
     error: createUserFacingFailureMessage(),
+    internalError: rawError,
   });
 }
 
@@ -325,6 +326,10 @@ export const generateWhiteBackground = internalAction({
     }
 
     const retryCount = generation.whiteBgRetryCount ?? 0;
+    await ctx.runMutation(internal.generations.markStageAttemptStarted, {
+      generationId: args.generationId,
+      stage: "white_background",
+    });
     await updateStatus(ctx, args.generationId, getGenerationRetryStatusMessage("white_background", retryCount));
 
     try {
@@ -373,11 +378,16 @@ export const generateBlackBackground = internalAction({
       await ctx.runMutation(internal.generations.failGeneration, {
         generationId: args.generationId,
         error: createUserFacingFailureMessage(),
+        internalError: "Missing white background image before black background generation",
       });
       return null;
     }
 
     const retryCount = generation.blackBgRetryCount ?? 0;
+    await ctx.runMutation(internal.generations.markStageAttemptStarted, {
+      generationId: args.generationId,
+      stage: "black_background",
+    });
     await updateStatus(ctx, args.generationId, getGenerationRetryStatusMessage("black_background", retryCount));
 
     try {
@@ -421,11 +431,16 @@ export const finalizeGeneration = internalAction({
       await ctx.runMutation(internal.generations.failGeneration, {
         generationId: args.generationId,
         error: createUserFacingFailureMessage(),
+        internalError: "Missing background images before finalizing generation",
       });
       return null;
     }
 
     const retryCount = generation.finalizeRetryCount ?? 0;
+    await ctx.runMutation(internal.generations.markStageAttemptStarted, {
+      generationId: args.generationId,
+      stage: "finalizing",
+    });
     await updateStatus(ctx, args.generationId, getGenerationRetryStatusMessage("finalizing", retryCount));
 
     try {

@@ -123,6 +123,14 @@ export const getByTokenIdentifier = internalQuery({
   },
 });
 
+export const getById = internalQuery({
+  args: { userId: v.id("users") },
+  returns: v.union(userDoc, v.null()),
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.userId);
+  },
+});
+
 export const getMe = query({
   args: {},
   returns: v.union(userDoc, v.null()),
