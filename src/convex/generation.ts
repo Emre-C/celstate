@@ -25,8 +25,19 @@ import {
 import { differenceMatte } from "./lib/matte.js";
 import { optimizeForWeb } from "./lib/optimize.js";
 
+/** PNG IEND chunk bytes: length(4) + "IEND"(4) + CRC(4) = 12 bytes total */
+const PNG_IEND_MARKER = Buffer.from([0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82]);
+
+function truncateAfterIend(buffer: Buffer): Buffer {
+  const idx = buffer.indexOf(PNG_IEND_MARKER);
+  if (idx === -1) return buffer;
+  const end = idx + PNG_IEND_MARKER.length;
+  return end < buffer.length ? buffer.subarray(0, end) : buffer;
+}
+
 function decodePng(base64: string): { pixels: Uint8ClampedArray; width: number; height: number } {
-  const buffer = Buffer.from(base64, "base64");
+  const raw = Buffer.from(base64, "base64");
+  const buffer = truncateAfterIend(raw);
   const png = PNG.sync.read(buffer);
   return {
     pixels: new Uint8ClampedArray(png.data),
