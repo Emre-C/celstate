@@ -9,6 +9,7 @@ export default defineSchema({
     email: v.optional(v.string()),
     emailVerificationTime: v.optional(v.number()),
     credits: v.optional(v.number()),
+    stripeCustomerId: v.optional(v.string()),
   })
     .index("email", ["email"])
     .index("by_token", ["tokenIdentifier"]),
@@ -52,4 +53,17 @@ export default defineSchema({
     stripePaymentIntentId: v.optional(v.string()),
     createdAt: v.number(),
   }).index("by_user", ["userId", "createdAt"]),
+
+  pendingCheckouts: defineTable({
+    userId: v.id("users"),
+    priceId: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("ready"),
+      v.literal("failed")
+    ),
+    checkoutUrl: v.optional(v.string()),
+    error: v.optional(v.string()),
+    createdAt: v.number(),
+  }).index("by_user_status", ["userId", "status"]),
 });

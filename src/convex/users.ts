@@ -19,6 +19,7 @@ const userDoc = v.object({
   name: v.optional(v.string()),
   image: v.optional(v.string()),
   credits: v.optional(v.number()),
+  stripeCustomerId: v.optional(v.string()),
 });
 
 const userProfile = v.object({

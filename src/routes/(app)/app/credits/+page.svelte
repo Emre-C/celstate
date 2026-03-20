@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { useQuery, useConvexClient } from '@mmailaender/convex-svelte';
 	import { api } from '../../../../convex/_generated/api.js';
+	import type { Id } from '../../../../convex/_generated/dataModel.js';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import SectionLabel from '$lib/components/ui/SectionLabel.svelte';
 
@@ -12,6 +13,31 @@
 
 	let purchasing = $state<string | null>(null);
 	let error = $state('');
+	let pendingCheckoutId = $state<Id<'pendingCheckouts'> | null>(null);
+
+	const checkoutStatus = useQuery(
+		api.pendingCheckouts.getCheckoutStatus,
+		() => (pendingCheckoutId ? { checkoutId: pendingCheckoutId } : 'skip')
+	);
+
+	$effect(() => {
+		const status = checkoutStatus.data;
+		if (!status || !pendingCheckoutId) return;
+
+		if (status.status === 'ready') {
+			if (status.checkoutUrl) {
+				window.location.href = status.checkoutUrl;
+			} else {
+				error = 'Could not create checkout session. Please try again.';
+				purchasing = null;
+				pendingCheckoutId = null;
+			}
+		} else if (status.status === 'failed') {
+			error = status.error;
+			purchasing = null;
+			pendingCheckoutId = null;
+		}
+	});
 
 	async function handlePurchase(priceId: string) {
 		if (purchasing) return;
@@ -19,16 +45,14 @@
 		error = '';
 
 		try {
-			const result = await client.action(api.stripe.createPaymentCheckout, { priceId });
-			if (result.url) {
-				window.location.href = result.url;
-			} else {
-				error = 'Could not create checkout session. Please try again.';
-			}
+			pendingCheckoutId = await client.mutation(
+				api.pendingCheckouts.requestCheckout,
+				{ priceId }
+			);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Something went wrong. Please try again.';
-		} finally {
 			purchasing = null;
+			pendingCheckoutId = null;
 		}
 	}
 </script>
