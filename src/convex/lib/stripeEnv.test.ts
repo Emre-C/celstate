@@ -6,7 +6,7 @@ const validLiveEnv: StripeEnv = {
   stripePriceStarter: "price_starter123",
   stripePricePro: "price_pro456",
   stripeWebhookSecret: "whsec_webhook789",
-  siteUrl: "https://celstate.app",
+  siteUrl: "https://www.celstate.com",
 };
 
 const validTestEnv: StripeEnv = {

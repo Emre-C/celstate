@@ -2,6 +2,8 @@
 
 **Audience**: humans and CI/CD automation. **Goal**: never point paying customers at Stripe test mode or leak test secrets into production.
 
+Broader Convex + Vercel deploy rules (prod-first): [CONVEX-VERCEL-ENVIRONMENTS.md](./CONVEX-VERCEL-ENVIRONMENTS.md).
+
 ---
 
 ## TL;DR for CI/CD

@@ -12,7 +12,7 @@ import {
 } from './config.js';
 
 const canonicalEnv = {
-	SITE_URL: 'https://celstate.app',
+	SITE_URL: 'https://www.celstate.com',
 	BETTER_AUTH_SECRET: 'secret',
 	AUTH_GOOGLE_ID: 'google-id',
 	AUTH_GOOGLE_SECRET: 'google-secret',
@@ -25,7 +25,7 @@ describe('auth config', () => {
 		const env = readCanonicalAuthEnv(canonicalEnv);
 
 		expect(env).toMatchObject({
-			siteUrl: 'https://celstate.app',
+			siteUrl: 'https://www.celstate.com',
 			betterAuthSecret: 'secret',
 			googleClientId: 'google-id',
 			googleClientSecret: 'google-secret',
@@ -82,7 +82,7 @@ describe('auth config', () => {
 	it('ignores legacy duplicate google env names after cleanup', () => {
 		expect(() =>
 			assertCanonicalAuthEnv({
-				SITE_URL: 'https://celstate.app',
+				SITE_URL: 'https://www.celstate.com',
 				BETTER_AUTH_SECRET: 'secret',
 				GOOGLE_CLIENT_ID: 'legacy-google-id',
 				GOOGLE_CLIENT_SECRET: 'legacy-google-secret',
@@ -100,9 +100,9 @@ describe('auth config', () => {
 	});
 
 	it('derives apex and www origins from the canonical site url', () => {
-		expect(getCanonicalSiteOrigins('https://www.celstate.app')).toEqual([
-			'https://www.celstate.app',
-			'https://celstate.app'
+		expect(getCanonicalSiteOrigins('https://www.celstate.com')).toEqual([
+			'https://www.celstate.com',
+			'https://celstate.com'
 		]);
 	});
 
@@ -112,16 +112,16 @@ describe('auth config', () => {
 
 	it('includes the Apple trusted origin when Apple is enabled', () => {
 		expect(getTrustedOrigins(readCanonicalAuthEnv(canonicalEnv))).toEqual([
-			'https://celstate.app',
-			'https://www.celstate.app',
+			'https://www.celstate.com',
+			'https://celstate.com',
 			APPLE_TRUSTED_ORIGIN
 		]);
 	});
 
 	it('derives allowed auth hosts from the canonical site url', () => {
 		expect(getAllowedAuthHosts(readCanonicalAuthEnv(canonicalEnv))).toEqual([
-			'celstate.app',
-			'www.celstate.app'
+			'www.celstate.com',
+			'celstate.com'
 		]);
 	});
 

@@ -22,6 +22,11 @@ export default defineSchema({
       v.literal("complete"),
       v.literal("failed")
     ),
+    stage: v.optional(v.union(
+      v.literal("white_background"),
+      v.literal("black_background"),
+      v.literal("finalizing")
+    )),
     statusMessage: v.optional(v.string()),
     resultStorageId: v.optional(v.id("_storage")),
     whiteBgStorageId: v.optional(v.id("_storage")),
@@ -32,11 +37,16 @@ export default defineSchema({
     creditsCost: v.number(),
     aspectRatio: v.string(),
     createdAt: v.number(),
+    lastProgressAt: v.optional(v.number()),
     completedAt: v.optional(v.number()),
     error: v.optional(v.string()),
     generationTimeMs: v.optional(v.number()),
     retryCount: v.optional(v.number()),
+    whiteBgRetryCount: v.optional(v.number()),
+    blackBgRetryCount: v.optional(v.number()),
+    finalizeRetryCount: v.optional(v.number()),
     dimensionMismatch: v.optional(v.boolean()),
+    creditRefundedAt: v.optional(v.number()),
   })
     .index("by_user", ["userId", "createdAt"])
     .index("by_status", ["status"]),

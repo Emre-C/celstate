@@ -19,6 +19,7 @@ pnpm check
 ```
 
 See [`docs/implementation/PRODUCTION-DEPLOYMENT.md`](docs/implementation/PRODUCTION-DEPLOYMENT.md) for full deployment steps.
+For **Convex dev vs production** and Vercel boundaries (prod-first), see [`docs/implementation/CONVEX-VERCEL-ENVIRONMENTS.md`](docs/implementation/CONVEX-VERCEL-ENVIRONMENTS.md).
 
 ## Project structure
 

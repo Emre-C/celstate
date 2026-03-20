@@ -36,9 +36,11 @@ export const GENERATION_CONFIG = {
   responseModalities: ["IMAGE"] as const,
 
   // Retry policy
-  maxRetriesPerPass: 2,
-  maxRetriesTotal: 3,
-  retryBaseDelayMs: 1000,
+  maxRetriesPerPass: 1,
+  maxRetriesTotal: 0,
+  maxFinalizeRetries: 1,
+  retryBaseDelayMs: 1500,
+  staleGenerationTimeoutMs: 15 * 60 * 1000,
 
   // Background purity validation
   cornerPatchSize: 32,

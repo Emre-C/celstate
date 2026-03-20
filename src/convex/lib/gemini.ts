@@ -230,7 +230,7 @@ export function createChatSession(
         imageSize,
       },
       thinkingConfig: {
-        thinkingLevel: ThinkingLevel.HIGH,
+        thinkingLevel: ThinkingLevel.LOW,
         includeThoughts: false,
       },
     },

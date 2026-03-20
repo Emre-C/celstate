@@ -260,7 +260,7 @@ These variables are required by `src/convex/auth.ts`:
 
 **Always required:**
 
-- `SITE_URL` — Canonical site origin
+- `SITE_URL` — Canonical site origin (must be an origin you actually serve, e.g. `https://www.celstate.com`; a wrong TLD or hostname breaks Better Auth `trustedOrigins` and Google OAuth redirects)
 - `BETTER_AUTH_SECRET` — Better Auth signing secret
 - `AUTH_GOOGLE_ID` — Google OAuth client ID
 - `AUTH_GOOGLE_SECRET` — Google OAuth client secret
@@ -288,13 +288,29 @@ These variables must be set in the web app environment:
 
 When running locally:
 
-- `PUBLIC_SITE_URL` and `SITE_URL` should remain `http://localhost:5173`
+- `PUBLIC_SITE_URL` should be `http://localhost:5173` (or match the port you use).
+- **Convex `SITE_URL` (dev deployment)** should also be `http://localhost:5173` so Better Auth `trustedOrigins` includes your dev origin. Production keeps its own `SITE_URL` (`https://www.celstate.com` or your canonical host); changing dev does not change prod.
 - `PUBLIC_CONVEX_URL` may point to either:
   - a cloud dev deployment, or
   - a local Convex deployment such as `http://127.0.0.1:3210`
 - `PUBLIC_CONVEX_SITE_URL` must point to the matching Better Auth HTTP actions target for that same deployment
 
 Do not mix a local realtime URL with a cloud HTTP actions URL or vice versa.
+
+#### Why we do not disable auth in dev
+
+Turning off auth locally trains the wrong muscle: cookies, redirects, and Convex identity never get exercised. Use the **development** Convex deployment plus localhost `SITE_URL` and test OAuth credentials instead.
+
+#### How this stays isolated from production
+
+| Concern | What to rely on |
+|--------|------------------|
+| Separate backends | Convex **development** and **production** deployments are different databases and different env var stores. |
+| CLI | `pnpm exec convex env set KEY VALUE` updates **dev** only. Use `--prod` only when you intend to change production. |
+| App env | Local `.env` / `.env.local` should use **dev** Convex URLs (`PUBLIC_CONVEX_*`) while you iterate; production builds / Vercel use **prod** URLs. |
+| Google OAuth | In Google Cloud Console, add **Authorized JavaScript origins** and **redirect URIs** for `http://localhost:5173` (and the exact `/api/auth/...` paths your Better Auth flow uses). The same OAuth client can list both localhost and production origins. |
+
+See also: [`docs/implementation/STRIPE-CONVEX-ENVIRONMENTS.md`](../implementation/STRIPE-CONVEX-ENVIRONMENTS.md) (same dev/prod split for Stripe).
 
 At the time of writing, Convex local deployment on Windows has shown an upstream path-handling failure during local push in this repo (`InvalidExternalModules` with duplicated drive-letter paths like `C:\C:\...`). Treat local Convex switching as an operational concern to validate separately from auth code changes.
 

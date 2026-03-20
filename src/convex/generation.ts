@@ -3,13 +3,19 @@
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
+import type { Id } from "./_generated/dataModel.js";
 import sharp from "sharp";
 import { GENERATION_CONFIG } from "./lib/config.js";
 import {
   createChatSession,
   type GeminiImageResult,
+  isGeminiImageMimeType,
   readGeminiRuntimeConfigFromEnv,
 } from "./lib/gemini.js";
+import {
+  getGenerationRetryStatusMessage,
+  hasRemainingStageRetries,
+} from "./lib/generationWorkflow.js";
 import {
   buildWhiteBgPrompt,
   buildBlackBgPrompt,
@@ -26,12 +32,18 @@ import {
 import { differenceMatte } from "./lib/matte.js";
 import { optimizeForWeb } from "./lib/optimize.js";
 
-/**
- * Decode any image format Gemini returns (PNG, JPEG, WebP, etc.) into raw RGBA
- * pixels via sharp. This eliminates the pngjs "unrecognized content at end of
- * stream" error class entirely — sharp handles trailing bytes, format
- * mismatches, and malformed chunks that pngjs cannot.
- */
+function aspectRatioMatches(
+  w1: number,
+  h1: number,
+  w2: number,
+  h2: number,
+): boolean {
+  const ratio1 = w1 / h1;
+  const ratio2 = w2 / h2;
+  // Allow 5% tolerance for aspect ratio comparison
+  return Math.abs(ratio1 - ratio2) / Math.max(ratio1, ratio2) < 0.05;
+}
+
 async function decodeImage(
   base64: string,
   mimeType?: string,
@@ -103,278 +115,152 @@ async function resizeToMatch(
   return new Uint8ClampedArray(data);
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+interface StageActionContext {
+  runMutation: (...args: any[]) => Promise<unknown>;
+  runQuery: (...args: any[]) => Promise<unknown>;
+  storage: {
+    get: (storageId: Id<"_storage">) => Promise<Blob | null>;
+    store: (blob: Blob) => Promise<Id<"_storage">>;
+  };
 }
-
-function aspectRatioMatches(
-  w1: number,
-  h1: number,
-  w2: number,
-  h2: number,
-): boolean {
-  const ratio1 = w1 / h1;
-  const ratio2 = w2 / h2;
-  // Allow 5% tolerance for aspect ratio comparison
-  return Math.abs(ratio1 - ratio2) / Math.max(ratio1, ratio2) < 0.05;
-}
-
-/**
- * Internal worker action scheduled by the requestGeneration mutation.
- * The generation row and credit deduction already exist when this runs.
- */
-export const generateWorker = internalAction({
-  args: {
-    generationId: v.id("generations"),
-    prompt: v.string(),
-    referenceStorageIds: v.optional(v.array(v.id("_storage"))),
-    aspectRatio: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    const startTime = Date.now();
-    const runtimeConfig = readGeminiRuntimeConfigFromEnv();
-
-    // Look up the generation to get userId for potential refund
-    const generation = await ctx.runQuery(internal.generations.getById, {
-      generationId: args.generationId,
-    });
-    if (!generation) {
-      throw new Error("Generation record not found");
-    }
-
-    // Load reference images if provided
-    const referenceImages: GeminiImageResult[] = [];
-    if (args.referenceStorageIds && args.referenceStorageIds.length > 0) {
-      for (const storageId of args.referenceStorageIds) {
-        const refBlob = await ctx.storage.get(storageId);
-        if (!refBlob) {
-          throw new Error("Reference image not found in storage");
-        }
-        const refBuffer = Buffer.from(await refBlob.arrayBuffer());
-        const refBase64 = refBuffer.toString("base64");
-        const mimeType = refBlob.type === "image/jpeg" ? "image/jpeg" as const : "image/png" as const;
-        referenceImages.push({ imageBase64: refBase64, mimeType });
-      }
-    }
-
-    let retryCount = 0;
-    let dimensionMismatch = false;
-
-    async function updateStatus(message: string) {
-      await ctx.runMutation(internal.generations.updateStatusMessage, {
-        generationId: args.generationId,
-        statusMessage: message,
-      });
-    }
-
-    try {
-      for (let attempt = 0; attempt <= GENERATION_CONFIG.maxRetriesTotal; attempt++) {
-        if (attempt > 0) {
-          retryCount++;
-          await updateStatus(`Still working on it (attempt ${attempt + 1})…`);
-          await sleep(
-            GENERATION_CONFIG.retryBaseDelayMs * Math.pow(2, attempt - 1),
-          );
-        }
-
-        try {
-          const result = await executeGenerationPipeline(
-            ctx, runtimeConfig, args.prompt, updateStatus, referenceImages, args.aspectRatio,
-          );
-          dimensionMismatch = result.dimensionMismatch;
-          await updateStatus("Saving your image…");
-
-          let whiteBgStorageId;
-          let blackBgStorageId;
-
-          if (result.whiteBgPng) {
-            const whiteBlob = new Blob([new Uint8Array(result.whiteBgPng)], { type: "image/png" });
-            whiteBgStorageId = await ctx.storage.store(whiteBlob);
-          }
-          if (result.blackBgPng) {
-            const blackBlob = new Blob([new Uint8Array(result.blackBgPng)], { type: "image/png" });
-            blackBgStorageId = await ctx.storage.store(blackBlob);
-          }
-
-          const resultBlob = new Blob([new Uint8Array(result.finalPng)], { type: "image/png" });
-          const resultStorageId = await ctx.storage.store(resultBlob);
-
-          await updateStatus("Optimizing for download…");
-          const optimizedPng = await optimizeForWeb(result.finalPng);
-          const optimizedBlob = new Blob([new Uint8Array(optimizedPng)], { type: "image/png" });
-          const optimizedStorageId = await ctx.storage.store(optimizedBlob);
-
-          await ctx.runMutation(internal.generations.completeGeneration, {
-            generationId: args.generationId,
-            resultStorageId,
-            optimizedStorageId,
-            whiteBgStorageId,
-            blackBgStorageId,
-            generationTimeMs: Date.now() - startTime,
-            retryCount,
-            dimensionMismatch,
-          });
-
-          return;
-        } catch (e) {
-          if (attempt === GENERATION_CONFIG.maxRetriesTotal) {
-            throw e;
-          }
-        }
-      }
-
-      throw new Error("Generation failed after all retries");
-    } catch (e) {
-      // Refund credits
-      await ctx.runMutation(internal.generations.refundCredits, {
-        userId: generation.userId,
-        amount: generation.creditsCost,
-      });
-
-      const rawError =
-        e instanceof Error ? e.message : "Unknown error occurred";
-      console.error(`[generateWorker] generationId=${args.generationId} error=${rawError}`);
-      const userMessage = "Something went wrong generating your image. Your credit has been refunded — please try again.";
-      await ctx.runMutation(internal.generations.failGeneration, {
-        generationId: args.generationId,
-        error: userMessage,
-      });
-    }
-  },
-});
 
 interface PipelineResult {
   finalPng: Buffer;
-  whiteBgPng: Buffer | null;
-  blackBgPng: Buffer | null;
+  whiteBgPng: Buffer;
+  blackBgPng: Buffer;
   dimensionMismatch: boolean;
 }
 
-async function executeGenerationPipeline(
-  ctx: { storage: { store: (blob: Blob) => Promise<string> } },
-  runtimeConfig: ReturnType<typeof readGeminiRuntimeConfigFromEnv>,
-  prompt: string,
-  updateStatus: (message: string) => Promise<void>,
-  referenceImages: GeminiImageResult[],
-  aspectRatio?: string,
+function normalizeMimeType(mimeType: string | undefined): GeminiImageResult["mimeType"] {
+  if (isGeminiImageMimeType(mimeType)) {
+    return mimeType;
+  }
+
+  return "image/png";
+}
+
+async function updateStatus(
+  ctx: StageActionContext,
+  generationId: Id<"generations">,
+  statusMessage: string,
+): Promise<void> {
+  await ctx.runMutation(internal.generations.updateStatusMessage, {
+    generationId,
+    statusMessage,
+  });
+}
+
+async function getGeneration(
+  ctx: StageActionContext,
+  generationId: Id<"generations">,
+): Promise<any> {
+  return await ctx.runQuery(internal.generations.getById, { generationId });
+}
+
+async function loadStoredImage(
+  ctx: StageActionContext,
+  storageId: Id<"_storage">,
+): Promise<GeminiImageResult> {
+  const blob = await ctx.storage.get(storageId);
+  if (!blob) {
+    throw new Error("Stored image not found");
+  }
+
+  const buffer = Buffer.from(await blob.arrayBuffer());
+  return {
+    imageBase64: buffer.toString("base64"),
+    mimeType: normalizeMimeType(blob.type),
+  };
+}
+
+async function loadStoredImages(
+  ctx: StageActionContext,
+  storageIds: Id<"_storage">[] | undefined,
+): Promise<GeminiImageResult[]> {
+  if (!storageIds || storageIds.length === 0) {
+    return [];
+  }
+
+  return Promise.all(storageIds.map((storageId) => loadStoredImage(ctx, storageId)));
+}
+
+async function storeGeneratedImage(
+  ctx: StageActionContext,
+  image: GeminiImageResult,
+): Promise<Id<"_storage">> {
+  const blob = new Blob([Buffer.from(image.imageBase64, "base64")], { type: image.mimeType });
+  return await ctx.storage.store(blob);
+}
+
+function createUserFacingFailureMessage(): string {
+  return "Something went wrong generating your image. Your credit has been refunded — please try again.";
+}
+
+async function handleStageFailure(
+  ctx: StageActionContext,
+  generationId: Id<"generations">,
+  stage: "white_background" | "black_background" | "finalizing",
+  retryCount: number,
+  error: unknown,
+): Promise<void> {
+  const rawError = error instanceof Error ? error.message : String(error);
+  console.error(`[${stage}] generationId=${generationId} error=${rawError}`);
+
+  if (hasRemainingStageRetries(stage, retryCount)) {
+    await ctx.runMutation(internal.generations.scheduleStageRetry, {
+      generationId,
+      retryCount: retryCount + 1,
+      stage,
+    });
+    return;
+  }
+
+  await ctx.runMutation(internal.generations.failGeneration, {
+    generationId,
+    error: createUserFacingFailureMessage(),
+  });
+}
+
+async function finalizePipeline(
+  ctx: StageActionContext,
+  generation: any,
 ): Promise<PipelineResult> {
-  const session = createChatSession(runtimeConfig, { aspectRatio });
-  const hasReferences = referenceImages.length > 0;
+  await updateStatus(ctx, generation._id, "Extracting transparency…");
+  let white = await loadStoredImage(ctx, generation.whiteBgStorageId);
+  let black = await loadStoredImage(ctx, generation.blackBgStorageId);
 
-  // === Pass 1: White background ===
-  await updateStatus("Creating your image…");
-  let whiteBgResult: GeminiImageResult | null = null;
-  for (let retry = 0; retry <= GENERATION_CONFIG.maxRetriesPerPass; retry++) {
-    if (retry > 0) {
-      await updateStatus(`Refining details…`);
-    }
+  let whiteDecoded = await decodeImage(white.imageBase64, white.mimeType);
+  let blackDecoded = await decodeImage(black.imageBase64, black.mimeType);
 
-    let result: GeminiImageResult;
-    if (hasReferences) {
-      const whiteBgPrompt =
-        retry === 0
-          ? buildWhiteBgPromptWithReference(prompt)
-          : buildWhiteBgRetryPromptWithReference(prompt);
-      result = await session.sendMessageWithImages(whiteBgPrompt, referenceImages);
-    } else {
-      const whiteBgPrompt =
-        retry === 0
-          ? buildWhiteBgPrompt(prompt)
-          : buildWhiteBgRetryPrompt(prompt);
-      result = await session.sendMessage(whiteBgPrompt);
-    }
-
-    // Decode and validate
-    const decoded = await decodeImage(result.imageBase64, result.mimeType);
-    const validation = validateWhiteBackground(
-      decoded.pixels,
-      decoded.width,
-      decoded.height,
-    );
-
-    if (validation.valid) {
-      whiteBgResult = result;
-      break;
-    }
-
-    if (retry === GENERATION_CONFIG.maxRetriesPerPass) {
-      throw new Error(
-        `White background validation failed after ${retry + 1} attempts: ${validation.reason}`,
-      );
-    }
-  }
-
-  if (!whiteBgResult) {
-    throw new Error("Failed to generate white background image");
-  }
-
-  // === Pass 2: Black background (same chat session) ===
-  await updateStatus("Enhancing quality…");
-  let blackBgResult: GeminiImageResult | null = null;
-  for (let retry = 0; retry <= GENERATION_CONFIG.maxRetriesPerPass; retry++) {
-    if (retry > 0) {
-      await updateStatus(`Fine-tuning output…`);
-    }
-    const blackBgPrompt =
-      retry === 0 ? buildBlackBgPrompt() : buildBlackBgRetryPrompt();
-
-    // Send with white-bg image as reference for stronger fidelity
-    const result = await session.sendMessageWithImages(
-      blackBgPrompt,
-      [whiteBgResult],
-    );
-
-    // Decode and validate
-    const decoded = await decodeImage(result.imageBase64, result.mimeType);
-    const validation = validateBlackBackground(
-      decoded.pixels,
-      decoded.width,
-      decoded.height,
-    );
-
-    if (validation.valid) {
-      blackBgResult = result;
-      break;
-    }
-
-    if (retry === GENERATION_CONFIG.maxRetriesPerPass) {
-      throw new Error(
-        `Black background validation failed after ${retry + 1} attempts: ${validation.reason}`,
-      );
-    }
-  }
-
-  if (!blackBgResult) {
-    throw new Error("Failed to generate black background image");
-  }
-
-  // === Decode both for matte ===
-  await updateStatus("Extracting transparency…");
-  let white = await decodeImage(whiteBgResult.imageBase64, whiteBgResult.mimeType);
-  let black = await decodeImage(blackBgResult.imageBase64, blackBgResult.mimeType);
-
-  // === Dimension check + resize ===
   let hadDimensionMismatch = false;
-  if (!validateDimensionMatch(white.width, white.height, black.width, black.height)) {
+  if (!validateDimensionMatch(
+    whiteDecoded.width,
+    whiteDecoded.height,
+    blackDecoded.width,
+    blackDecoded.height,
+  )) {
     hadDimensionMismatch = true;
 
-    // Check if aspect ratios fundamentally differ
-    if (!aspectRatioMatches(white.width, white.height, black.width, black.height)) {
+    if (!aspectRatioMatches(
+      whiteDecoded.width,
+      whiteDecoded.height,
+      blackDecoded.width,
+      blackDecoded.height,
+    )) {
       throw new Error(
-        `Aspect ratio mismatch: white=${white.width}x${white.height}, black=${black.width}x${black.height}. Retry required.`,
+        `Aspect ratio mismatch: white=${whiteDecoded.width}x${whiteDecoded.height}, black=${blackDecoded.width}x${blackDecoded.height}.`,
       );
     }
 
-    // Resize larger to match smaller
-    const targetWidth = Math.min(white.width, black.width);
-    const targetHeight = Math.min(white.height, black.height);
+    const targetWidth = Math.min(whiteDecoded.width, blackDecoded.width);
+    const targetHeight = Math.min(whiteDecoded.height, blackDecoded.height);
 
-    if (white.width !== targetWidth || white.height !== targetHeight) {
-      white = {
+    if (whiteDecoded.width !== targetWidth || whiteDecoded.height !== targetHeight) {
+      whiteDecoded = {
         pixels: await resizeToMatch(
-          white.pixels,
-          white.width,
-          white.height,
+          whiteDecoded.pixels,
+          whiteDecoded.width,
+          whiteDecoded.height,
           targetWidth,
           targetHeight,
         ),
@@ -383,12 +269,12 @@ async function executeGenerationPipeline(
       };
     }
 
-    if (black.width !== targetWidth || black.height !== targetHeight) {
-      black = {
+    if (blackDecoded.width !== targetWidth || blackDecoded.height !== targetHeight) {
+      blackDecoded = {
         pixels: await resizeToMatch(
-          black.pixels,
-          black.width,
-          black.height,
+          blackDecoded.pixels,
+          blackDecoded.width,
+          blackDecoded.height,
           targetWidth,
           targetHeight,
         ),
@@ -398,21 +284,17 @@ async function executeGenerationPipeline(
     }
   }
 
-  // === Difference matte ===
   const matteOutput = differenceMatte({
-    whiteBg: white.pixels,
-    blackBg: black.pixels,
-    width: white.width,
-    height: white.height,
+    whiteBg: whiteDecoded.pixels,
+    blackBg: blackDecoded.pixels,
+    width: whiteDecoded.width,
+    height: whiteDecoded.height,
   });
 
-  // === Encode final RGBA PNG ===
-  await updateStatus("Preparing final image…");
+  await updateStatus(ctx, generation._id, "Preparing final image…");
   const finalPng = await encodePng(matteOutput.pixels, matteOutput.width, matteOutput.height);
-
-  // Re-encode intermediates for storage
-  const whiteBgPng = await encodePng(white.pixels, white.width, white.height);
-  const blackBgPng = await encodePng(black.pixels, black.width, black.height);
+  const whiteBgPng = await encodePng(whiteDecoded.pixels, whiteDecoded.width, whiteDecoded.height);
+  const blackBgPng = await encodePng(blackDecoded.pixels, blackDecoded.width, blackDecoded.height);
 
   return {
     finalPng,
@@ -421,3 +303,159 @@ async function executeGenerationPipeline(
     dimensionMismatch: hadDimensionMismatch,
   };
 }
+
+export const generateWorker = internalAction({
+  args: {
+    generationId: v.id("generations"),
+    prompt: v.string(),
+    referenceStorageIds: v.optional(v.array(v.id("_storage"))),
+    aspectRatio: v.optional(v.string()),
+  },
+  handler: async () => null,
+});
+
+export const generateWhiteBackground = internalAction({
+  args: {
+    generationId: v.id("generations"),
+  },
+  handler: async (ctx, args) => {
+    const generation = await getGeneration(ctx, args.generationId);
+    if (!generation || generation.status !== "generating" || generation.stage !== "white_background") {
+      return null;
+    }
+
+    const retryCount = generation.whiteBgRetryCount ?? 0;
+    await updateStatus(ctx, args.generationId, getGenerationRetryStatusMessage("white_background", retryCount));
+
+    try {
+      const runtimeConfig = readGeminiRuntimeConfigFromEnv();
+      const referenceImages = await loadStoredImages(ctx, generation.referenceStorageIds);
+      const session = createChatSession(runtimeConfig, { aspectRatio: generation.aspectRatio });
+      const prompt = referenceImages.length > 0
+        ? (retryCount === 0 ? buildWhiteBgPromptWithReference(generation.prompt) : buildWhiteBgRetryPromptWithReference(generation.prompt))
+        : (retryCount === 0 ? buildWhiteBgPrompt(generation.prompt) : buildWhiteBgRetryPrompt(generation.prompt));
+
+      const result = referenceImages.length > 0
+        ? await session.sendMessageWithImages(prompt, referenceImages)
+        : await session.sendMessage(prompt);
+
+      const decoded = await decodeImage(result.imageBase64, result.mimeType);
+      const validation = validateWhiteBackground(decoded.pixels, decoded.width, decoded.height);
+      if (!validation.valid) {
+        throw new Error(`White background validation failed: ${validation.reason}`);
+      }
+
+      const whiteBgStorageId = await storeGeneratedImage(ctx, result);
+      await ctx.runMutation(internal.generations.recordWhiteBackgroundSuccess, {
+        generationId: args.generationId,
+        retryCount,
+        whiteBgStorageId,
+      });
+    } catch (error) {
+      await handleStageFailure(ctx, args.generationId, "white_background", retryCount, error);
+    }
+
+    return null;
+  },
+});
+
+export const generateBlackBackground = internalAction({
+  args: {
+    generationId: v.id("generations"),
+  },
+  handler: async (ctx, args) => {
+    const generation = await getGeneration(ctx, args.generationId);
+    if (!generation || generation.status !== "generating" || generation.stage !== "black_background") {
+      return null;
+    }
+
+    if (!generation.whiteBgStorageId) {
+      await ctx.runMutation(internal.generations.failGeneration, {
+        generationId: args.generationId,
+        error: createUserFacingFailureMessage(),
+      });
+      return null;
+    }
+
+    const retryCount = generation.blackBgRetryCount ?? 0;
+    await updateStatus(ctx, args.generationId, getGenerationRetryStatusMessage("black_background", retryCount));
+
+    try {
+      const runtimeConfig = readGeminiRuntimeConfigFromEnv();
+      const session = createChatSession(runtimeConfig, { aspectRatio: generation.aspectRatio });
+      const whiteBgImage = await loadStoredImage(ctx, generation.whiteBgStorageId);
+      const prompt = retryCount === 0 ? buildBlackBgPrompt() : buildBlackBgRetryPrompt();
+      const result = await session.sendMessageWithImages(prompt, [whiteBgImage]);
+
+      const decoded = await decodeImage(result.imageBase64, result.mimeType);
+      const validation = validateBlackBackground(decoded.pixels, decoded.width, decoded.height);
+      if (!validation.valid) {
+        throw new Error(`Black background validation failed: ${validation.reason}`);
+      }
+
+      const blackBgStorageId = await storeGeneratedImage(ctx, result);
+      await ctx.runMutation(internal.generations.recordBlackBackgroundSuccess, {
+        blackBgStorageId,
+        generationId: args.generationId,
+        retryCount,
+      });
+    } catch (error) {
+      await handleStageFailure(ctx, args.generationId, "black_background", retryCount, error);
+    }
+
+    return null;
+  },
+});
+
+export const finalizeGeneration = internalAction({
+  args: {
+    generationId: v.id("generations"),
+  },
+  handler: async (ctx, args) => {
+    const generation = await getGeneration(ctx, args.generationId);
+    if (!generation || generation.status !== "generating" || generation.stage !== "finalizing") {
+      return null;
+    }
+
+    if (!generation.whiteBgStorageId || !generation.blackBgStorageId) {
+      await ctx.runMutation(internal.generations.failGeneration, {
+        generationId: args.generationId,
+        error: createUserFacingFailureMessage(),
+      });
+      return null;
+    }
+
+    const retryCount = generation.finalizeRetryCount ?? 0;
+    await updateStatus(ctx, args.generationId, getGenerationRetryStatusMessage("finalizing", retryCount));
+
+    try {
+      const result = await finalizePipeline(ctx, generation);
+      const whiteBgBlob = new Blob([new Uint8Array(result.whiteBgPng)], { type: "image/png" });
+      const whiteBgStorageId = await ctx.storage.store(whiteBgBlob);
+      const blackBgBlob = new Blob([new Uint8Array(result.blackBgPng)], { type: "image/png" });
+      const blackBgStorageId = await ctx.storage.store(blackBgBlob);
+      const resultBlob = new Blob([new Uint8Array(result.finalPng)], { type: "image/png" });
+      const resultStorageId = await ctx.storage.store(resultBlob);
+
+      await updateStatus(ctx, args.generationId, "Optimizing for download…");
+      const optimizedPng = await optimizeForWeb(result.finalPng);
+      const optimizedBlob = new Blob([new Uint8Array(optimizedPng)], { type: "image/png" });
+      const optimizedStorageId = await ctx.storage.store(optimizedBlob);
+
+      await ctx.runMutation(internal.generations.completeGeneration, {
+        blackBgStorageId,
+        dimensionMismatch: result.dimensionMismatch,
+        generationId: args.generationId,
+        generationTimeMs: Date.now() - generation.createdAt,
+        optimizedStorageId,
+        resultStorageId,
+        retryCount: generation.retryCount ?? 0,
+        whiteBgStorageId,
+      });
+    } catch (error) {
+      await handleStageFailure(ctx, args.generationId, "finalizing", retryCount, error);
+    }
+
+    return null;
+  },
+});

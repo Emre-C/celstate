@@ -16,6 +16,7 @@ import type * as generations from "../generations.js";
 import type * as http from "../http.js";
 import type * as lib_config from "../lib/config.js";
 import type * as lib_gemini from "../lib/gemini.js";
+import type * as lib_generationWorkflow from "../lib/generationWorkflow.js";
 import type * as lib_matte from "../lib/matte.js";
 import type * as lib_optimize from "../lib/optimize.js";
 import type * as lib_prompts from "../lib/prompts.js";
@@ -40,6 +41,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   "lib/config": typeof lib_config;
   "lib/gemini": typeof lib_gemini;
+  "lib/generationWorkflow": typeof lib_generationWorkflow;
   "lib/matte": typeof lib_matte;
   "lib/optimize": typeof lib_optimize;
   "lib/prompts": typeof lib_prompts;

@@ -3,8 +3,8 @@ import { resolveAuthClientBaseUrl } from './auth-client.js';
 
 describe('auth client base url', () => {
 	it('normalizes absolute public site urls to their origin', () => {
-		expect(resolveAuthClientBaseUrl({ publicSiteUrl: 'https://celstate.app/api/auth' })).toBe(
-			'https://celstate.app'
+		expect(resolveAuthClientBaseUrl({ publicSiteUrl: 'https://www.celstate.com/api/auth' })).toBe(
+			'https://www.celstate.com'
 		);
 	});
 
