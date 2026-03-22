@@ -3,7 +3,7 @@
 	"private": true,
 	"version": "0.0.1",
 	"type": "module",
-	"packageManager": "pnpm@10.32.0",
+	"packageManager": "pnpm@10.32.1",
 	"scripts": {
 		"dev": "concurrently \"vite dev\" \"pnpm exec convex dev\"",
 		"build": "vite build",
@@ -33,11 +33,13 @@
 		"@google/genai": "^1.43.0",
 		"@mmailaender/convex-better-auth-svelte": "^0.6.2",
 		"@mmailaender/convex-svelte": "^0.17.0",
+		"@posthog/convex": "^0.1.13",
 		"@sentry/sveltekit": "^10.45.0",
 		"@tailwindcss/vite": "^4.2.1",
 		"better-auth": "1.5.5",
 		"convex": "^1.33.1",
 		"pngjs": "^7.0.0",
+		"posthog-js": "^1.363.1",
 		"sharp": "^0.34.5",
 		"tailwindcss": "^4.2.1"
 	}

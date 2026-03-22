@@ -21,7 +21,7 @@ Every Convex **project** has separate **development** and **production** deploym
 - **Development** — what `pnpm exec convex dev` syncs to; default target for `convex env`, `convex run`, `convex logs` (without flags).
 - **Production** — what users rely on; only change when you intend to ship backend changes or prod-specific config.
 
-Stripe, Vertex, Better Auth secrets, and `SITE_URL` are **per deployment**. See also [STRIPE-CONVEX-ENVIRONMENTS.md](./STRIPE-CONVEX-ENVIRONMENTS.md) and [AUTH.md](../product/AUTH.md) (local dev).
+Stripe, Vertex, Better Auth secrets, and `SITE_URL` are **per deployment**. See also [STRIPE-CONVEX-ENVIRONMENTS.md](./STRIPE-CONVEX-ENVIRONMENTS.md) and [Authentication](../product/features/authentication.md) (local dev).
 
 ---
 
@@ -66,4 +66,4 @@ Convex’s Vercel guide also describes an **integrated** workflow: build command
 ## Local development
 
 - Point `.env.local` at the **development** Convex URLs for `PUBLIC_CONVEX_*`.
-- Use `SITE_URL=http://localhost:5173` on the **dev** Convex deployment for Better Auth; production keeps the real canonical URL (see [AUTH.md](../product/AUTH.md)).
+- Use `SITE_URL=http://localhost:5173` on the **dev** Convex deployment for Better Auth; production keeps the real canonical URL (see [Authentication](../product/features/authentication.md)).

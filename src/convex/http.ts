@@ -5,6 +5,8 @@ import { registerRoutes } from "@convex-dev/stripe";
 import type Stripe from "stripe";
 import { authComponent, createAuth } from "./auth.js";
 import { assertStripeEnv } from "./lib/stripeEnv.js";
+import { posthog } from "./posthog.js";
+import { buildPurchaseAlertRequest, readOpsAlertRuntimeConfig } from "./lib/ops.js";
 
 const stripeEnv = assertStripeEnv();
 
@@ -60,6 +62,53 @@ registerRoutes(http, components.stripe, {
         reason: "purchase",
         stripePaymentIntentId: paymentIntentId,
       });
+
+      const amountUsd = (session.amount_total ?? 0) / 100;
+      const currency = session.currency ?? "usd";
+
+      // Server-side authoritative revenue event (exact-once, inside idempotency gate)
+      await posthog.capture(ctx, {
+        distinctId: String(userId),
+        event: "credits_purchase_completed",
+        properties: {
+          credits_added: credits,
+          amount_usd: amountUsd,
+          currency,
+          stripe_payment_intent_id: paymentIntentId,
+          user_id: String(userId),
+        },
+      });
+
+      // Discord purchase notification (exact-once, inside idempotency gate)
+      const opsConfig = readOpsAlertRuntimeConfig();
+      if (opsConfig.webhookUrl) {
+        const user = await ctx.runQuery(internal.users.getById, {
+          userId: userId as Id<"users">,
+        });
+
+        try {
+          const request = buildPurchaseAlertRequest(opsConfig, {
+            amountUsd,
+            creditsAdded: credits,
+            currency,
+            stripePaymentIntentId: paymentIntentId,
+            userEmail: user?.email ?? undefined,
+            userId: String(userId),
+          });
+
+          const response = await fetch(request.url, {
+            method: "POST",
+            headers: request.headers,
+            body: request.body,
+          });
+
+          if (!response.ok) {
+            throw new Error(`Webhook responded with ${response.status} ${response.statusText}`);
+          }
+        } catch (error) {
+          console.error("Failed to send purchase Discord notification", error);
+        }
+      }
     },
   },
 });

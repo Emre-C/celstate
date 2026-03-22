@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { authClient } from '$lib/auth-client';
+	import { initPostHog, posthog } from '$lib/posthog';
 	import { useQuery } from '@mmailaender/convex-svelte';
 	import { api } from '../../../convex/_generated/api.js';
 	import NavBar from '$lib/components/ui/NavBar.svelte';
@@ -13,9 +15,28 @@
 	);
 	let signingOut = $state(false);
 
+	$effect(() => {
+		if (!browser) {
+			return;
+		}
+		initPostHog();
+		const doc = user.data;
+		if (doc) {
+			posthog.identify(String(doc._id), {
+				credits: doc.credits,
+				email: doc.email,
+				name: doc.name,
+			});
+		}
+	});
+
 	async function handleSignOut() {
-		if (signingOut) return;
+		if (signingOut) {
+			return;
+		}
 		signingOut = true;
+		initPostHog();
+		posthog.reset();
 		await authClient.signOut();
 		await goto('/', { replaceState: true });
 		signingOut = false;

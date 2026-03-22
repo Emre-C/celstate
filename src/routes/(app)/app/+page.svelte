@@ -1,14 +1,17 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { useQuery, useConvexClient } from '@mmailaender/convex-svelte';
 	import { ConvexError } from 'convex/values';
+	import { buildGenerationFailedAnalyticsProps } from '$lib/analytics/generation';
 	import { api } from '../../../convex/_generated/api.js';
 	import type { Id } from '../../../convex/_generated/dataModel.js';
 	import PromptInput from '$lib/components/PromptInput.svelte';
 	import GenerationCard from '$lib/components/GenerationCard.svelte';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import SectionLabel from '$lib/components/ui/SectionLabel.svelte';
+	import { initPostHog, posthog } from '$lib/posthog';
 
 	const client = useConvexClient();
 	const user = useQuery(api.users.getMe, {});
@@ -18,16 +21,67 @@
 	let successMessage = $state('');
 	let creditNudge = $state(false);
 	let creditNudgeTimer: ReturnType<typeof setTimeout> | undefined;
+	let purchaseSuccessCaptured = $state(false);
+
+	/** Avoids reactive feedback loops when syncing Convex subscription → PostHog. */
+	const generationStatusPrev = new Map<string, 'generating' | 'complete' | 'failed'>();
 
 	// Handle Stripe redirect params
 	$effect(() => {
 		const params = $page.url.searchParams;
 		if (params.get('success') === 'true') {
+			if (browser && !purchaseSuccessCaptured) {
+				purchaseSuccessCaptured = true;
+				initPostHog();
+				posthog.capture('credits_checkout_returned');
+			}
 			successMessage = 'Payment successful! Your credits are being added.';
 			goto('/app', { replaceState: true });
 		} else if (params.get('canceled') === 'true') {
 			errorMessage = 'Payment canceled. No charges were made.';
 			goto('/app', { replaceState: true });
+		}
+	});
+
+	$effect(() => {
+		if (!browser) {
+			return;
+		}
+		const list = generations.data;
+		if (!list) {
+			return;
+		}
+
+		for (const g of list) {
+			const id = String(g._id);
+			const analyticsGeneration = g as typeof g & {
+				failureKind?: string;
+				failureStage?: string;
+			};
+			const prev = generationStatusPrev.get(id);
+			if (prev === 'generating' && g.status === 'complete') {
+				initPostHog();
+				posthog.capture('generation_completed', {
+					aspect_ratio: g.aspectRatio,
+					generation_id: id,
+					generation_time_ms: g.generationTimeMs,
+				});
+			} else if (prev === 'generating' && g.status === 'failed') {
+				initPostHog();
+				posthog.capture(
+					'generation_failed',
+					buildGenerationFailedAnalyticsProps({
+						error: g.error,
+						failureKind: analyticsGeneration.failureKind,
+						failureStage: analyticsGeneration.failureStage,
+						generationId: id,
+						retryCount: g.retryCount,
+						stage: g.stage,
+						statusMessage: g.statusMessage
+					})
+				);
+			}
+			generationStatusPrev.set(id, g.status);
 		}
 	});
 
@@ -63,6 +117,11 @@
 				prompt,
 				referenceStorageIds: referenceStorageIds as Id<'_storage'>[] | undefined,
 				aspectRatio,
+			});
+			initPostHog();
+			posthog.capture('generation_started', {
+				aspect_ratio: aspectRatio ?? '1:1',
+				reference_count: referenceStorageIds?.length ?? 0,
 			});
 		} catch (e) {
 			if (e instanceof ConvexError) {

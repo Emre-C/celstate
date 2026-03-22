@@ -4,6 +4,7 @@
 	import type { Id } from '../../../../convex/_generated/dataModel.js';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import SectionLabel from '$lib/components/ui/SectionLabel.svelte';
+	import { initPostHog, posthog } from '$lib/posthog';
 
 	const client = useConvexClient();
 	const user = useQuery(api.users.getMe, {});
@@ -49,6 +50,8 @@
 				api.pendingCheckouts.requestCheckout,
 				{ priceId }
 			);
+			initPostHog();
+			posthog.capture('credits_purchase_initiated', { price_id: priceId });
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Something went wrong. Please try again.';
 			purchasing = null;

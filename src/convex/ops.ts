@@ -237,3 +237,130 @@ export const getRecentGenerationOpsFeed = internalQuery({
       .map(toRecentEvent);
   },
 });
+
+export const getGenerationActivityReport = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const generations = await ctx.db.query("generations").collect();
+    const users = await ctx.db.query("users").collect();
+
+    const userMap = new Map(users.map((u) => [u._id, u]));
+
+    const perUser: Record<
+      string,
+      { email: string | undefined; total: number; complete: number; failed: number; generating: number; prompts: string[] }
+    > = {};
+
+    for (const gen of generations) {
+      const user = userMap.get(gen.userId);
+      const key = String(gen.userId);
+      if (!perUser[key]) {
+        perUser[key] = { email: user?.email ?? undefined, total: 0, complete: 0, failed: 0, generating: 0, prompts: [] };
+      }
+      perUser[key].total++;
+      perUser[key][gen.status]++;
+      perUser[key].prompts.push(gen.prompt.slice(0, 80));
+    }
+
+    const sorted = Object.entries(perUser)
+      .sort(([, a], [, b]) => b.total - a.total)
+      .map(([userId, data]) => ({ userId, ...data }));
+
+    return {
+      totalGenerations: generations.length,
+      totalUsers: users.length,
+      activeUsers: sorted.length,
+      byUser: sorted,
+    };
+  },
+});
+
+export const mergeDuplicateUsers = internalMutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    const users = await ctx.db.query("users").collect();
+
+    const byEmail: Record<string, typeof users> = {};
+    for (const user of users) {
+      if (!user.email) continue;
+      if (!byEmail[user.email]) byEmail[user.email] = [];
+      byEmail[user.email].push(user);
+    }
+
+    for (const [, group] of Object.entries(byEmail)) {
+      if (group.length <= 1) continue;
+
+      // Keep the record that has a tokenIdentifier; if both do, keep the newer one
+      const sorted = [...group].sort((a, b) => {
+        if (a.tokenIdentifier && !b.tokenIdentifier) return -1;
+        if (!a.tokenIdentifier && b.tokenIdentifier) return 1;
+        return b._creationTime - a._creationTime;
+      });
+
+      const keep = sorted[0];
+      const duplicates = sorted.slice(1);
+
+      // Sum credits from all duplicates into the keeper
+      let totalCredits = keep.credits ?? 0;
+      for (const dup of duplicates) {
+        totalCredits += dup.credits ?? 0;
+
+        // Re-assign generations from duplicate to keeper
+        const gens = await ctx.db
+          .query("generations")
+          .withIndex("by_user", (q) => q.eq("userId", dup._id))
+          .collect();
+        for (const gen of gens) {
+          await ctx.db.patch(gen._id, { userId: keep._id });
+        }
+
+        // Re-assign creditGrants
+        const grants = await ctx.db
+          .query("creditGrants")
+          .withIndex("by_user", (q) => q.eq("userId", dup._id))
+          .collect();
+        for (const grant of grants) {
+          await ctx.db.patch(grant._id, { userId: keep._id });
+        }
+
+        // Delete the duplicate user record
+        await ctx.db.delete(dup._id);
+      }
+
+      await ctx.db.patch(keep._id, { credits: totalCredits });
+    }
+
+    return null;
+  },
+});
+
+export const getDuplicateUsers = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const users = await ctx.db.query("users").collect();
+
+    const byEmail: Record<string, typeof users> = {};
+    for (const user of users) {
+      if (!user.email) continue;
+      if (!byEmail[user.email]) byEmail[user.email] = [];
+      byEmail[user.email].push(user);
+    }
+
+    const duplicates = Object.entries(byEmail)
+      .filter(([, group]) => group.length > 1)
+      .map(([email, group]) => ({
+        email,
+        records: group.map((u) => ({
+          _id: String(u._id),
+          _creationTime: u._creationTime,
+          tokenIdentifier: u.tokenIdentifier,
+          credits: u.credits,
+          name: u.name,
+          stripeCustomerId: u.stripeCustomerId,
+        })),
+      }));
+
+    return duplicates;
+  },
+});

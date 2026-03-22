@@ -86,6 +86,6 @@ The following are not exhaustive — they're starting points for continued harde
 
 - **Storage cleanup for orphaned uploads**: If a user uploads reference images via `generateUploadUrl` but never submits a generation, those files sit in Convex storage indefinitely. A periodic cleanup of unreferenced storage objects could control storage costs.
 
-- **Observability**: Logging or alerting on unusual patterns (e.g., a user generating at maximum concurrency continuously, or a spike in failed generations) would help surface abuse early. See `OBSERVABILITY-AND-ALERTING.md` for related work.
+- **Observability**: Logging or alerting on unusual patterns (e.g., a user generating at maximum concurrency continuously, or a spike in failed generations) would help surface abuse early. See `GROWTH-OBSERVABILITY-AGENT-SPEC.md` for observability routing and growth analytics scope.
 
 - **Credit balance integrity**: The `credits` field is a plain number with no audit log for deductions (only grants are logged in `creditGrants`). If deeper auditability is ever needed, a ledger-style approach (append-only transactions) could replace the current mutable balance.

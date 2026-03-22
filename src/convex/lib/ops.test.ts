@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	buildGenerationAlertRequest,
+	buildPurchaseAlertRequest,
 	formatDurationMs,
 	readOpsAlertRuntimeConfig,
 	summarizeGenerationOpsEvents
@@ -50,6 +51,35 @@ describe('ops helpers', () => {
 		expect(body.text).toContain('founder@celstate.com');
 		expect(body.text).toContain('Vertex quota exhausted');
 		expect(body.blocks[0]?.type).toBe('header');
+	});
+
+	it('builds generic purchase webhook payloads', () => {
+		const request = buildPurchaseAlertRequest(
+			{
+				webhookKind: 'generic',
+				webhookUrl: 'https://ops.example.com/webhook'
+			},
+			{
+				amountUsd: 10,
+				creditsAdded: 40,
+				currency: 'usd',
+				stripePaymentIntentId: 'pi_123',
+				userEmail: 'founder@celstate.com',
+				userId: 'user_123'
+			}
+		);
+
+		expect(request.headers['content-type']).toBe('application/json');
+		expect(JSON.parse(request.body)).toEqual({
+			event: 'purchase_new',
+			credits_added: 40,
+			currency: 'usd',
+			amount_usd: 10,
+			stripe_payment_intent_id: 'pi_123',
+			user_id: 'user_123',
+			user_email: 'founder@celstate.com',
+			title: 'Celstate purchase completed'
+		});
 	});
 
 	it('summarizes generation ops metrics for AI-readable inspection', () => {

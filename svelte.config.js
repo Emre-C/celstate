@@ -5,6 +5,10 @@ const config = {
 				kit: {
 				 adapter: adapter(),
 
+					paths: {
+						relative: false,
+					},
+
 				 alias: {
 									$convex: './src/convex',
 					},

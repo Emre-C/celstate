@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { authComponent } from "./auth.js";
+import { components } from "./_generated/api.js";
 import {
   mutation,
   query,
@@ -10,6 +11,7 @@ import {
 } from "./_generated/server.js";
 import { GENERATION_CONFIG } from "./lib/config.js";
 import { assertStripeEnv } from "./lib/stripeEnv.js";
+import { posthog } from "./posthog.js";
 
 const userDoc = v.object({
   _id: v.id("users"),
@@ -34,6 +36,27 @@ const getCurrentTokenIdentifier = async (ctx: QueryCtx | MutationCtx) => {
   return identity?.tokenIdentifier ?? null;
 };
 
+const getAuthProviderForBetterAuthUser = async (
+  ctx: MutationCtx,
+  betterAuthUserId: string | undefined,
+): Promise<"google" | "apple" | "unknown"> => {
+  if (!betterAuthUserId) {
+    return "unknown";
+  }
+
+  const account = await ctx.runQuery(components.betterAuth.adapter.findOne, {
+    model: "account",
+    select: ["providerId"],
+    where: [{ field: "userId", operator: "eq", value: betterAuthUserId }],
+  });
+
+  const providerId = typeof (account as { providerId?: unknown } | null)?.providerId === "string"
+    ? (account as { providerId: string }).providerId
+    : undefined;
+
+  return providerId === "google" || providerId === "apple" ? providerId : "unknown";
+};
+
 export const getCurrentAppUser = async (ctx: QueryCtx | MutationCtx) => {
   const tokenIdentifier = await getCurrentTokenIdentifier(ctx);
   if (!tokenIdentifier) {
@@ -53,6 +76,7 @@ const upsertUserRecord = async (
     email?: string;
     name?: string;
     image?: string;
+    authProvider?: "google" | "apple" | "unknown";
   },
 ) => {
   const existing = await ctx.db
@@ -71,6 +95,25 @@ const upsertUserRecord = async (
     return (await ctx.db.get(existing._id))!;
   }
 
+  // Fallback: find by email to prevent duplicates when tokenIdentifier changes
+  if (profile.email) {
+    const byEmail = await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", profile.email))
+      .first();
+
+    if (byEmail) {
+      await ctx.db.patch(byEmail._id, {
+        tokenIdentifier: profile.tokenIdentifier,
+        email: profile.email,
+        name: profile.name,
+        image: profile.image,
+      });
+
+      return (await ctx.db.get(byEmail._id))!;
+    }
+  }
+
   const userId = await ctx.db.insert("users", {
     tokenIdentifier: profile.tokenIdentifier,
     email: profile.email,
@@ -79,7 +122,19 @@ const upsertUserRecord = async (
     credits: GENERATION_CONFIG.initialCredits,
   });
 
-  return (await ctx.db.get(userId))!;
+  const user = (await ctx.db.get(userId))!;
+
+  await posthog.capture(ctx, {
+    distinctId: String(userId),
+    event: "signed_up",
+    properties: {
+      user_id: String(userId),
+      auth_provider: profile.authProvider ?? "unknown",
+      initial_credits: GENERATION_CONFIG.initialCredits,
+    },
+  });
+
+  return user;
 };
 
 export const upsertCurrentUser = async (ctx: MutationCtx) => {
@@ -93,11 +148,19 @@ export const upsertCurrentUser = async (ctx: MutationCtx) => {
     throw new Error("Authenticated user record not found");
   }
 
+  const authProvider = await getAuthProviderForBetterAuthUser(
+    ctx,
+    typeof (authUser as { userId?: unknown }).userId === "string"
+      ? (authUser as { userId: string }).userId
+      : undefined,
+  );
+
   return await upsertUserRecord(ctx, {
     tokenIdentifier,
     email: authUser.email,
     name: authUser.name,
     image: authUser.image ?? undefined,
+    authProvider,
   });
 };
 

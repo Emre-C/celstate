@@ -36,6 +36,15 @@ export interface GenerationAlertContext {
 	generationDurationMs?: number;
 }
 
+export interface PurchaseAlertContext {
+	amountUsd: number;
+	creditsAdded: number;
+	currency: string;
+	stripePaymentIntentId: string;
+	userEmail?: string;
+	userId: string;
+}
+
 export interface OpsAlertRuntimeConfig {
 	webhookKind: OpsAlertWebhookKind;
 	webhookUrl?: string;
@@ -231,6 +240,15 @@ function buildAlertFacts(context: GenerationAlertContext): string[] {
 	return facts;
 }
 
+function buildPurchaseAlertFacts(context: PurchaseAlertContext): string[] {
+	return [
+		`Credits: +${context.creditsAdded}`,
+		`Amount: $${context.amountUsd.toFixed(2)} ${context.currency.toUpperCase()}`,
+		`User: ${context.userEmail ?? context.userId}`,
+		`Payment: ${context.stripePaymentIntentId}`
+	];
+}
+
 export function buildGenerationAlertRequest(config: OpsAlertRuntimeConfig, context: GenerationAlertContext): {
 	body: string;
 	headers: Record<string, string>;
@@ -294,6 +312,77 @@ export function buildGenerationAlertRequest(config: OpsAlertRuntimeConfig, conte
 			severity: context.severity,
 			alertType: context.alertType,
 			context
+		})
+	};
+}
+
+export function buildPurchaseAlertRequest(config: OpsAlertRuntimeConfig, context: PurchaseAlertContext): {
+	body: string;
+	headers: Record<string, string>;
+	url: string;
+} {
+	if (!config.webhookUrl) {
+		throw new Error('OPS_ALERT_WEBHOOK_URL is not configured');
+	}
+
+	const title = 'Celstate purchase completed';
+	const facts = buildPurchaseAlertFacts(context);
+	const summaryLine = '💰 New Purchase';
+
+	if (config.webhookKind === 'slack') {
+		return {
+			url: config.webhookUrl,
+			headers: {
+				'content-type': 'application/json'
+			},
+			body: JSON.stringify({
+				text: [summaryLine, ...facts].join('\n'),
+				blocks: [
+					{
+						type: 'header',
+						text: {
+							type: 'plain_text',
+							text: summaryLine
+						}
+					},
+					{
+						type: 'section',
+						text: {
+							type: 'mrkdwn',
+							text: facts.map((fact) => `• ${fact}`).join('\n')
+						}
+					}
+				]
+			})
+		};
+	}
+
+	if (config.webhookKind === 'discord') {
+		return {
+			url: config.webhookUrl,
+			headers: {
+				'content-type': 'application/json'
+			},
+			body: JSON.stringify({
+				content: [summaryLine, ...facts].join('\n')
+			})
+		};
+	}
+
+	return {
+		url: config.webhookUrl,
+		headers: {
+			'content-type': 'application/json'
+		},
+		body: JSON.stringify({
+			event: 'purchase_new',
+			credits_added: context.creditsAdded,
+			currency: context.currency,
+			amount_usd: context.amountUsd,
+			stripe_payment_intent_id: context.stripePaymentIntentId,
+			user_id: context.userId,
+			user_email: context.userEmail,
+			title
 		})
 	};
 }

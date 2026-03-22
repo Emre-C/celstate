@@ -1,0 +1,223 @@
+# Authentication
+
+**Canonical product and engineering reference** for Celstate sign-in, session handling, and protected routes. Older bookmarks may point to `docs/product/AUTH.md`, which redirects here.
+
+## Overview
+
+Celstate uses **Better Auth on Convex** with a SvelteKit proxy layer. The deliberate product shape is:
+
+- Only trusted social identity providers are supported.
+- **`google`** — active in all environments.
+- **`apple`** — fully implemented but temporarily disabled while Apple-side setup is resolved.
+- **Email/password** is intentionally not offered.
+- Members-only routes stay protected on the server.
+- SSR and client hydration share a minimal cookie-based bootstrap contract.
+- The public site must behave consistently on one canonical origin.
+
+## Why email/password is not supported
+
+Celstate does not want to own password storage, reset flows, breach handling, or another low-trust account surface. Google and Apple provide a tighter product surface, lower operational risk, and cleaner onboarding.
+
+## Architecture map
+
+### Core pieces
+
+- `src/convex/auth.ts` — Better Auth server configuration via `@convex-dev/better-auth`. Registers Google (and Apple when re-enabled). Uses canonical `SITE_URL` as Better Auth `baseURL`. Validates canonical auth env at startup via `assertCanonicalAuthEnv()` (from `src/lib/auth/config.ts`).
+- `src/convex/auth.config.ts` — Convex auth config using `getAuthConfigProvider()` from `@convex-dev/better-auth/auth-config`.
+- `src/convex/http.ts` — Convex HTTP router. Registers Better Auth routes via `authComponent.registerRoutes(http, createAuth)`.
+- `src/routes/api/auth/[...all]/+server.ts` — SvelteKit proxy for Better Auth requests. Requires `PUBLIC_CONVEX_SITE_URL` explicitly. Delegates to `src/lib/server/auth-proxy.ts`.
+- `src/lib/server/auth-proxy.ts` — Builds the Better Auth proxy request for Convex. Preserves `x-forwarded-host`, `x-forwarded-proto`, `x-forwarded-port`, and `x-request-id`.
+- `src/lib/auth-client.ts` — Better Auth browser client via `createAuthClient` from `better-auth/svelte`. Prefers `window.location.origin` over `PUBLIC_SITE_URL` so browser auth calls stay same-origin on the live host. Includes the `convexClient()` plugin from `@convex-dev/better-auth/client/plugins`.
+- `src/lib/auth/config.ts` — Canonical auth env contract: reads, validates, exports structured env values; builds social provider config, trusted origins, and provider availability. Apple credential requirements are temporarily relaxed (see Apple section).
+- `src/lib/auth/providers.ts` — UI provider descriptors for `google` and `apple`. Apple is currently forced to `comingSoon: true`.
+- `src/lib/auth/redirect.ts` — Shared redirect-target builder for server and client auth guards.
+- `src/lib/auth/protected-app.ts` — Pure helper for protected-app auth-state UX (including grace-period behavior to reduce tab-return flicker).
+- `src/lib/server/auth.ts` — Cookie helpers for SSR auth bootstrap; detects the Better Auth Convex JWT cookie; seeds initial client auth snapshot from cookie presence only.
+- `src/lib/server/auth-guard.ts` — Server helpers such as `buildAuthRedirectTarget` used by the `(app)` layout guard.
+- `src/lib/server/canonical-site.ts` — Resolves canonical-host redirects from `PUBLIC_SITE_URL`.
+- `src/lib/server/response.ts` — Safely adds headers to immutable `Response` objects by cloning first.
+- `src/routes/+layout.server.ts` — Feeds initial auth state from cookies into the root layout.
+- `src/routes/+layout.svelte` — Root layout owns global app chrome and the SSR auth snapshot; does not initialize the Convex Better Auth client globally.
+- `src/hooks.server.ts` — Reads Convex JWT from Better Auth cookies into `event.locals.token`; enforces canonical host; emits request-scoped auth logs for `/auth` and `/api/auth/*`.
+- `src/routes/(app)/+layout.server.ts` — **Authoritative route guard**: redirects unauthenticated users to `/auth?redirectTo=...` (via `buildAuthRedirectTarget` from `auth-guard.ts`).
+- `src/routes/(app)/+layout.svelte` — Protected-app client UX after hydration; initializes `createSvelteAuthClient(...)` with `PUBLIC_CONVEX_URL`; runs `users.storeUser` bootstrap without blocking first paint; tolerates brief auth revalidation churn before redirecting.
+- `src/routes/auth/+page.svelte` — Social-only sign-in surface (Google active, Apple “Coming soon”).
+
+## Dependencies
+
+| Package | Version | Role |
+|--------|---------|------|
+| `@convex-dev/better-auth` | `^0.11.1` | Convex integration for Better Auth |
+| `better-auth` | `1.5.5` | Core auth framework |
+| `@mmailaender/convex-better-auth-svelte` | `^0.6.2` | SvelteKit handler + Svelte client helpers |
+| `@mmailaender/convex-svelte` | `^0.17.0` | Convex Svelte client |
+| `convex` | `^1.33.1` | Core Convex client |
+
+## Request flow
+
+### Sign-in
+
+1. User visits `/auth`.
+2. The page calls `authClient.signIn.social(...)` for Google.
+3. SvelteKit proxies Better Auth through `/api/auth/[...all]` to Convex using `PUBLIC_CONVEX_SITE_URL`.
+4. `auth-proxy.ts` forwards the browser’s public host/protocol headers so Better Auth resolves callbacks against the real origin.
+5. Better Auth completes the provider flow and writes the session cookies plus the Convex JWT cookie.
+6. SSR reads the Convex JWT cookie to derive initial auth state.
+7. The root layout passes the SSR auth snapshot down; the protected app layout initializes `createSvelteAuthClient(...)` with `PUBLIC_CONVEX_URL`.
+8. Client hydration exchanges the Better Auth session for Convex auth state and initializes the protected shell.
+
+### Protected routes (`/app/*`)
+
+1. User requests a route under `(app)` (e.g. `/app`).
+2. `hooks.server.ts` exposes the JWT from cookies as `locals.token`.
+3. `(app)/+layout.server.ts` redirects unauthenticated users to `/auth?redirectTo=...`.
+4. `(app)/+layout.svelte` manages post-hydration UX and must not eagerly override the server guard during transient client revalidation.
+5. The shell renders when the user is effectively authenticated; `users.storeUser` continues in the background.
+6. After sign-in, the user returns to the original route.
+
+## Cookies and SSR
+
+Server-side bootstrap depends on Better Auth’s Convex JWT cookie contract. Cookie candidates (in order):
+
+- `better-auth.convex_jwt`
+- `__Secure-better-auth.convex_jwt`
+
+SSR uses **cookie presence only** to derive the initial snapshot. Full validation remains with Better Auth + Convex after hydration.
+
+## Enduring lessons
+
+1. **One canonical public origin** — `SITE_URL` and `PUBLIC_SITE_URL` must resolve to the same host. The SvelteKit hook redirects non-canonical requests. OAuth must start and finish on the same origin or state cookies drift.
+2. **Browser auth client** — Prefer `window.location.origin` over `PUBLIC_SITE_URL` in `auth-client.ts` so `/api/auth/*` stays same-origin for the host the user loaded.
+3. **Proxy headers** — Forward real public metadata: `x-forwarded-host`, `x-forwarded-proto`, `x-forwarded-port`, `x-request-id`.
+4. **Immutable responses in hooks** — Do not mutate headers on arbitrary `Response` objects; use `response.ts` when adding headers.
+5. **Server vs client** — `+layout.server.ts` is the source of truth for route protection; the client layout smooths transient churn, not authorization.
+6. **SSR snapshot** — UX seed only; session authority is Better Auth + Convex after hydration.
+7. **Non-blocking user sync** — `users.storeUser` is app data, not authz. `/app` must not wait for the user row; queries must tolerate a short window without row data.
+8. **Scope bootstrap** — Avoid initializing the Convex Better Auth bridge globally on public pages; keep it explicit in `(app)`.
+9. **Explicit Convex URL** — Pass `PUBLIC_CONVEX_URL` into `createSvelteAuthClient(...)` explicitly.
+10. **Dev vs prod Convex** — `PUBLIC_CONVEX_URL` is the realtime target; `PUBLIC_CONVEX_SITE_URL` is the Better Auth HTTP actions target. Do not mix local realtime with cloud HTTP actions (or vice versa).
+
+## Observability
+
+This section describes **auth-route visibility on the SvelteKit server**, not the full product observability stack (PostHog, Convex-side capture, ops webhooks). For that partition, see [`docs/product/observability-generation.md`](observability-generation.md).
+
+Structured **console** logging lives in `src/hooks.server.ts` (JSON lines with `scope: "auth"`). A request is observed when the path is `/auth`, starts with `/api/auth`, **or** the URL has an `error` query parameter (so OAuth failures on redirects are captured even off those paths). Events include `request_started`, `request_finished`, and `request_failed`; payloads include request ID, method, host, pathname, origin/referer where relevant, `hasAuthToken` (Convex JWT from cookies), response status, redirect location summary, and URL `error` when present.
+
+The same hook chain wraps **`@sentry/sveltekit`** (`Sentry.sentryHandle()` and `handleErrorWithSentry()`), so unhandled errors and Sentry’s own instrumentation are separate from the auth-scoped console logs.
+
+Auth-route console logging does not fully diagnose **client-only** flicker inside an already-loaded `/app` tab; pair server logs with browser automation or temporary client instrumentation in the protected layout when debugging UX regressions.
+
+## Regression coverage
+
+Relevant tests:
+
+- `src/lib/auth-client.test.ts`
+- `src/lib/auth/protected-app.test.ts`
+- `src/lib/server/auth-guard.test.ts`
+- `src/lib/server/auth-proxy.test.ts`
+- `src/lib/server/auth.test.ts`
+- `src/lib/server/canonical-site.test.ts`
+- `src/lib/server/response.test.ts`
+
+Additional areas worth covering over time: protected-route hydration after social login, first authenticated render when the Convex user row does not exist yet, and env selection when switching between cloud dev and local Convex.
+
+## Environment variables
+
+### Convex / Better Auth (server)
+
+Required by `src/convex/auth.ts`:
+- `SITE_URL` — Canonical site origin (must match what you serve; wrong host breaks `trustedOrigins` and OAuth redirects).
+- `BETTER_AUTH_SECRET` — Better Auth signing secret.
+- `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` — Google OAuth.
+
+When Apple is re-enabled:
+- `AUTH_APPLE_ID`, `AUTH_APPLE_SECRET`
+- Optional: `AUTH_APPLE_APP_BUNDLE_IDENTIFIER`
+
+Legacy names such as `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` are intentionally ignored.
+
+### Public (web app)
+
+- `PUBLIC_CONVEX_URL` — Convex deployment URL (realtime client).
+- `PUBLIC_CONVEX_SITE_URL` — Convex HTTP / site URL for the auth proxy.
+- `PUBLIC_SITE_URL` — Canonical public site origin.
+
+### Local development
+
+- `PUBLIC_SITE_URL` should match the dev server (e.g. `http://localhost:5173`).
+- Convex **dev** deployment `SITE_URL` should match that origin so `trustedOrigins` includes your dev origin. Production keeps its own canonical `SITE_URL`.
+- `PUBLIC_CONVEX_URL` may point to cloud dev or local Convex (e.g. `http://127.0.0.1:3210`); `PUBLIC_CONVEX_SITE_URL` must match the **same** deployment’s HTTP actions endpoint.
+
+**Do not disable auth in dev** — cookies, redirects, and Convex identity should always be exercised. Use the development Convex deployment and test OAuth credentials.
+
+**Dev vs prod isolation** — Separate Convex deployments and env stores; `pnpm exec convex env set` defaults to dev (`--prod` for production). Local `.env` uses dev URLs; production builds use prod URLs. Google Cloud Console can list both localhost and production origins on the same OAuth client.
+
+See also: [`docs/implementation/STRIPE-CONVEX-ENVIRONMENTS.md`](../../implementation/STRIPE-CONVEX-ENVIRONMENTS.md) (same dev/prod split pattern for Stripe).
+
+**Known operational note:** Convex local deployment on Windows has shown upstream path issues (`InvalidExternalModules` with duplicated drive-letter paths). Treat local Convex switching as an operational validation separate from auth code changes.
+
+## Apple Sign-In
+
+### Status
+
+Implemented but temporarily disabled (config, server registration, UI, env parsing). Paused for Apple-side issues, not missing implementation.
+
+### What to change to re-enable
+
+Locations are marked with `TODO:` in:
+
+- `src/lib/auth/providers.ts`
+- `src/lib/auth/config.ts`
+- `src/lib/auth/config.test.ts`
+- `src/routes/auth/+page.svelte`
+
+### Re-enable checklist
+
+1. Set `AUTH_APPLE_ID` and `AUTH_APPLE_SECRET` on the target Convex deployment.
+2. Revert the `TODO:` blocks above.
+3. Run `pnpm test` and `pnpm check`.
+4. Deploy Convex (`pnpm exec convex deploy --yes`), then deploy the frontend (e.g. `pnpm exec vercel --prod`).
+
+## Operations
+
+### Rotating secrets
+
+1. Update Convex (and local) env as needed.
+2. Restart dev servers.
+3. Run `pnpm test` and `pnpm check`.
+4. Verify `/auth`, Google handoff, and protected `/app` tab-return in the browser.
+
+### Deploying
+
+- Convex: `pnpm exec convex deploy --yes` (non-interactive; adjust for your pipeline).
+- Vercel: `pnpm exec vercel --prod`.
+
+Convex env: `pnpm exec convex env set KEY VALUE` (add `--prod` for production). Vercel env: `pnpm exec vercel env add KEY production --value VALUE --yes`.
+
+## Future hardening (non-blocking)
+
+1. E2E auth smoke: sign-in, callback, protected entry, sign-out, tab-return.
+2. Optional structured client metrics for protected-app churn and `users.storeUser` latency when debugging.
+3. Explicit tests for non-blocking user bootstrap (render before `users.storeUser` completes; graceful degradation until user row exists).
+4. Revisit local Convex on Windows after upstream fixes.
+5. Release checklist: canonical origin, same-origin `/api/auth`, protected routes, callbacks, no redirect loops on apex vs `www` if aliases exist.
+6. Richer failure taxonomy for callbacks, proxy errors, cookie bootstrap, and client churn.
+
+### Adding another provider later
+
+1. Extend `src/lib/auth/config.ts` (env + `buildSocialProviders()`).
+2. Extend `src/lib/auth/providers.ts`.
+3. Add regression tests.
+4. Update this document.
+
+## Sign out
+
+Signing out clears the Better Auth session through the same-origin auth client and returns the user to the public experience.
+
+## Intentionally out of scope
+
+- Email/password authentication
+- Password reset flows
+- Magic links
+- Anonymous sessions
+- Native Apple ID token flows without additional mobile-specific setup

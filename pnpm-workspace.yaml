@@ -1,4 +1,6 @@
 onlyBuiltDependencies:
+  - '@sentry/cli'
+  - core-js
   - esbuild
-  - sharp
   - protobufjs
+  - sharp

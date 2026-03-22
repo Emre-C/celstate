@@ -16,6 +16,10 @@ import {
   getGenerationRetryStatusMessage,
   getGenerationStageStatusMessage,
 } from "./lib/generationWorkflow.js";
+import {
+  classifyGenerationFailureKind,
+  normalizeGenerationFailureStage,
+} from "../lib/analytics/generation.js";
 import { getCurrentAppUser, upsertCurrentUser } from "./users.js";
 
 async function scheduleGenerationStage(
@@ -251,9 +255,18 @@ async function failGenerationRecord(
   }
 
   const now = Date.now();
+  const failureKind = classifyGenerationFailureKind({
+    error: internalError ?? error,
+    stage: generation.stage,
+    statusMessage: generation.statusMessage,
+  });
+  const failureStage = normalizeGenerationFailureStage(generation.stage);
+
   await ctx.db.patch(generationId, {
     completedAt: now,
     error,
+    failureKind,
+    failureStage,
     lastProgressAt: now,
     stage: undefined,
     stageStartedAt: undefined,
@@ -586,6 +599,17 @@ export const getByUser = internalQuery({
       stageStartedAt: v.optional(v.number()),
       completedAt: v.optional(v.number()),
       error: v.optional(v.string()),
+      failureKind: v.optional(v.union(
+        v.literal("timeout"),
+        v.literal("provider_error"),
+        v.literal("processing_error"),
+        v.literal("unknown"),
+      )),
+      failureStage: v.optional(v.union(
+        v.literal("white_background"),
+        v.literal("black_background"),
+        v.literal("finalizing"),
+      )),
       generationTimeMs: v.optional(v.number()),
       retryCount: v.optional(v.number()),
       whiteBgRetryCount: v.optional(v.number()),
@@ -637,6 +661,17 @@ export const getById = internalQuery({
       stageStartedAt: v.optional(v.number()),
       completedAt: v.optional(v.number()),
       error: v.optional(v.string()),
+      failureKind: v.optional(v.union(
+        v.literal("timeout"),
+        v.literal("provider_error"),
+        v.literal("processing_error"),
+        v.literal("unknown"),
+      )),
+      failureStage: v.optional(v.union(
+        v.literal("white_background"),
+        v.literal("black_background"),
+        v.literal("finalizing"),
+      )),
       generationTimeMs: v.optional(v.number()),
       retryCount: v.optional(v.number()),
       whiteBgRetryCount: v.optional(v.number()),
