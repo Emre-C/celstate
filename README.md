@@ -1,6 +1,28 @@
 # Celstate
 
-SvelteKit + Convex app for image generation and Stripe-based credit purchases.
+A focused tool for **transparent-background PNGs** from a text prompt—no background-removal step after the fact. The app is a **SvelteKit** frontend on **Convex** (realtime data, storage, scheduled work) with **Stripe** credit packs and product analytics.
+
+Product direction and principles: [`docs/VISION.md`](docs/VISION.md).
+
+## What it does today
+
+- **Transparent images** — Dual-pass generation on white/black backgrounds, then **difference matting** for exact alpha (see [`docs/product/image-generation.md`](docs/product/image-generation.md)). Inference uses **Vertex AI** (Generative AI on Vertex), not the Gemini Developer API key flow.
+- **Style references** — Optional reference image(s) steer palette and look; text-only mode when none are attached.
+- **Credits** — Balance shown in-app; generations deduct credits; failures refund. **Sign-up bonus**, **weekly free drip**, and **one-time Stripe packs** (no subscriptions). Details: [`docs/product/payments-system.md`](docs/product/payments-system.md).
+- **Auth** — **Better Auth on Convex** with a SvelteKit proxy; **Google** sign-in live; **Apple** implemented but disabled until Apple-side setup is done; **no email/password**. Server-side guards for `/app/*`. Details: [`docs/product/authentication.md`](docs/product/authentication.md).
+- **Observability** — **PostHog** (client + Convex server capture), **Sentry** on the SvelteKit app, optional **ops webhooks** (e.g. Slack/Discord) for purchases and generation alerts. Convex workers do not use Sentry. Overview: [`docs/product/observability.md`](docs/product/observability.md).
+
+## Tech stack
+
+| Area | Choice |
+|------|--------|
+| UI | Svelte 5, SvelteKit, TypeScript, Tailwind CSS |
+| Backend | Convex (queries, mutations, actions, crons, file storage) |
+| Auth | Better Auth + `@convex-dev/better-auth` |
+| Payments | Stripe Checkout (one-time packs), `@convex-dev/stripe` |
+| Image pipeline | Vertex AI via `@google/genai` in Node actions; matting and optimization in Convex |
+
+Deployment is described in the implementation docs (frontend e.g. Vercel + Convex cloud).
 
 ## Development
 
@@ -9,25 +31,35 @@ pnpm install
 pnpm dev
 ```
 
-Runs Vite dev server and Convex dev in parallel.
+Runs the Vite dev server and Convex dev in parallel.
 
-## Build & Deploy
+## Build & check
 
 ```sh
 pnpm build
 pnpm check
 ```
 
-See [`docs/implementation/PRODUCTION-DEPLOYMENT.md`](docs/implementation/PRODUCTION-DEPLOYMENT.md) for full deployment steps.
-For **Convex dev vs production** and Vercel boundaries (prod-first), see [`docs/implementation/CONVEX-VERCEL-ENVIRONMENTS.md`](docs/implementation/CONVEX-VERCEL-ENVIRONMENTS.md).
+- Full production steps: [`docs/implementation/PRODUCTION-DEPLOYMENT.md`](docs/implementation/PRODUCTION-DEPLOYMENT.md)
+- Convex vs Vercel env boundaries: [`docs/implementation/CONVEX-VERCEL-ENVIRONMENTS.md`](docs/implementation/CONVEX-VERCEL-ENVIRONMENTS.md)
+- Stripe + Convex environments: [`docs/implementation/STRIPE-CONVEX-ENVIRONMENTS.md`](docs/implementation/STRIPE-CONVEX-ENVIRONMENTS.md)
 
 ## Project structure
 
-- `src/convex/` — Convex functions (generations, users, Stripe)
-- `src/lib/` — Shared components
-- `src/routes/` — SvelteKit routes
+- `src/convex/` — Convex schema, auth, generations, Stripe, HTTP (webhooks), ops/analytics hooks
+- `src/lib/` — Components, auth client, PostHog, analytics helpers
+- `src/routes/` — SvelteKit routes (marketing, `/auth`, `/app/*`)
 - `scripts/` — Utility scripts
+- `docs/product/` — Product behavior (auth, generation, payments, observability)
+- `docs/implementation/` — Setup and deployment specifics
 
-## Docs
+## Documentation
 
-- [`docs/implementation/PRODUCTION-DEPLOYMENT.md`](docs/implementation/PRODUCTION-DEPLOYMENT.md) — Deployment master plan
+| Doc | Purpose |
+|-----|---------|
+| [`docs/VISION.md`](docs/VISION.md) | Product vision and quality bar |
+| [`docs/product/authentication.md`](docs/product/authentication.md) | Sign-in, sessions, protected routes |
+| [`docs/product/image-generation.md`](docs/product/image-generation.md) | Pipeline, Vertex, matting, history |
+| [`docs/product/payments-system.md`](docs/product/payments-system.md) | Credits, Stripe, pricing tiers |
+| [`docs/product/observability.md`](docs/product/observability.md) | PostHog, ops events, Sentry scope |
+| [`docs/implementation/PRODUCTION-DEPLOYMENT.md`](docs/implementation/PRODUCTION-DEPLOYMENT.md) | Deploy checklist |

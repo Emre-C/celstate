@@ -10,6 +10,6 @@
 	} = $props();
 </script>
 
-<span class="font-mono text-[10px] tracking-[0.15em] uppercase text-dim {className}">
+<span class="text-[10px] font-medium uppercase tracking-[0.06em] text-dim {className}">
 	{@render children()}
 </span>

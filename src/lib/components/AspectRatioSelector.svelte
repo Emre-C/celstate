@@ -65,7 +65,7 @@
 						{value === ratio.key ? 'bg-accent' : 'bg-dim/40 group-hover:bg-dim/60'}"
 					style={shapeStyle(ratio.w, ratio.h)}
 				></div>
-				<span class="font-mono text-[10px] leading-none tracking-[0.1em]">
+				<span class="text-[10px] font-medium leading-none tracking-[0.04em]">
 					{ratio.label}
 				</span>
 			</button>
@@ -82,7 +82,7 @@
 					: 'border-border text-dim hover:border-accent/30 hover:text-text'}
 				disabled:opacity-40 disabled:cursor-not-allowed"
 		>
-			<span class="font-mono text-[10px] leading-none tracking-[0.1em]">
+			<span class="text-[10px] font-medium leading-none tracking-[0.04em]">
 				{expanded ? 'Less' : 'More'}
 			</span>
 			<svg
@@ -115,7 +115,7 @@
 							{value === ratio.key ? 'bg-accent' : 'bg-dim/40 group-hover:bg-dim/60'}"
 						style={shapeStyle(ratio.w, ratio.h)}
 					></div>
-					<span class="font-mono text-[10px] leading-none tracking-[0.1em]">
+					<span class="text-[10px] font-medium leading-none tracking-[0.04em]">
 						{ratio.label}
 					</span>
 				</button>

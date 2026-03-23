@@ -47,13 +47,20 @@ invariant_convex_sentry:
 ## 2. Environment variables
 
 ```yaml
-# SvelteKit / Vercel — repo .env; PUBLIC_* bundled to browser
+# SvelteKit / Vercel — repo .env; PUBLIC_* bundled at build time
 PUBLIC_POSTHOG_KEY:
   pattern: "phc_*"
-  used_by: ["posthog-js", "Convex POSTHOG_API_KEY (same value)"]
+  used_by: ["posthog-js", "Convex POSTHOG_API_KEY (same project key)"]
 PUBLIC_POSTHOG_HOST:
-  example: "https://us.i.posthog.com"
-  used_by: ["posthog-js", "Convex POSTHOG_HOST (same value)"]
+  production_example: "https://wel.celstate.com"
+  dev_fallback: "https://us.i.posthog.com"
+  semantics: "posthog-js api_host — MUST be set on Vercel Production or the client never inits"
+  managed_proxy:
+    summary: "PostHog Cloud managed reverse proxy (organization settings): neutral subdomain CNAME → *.proxy-us.posthog.com"
+    dns: "Registrar (e.g. Namecheap): CNAME host = subdomain label only; target = value from PostHog UI"
+    naming: "Avoid analytics|tracking|telemetry|posthog|ph in the subdomain — use a generic label (e.g. wel)"
+    vercel_note: "After DNS is live, set PUBLIC_POSTHOG_HOST to https://<subdomain>.<apex> and redeploy"
+  not_equal_to_convex_host: "Server ingest URL stays us.i.posthog.com — see POSTHOG_HOST below"
 
 # Convex deployment — `pnpm exec convex env set` (NOT .env)
 POSTHOG_API_KEY:
@@ -61,8 +68,9 @@ POSTHOG_API_KEY:
   used_by: "@posthog/convex server capture"
   prerequisite: "Unset → server-side PostHog capture does not fire (no runtime fallback)"
 POSTHOG_HOST:
-  equals: "PUBLIC_POSTHOG_HOST"
-  used_by: "@posthog/convex server capture"
+  value: "https://us.i.posthog.com" # US Cloud direct API (EU: https://eu.i.posthog.com)
+  used_by: "@posthog/convex server capture only"
+  not_browser_proxy: "Do NOT set this to the managed-proxy subdomain — Convex calls PostHog from the backend, not the user browser"
 OPS_ALERT_WEBHOOK_URL:
   semantics: "trimmed; empty → no outbound ops HTTP"
 OPS_ALERT_WEBHOOK_KIND:
@@ -109,7 +117,8 @@ implementation_facts:
 
 ```typescript
 interface PostHogBrowserInit {
-  api_host: string; // PUBLIC_POSTHOG_HOST || default us.i.posthog.com
+  api_host: string; // PUBLIC_POSTHOG_HOST || default https://us.i.posthog.com
+  ui_host: string;  // US Cloud: https://us.posthog.com — required when api_host is a custom / proxy origin (toolbar)
   key: string;      // PUBLIC_POSTHOG_KEY
   options: {
     defaults: "2026-01-30";
@@ -118,6 +127,10 @@ interface PostHogBrowserInit {
     capture_pageleave: true;
   };
 }
+```
+
+```yaml
+proxy_reference: "https://posthog.com/docs/advanced/proxy"
 ```
 
 ```pseudo
@@ -597,6 +610,9 @@ INVARIANT no_raw_errors_in_posthog:
 INVARIANT client_events_are_lossy:
   browser posthog-js captures may be blocked or missed — not authoritative for revenue
 
+INVARIANT proxy_host_split:
+  PUBLIC_POSTHOG_HOST points at managed proxy (or direct ingest in dev); Convex POSTHOG_HOST remains regional ingest API (us.i / eu.i)
+
 INVARIANT phc_vs_phx:
   phc_* = ingest (client + Convex POSTHOG_API_KEY)
   phx_* = read APIs / MCP only
@@ -639,6 +655,9 @@ sentry:
 ## 19. Change checklist (agent)
 
 ```text
+Managed proxy / PUBLIC_POSTHOG_HOST change:
+  - DNS CNAME live in registrar; PostHog proxy status live; Vercel PUBLIC_POSTHOG_HOST + redeploy; do not change Convex POSTHOG_HOST to proxy URL
+
 NEW PostHog event:
   - Add to §6 inventory; implement client OR server; validate env for server
   - If revenue-critical: MUST be server-side with idempotency gate

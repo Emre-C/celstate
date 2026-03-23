@@ -34,12 +34,12 @@
 <style>
 	.checkerboard-bg {
 		background-image:
-			linear-gradient(45deg, #1a1a1a 25%, transparent 25%),
-			linear-gradient(-45deg, #1a1a1a 25%, transparent 25%),
-			linear-gradient(45deg, transparent 75%, #1a1a1a 75%),
-			linear-gradient(-45deg, transparent 75%, #1a1a1a 75%);
+			linear-gradient(45deg, #d6d3cb 25%, transparent 25%),
+			linear-gradient(-45deg, #d6d3cb 25%, transparent 25%),
+			linear-gradient(45deg, transparent 75%, #d6d3cb 75%),
+			linear-gradient(-45deg, transparent 75%, #d6d3cb 75%);
 		background-size: 24px 24px;
 		background-position: 0 0, 0 12px, 12px -12px, -12px 0;
-		background-color: #111;
+		background-color: #e8e5dd;
 	}
 </style>

@@ -94,11 +94,11 @@
 	const canSubmit = $derived(value.trim().length > 0 && !disabled && !noCredits && !uploading);
 </script>
 
-<div class="prompt-input-wrapper">
+<div class="prompt-input-wrapper min-w-0 max-w-full">
 	<!-- Reference image previews -->
 	{#if referencePreviewUrls.length > 0}
-		<div class="mb-2 flex items-center gap-2 px-1">
-			<div class="flex gap-1.5">
+		<div class="mb-2 flex min-w-0 flex-wrap items-center gap-2 px-1">
+			<div class="flex min-w-0 flex-wrap gap-1.5">
 				{#each referencePreviewUrls as url, i}
 					<div class="relative h-10 w-10 shrink-0 overflow-hidden border border-border">
 						<img src={url} alt="Reference {i + 1}" class="h-full w-full object-cover" />
@@ -114,7 +114,7 @@
 					</div>
 				{/each}
 			</div>
-			<span class="font-mono text-[10px] tracking-[0.15em] uppercase text-dim/60">
+			<span class="text-[10px] font-medium uppercase tracking-[0.06em] text-dim/60">
 				{referencePreviewUrls.length === 1 ? 'Style reference' : `${referencePreviewUrls.length} references`}
 			</span>
 		</div>
@@ -122,13 +122,13 @@
 
 	<!-- Zero-credit inline CTA -->
 	{#if noCredits}
-		<div class="mb-2 flex items-center justify-between px-1">
-			<span class="font-mono text-[10px] tracking-[0.15em] uppercase text-red-400/70">
+		<div class="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-1">
+			<span class="text-[10px] font-medium uppercase tracking-[0.06em] text-red-600">
 				Out of credits
 			</span>
 			<a
 				href="/app/credits"
-				class="font-mono text-[10px] tracking-[0.15em] uppercase text-accent transition-colors hover:text-text"
+				class="min-w-0 break-words text-end text-[10px] font-medium uppercase tracking-[0.06em] text-accent transition-colors hover:text-text"
 			>
 				15 for $5, 40 for $10 · Get more →
 			</a>
@@ -136,7 +136,7 @@
 	{/if}
 
 	<div
-		class="flex items-center border transition-all duration-200 {noCredits
+		class="flex min-w-0 items-center border transition-all duration-200 {noCredits
 			? 'border-red-900/30'
 			: focused
 				? 'border-accent/40 shadow-[0_0_12px_-4px_var(--color-accent)]'
@@ -169,7 +169,7 @@
 
 		<!-- Terminal prompt indicator -->
 		<div class="flex shrink-0 items-center pr-2">
-			<span class="font-mono text-sm text-accent" aria-hidden="true">&gt;_</span>
+			<span class="text-sm font-semibold text-accent" aria-hidden="true">→</span>
 		</div>
 
 		<!-- Input -->
@@ -188,7 +188,7 @@
 		<button
 			onclick={handleSubmit}
 			disabled={!canSubmit}
-			class="flex shrink-0 items-center gap-2 border-l border-border px-5 py-3.5 font-mono text-[11px] tracking-[0.15em] uppercase transition-all duration-200
+			class="flex shrink-0 items-center gap-2 border-l border-border px-3 py-3.5 text-[11px] font-medium uppercase tracking-[0.06em] transition-all duration-200 sm:px-5
 				{canSubmit
 					? 'bg-accent/5 text-accent hover:bg-accent hover:text-bg'
 					: 'text-dim/40 cursor-not-allowed'}"
@@ -216,10 +216,13 @@
 	</div>
 
 	<!-- Helper text -->
-	<div class="mt-2 flex items-center justify-between px-1">
-		<span class="font-mono text-[10px] tracking-[0.15em] uppercase text-dim/50">
+	<div
+		class="mt-2 flex flex-col gap-1.5 px-1 sm:flex-row sm:items-center sm:justify-between sm:gap-2"
+	>
+		<span class="min-w-0 text-[10px] font-medium uppercase tracking-[0.06em] text-dim/50">
 			{#if credits !== undefined && credits > 0}
-				1 of {credits} {credits === 1 ? 'credit' : 'credits'}
+				1 of <span class="tabular-nums">{credits}</span>
+				{credits === 1 ? 'credit' : 'credits'}
 				{#if credits === 1}
 					·
 					<a href="/app/credits" class="text-accent transition-colors hover:text-text">Stock up →</a>
@@ -230,7 +233,9 @@
 				1 credit per generation
 			{/if}
 		</span>
-		<span class="font-mono text-[10px] tracking-[0.15em] uppercase text-dim/50">
+		<span
+			class="shrink-0 text-[10px] font-medium uppercase tracking-[0.06em] text-dim/50 sm:text-end"
+		>
 			Enter ↵ to generate
 		</span>
 	</div>

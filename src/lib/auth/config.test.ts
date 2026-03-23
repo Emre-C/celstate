@@ -6,6 +6,7 @@ import {
 	getCanonicalSiteOrigins,
 	getAuthProviderAvailability,
 	getMissingCanonicalAuthEnvKeys,
+	getLoopbackAliasOrigins,
 	getTrustedOrigins,
 	readCanonicalAuthEnv,
 	requiresAppleCredentials
@@ -108,6 +109,25 @@ describe('auth config', () => {
 
 	it('keeps localhost as a single origin', () => {
 		expect(getCanonicalSiteOrigins('http://localhost:5173')).toEqual(['http://localhost:5173']);
+	});
+
+	it('maps localhost http to IPv4 loopback alias for Better Auth', () => {
+		expect(getLoopbackAliasOrigins('http://localhost:5173')).toEqual(['http://127.0.0.1:5173']);
+		expect(getLoopbackAliasOrigins('http://127.0.0.1:5173')).toEqual(['http://localhost:5173']);
+		expect(getLoopbackAliasOrigins('https://celstate.app')).toEqual([]);
+	});
+
+	it('includes loopback aliases in trusted origins for local http SITE_URL', () => {
+		expect(
+			getTrustedOrigins(
+				readCanonicalAuthEnv({
+					SITE_URL: 'http://localhost:5173',
+					BETTER_AUTH_SECRET: 'secret',
+					AUTH_GOOGLE_ID: 'google-id',
+					AUTH_GOOGLE_SECRET: 'google-secret'
+				})
+			)
+		).toEqual(['http://localhost:5173', 'http://127.0.0.1:5173']);
 	});
 
 	it('includes the Apple trusted origin when Apple is enabled', () => {

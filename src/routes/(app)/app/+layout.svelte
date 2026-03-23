@@ -44,26 +44,29 @@
 </script>
 
 <div class="min-h-dvh">
-	<NavBar compact>
-		<div class="flex items-center gap-4">
-			<a href="/app/credits" class="flex items-center gap-2 transition-colors hover:text-accent">
-				<span class="h-1.5 w-1.5 rounded-full bg-accent"></span>
-				<span class="font-mono text-xs tracking-[0.15em] uppercase {creditColor}">
-					{credits} {credits === 1 ? 'credit' : 'credits'}
+	<NavBar compact max="4xl">
+		<div class="flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1 sm:gap-x-4">
+			<a
+				href="/app/credits"
+				class="flex min-w-0 items-center gap-1.5 transition-colors hover:text-accent"
+			>
+				<span class="text-xs font-medium tracking-[0.06em] uppercase {creditColor}">
+					<span class="tabular-nums">{credits}</span>
+					{credits === 1 ? 'credit' : 'credits'}
 				</span>
 			</a>
 			<button
 				type="button"
 				onclick={handleSignOut}
 				disabled={signingOut}
-				class="font-mono text-xs tracking-[0.15em] uppercase text-dim transition-colors hover:text-text disabled:cursor-not-allowed disabled:opacity-60"
+				class="shrink-0 text-xs font-medium tracking-[0.06em] text-dim uppercase transition-colors hover:text-text disabled:cursor-not-allowed disabled:opacity-60"
 			>
 				{signingOut ? 'Signing out…' : 'Sign out'}
 			</button>
 		</div>
 	</NavBar>
 
-	<main class="pt-14">
+	<main class="min-w-0 pt-14">
 		{@render children()}
 	</main>
 </div>

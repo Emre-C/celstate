@@ -81,7 +81,7 @@
 		<div class="mx-auto w-full max-w-md border border-border bg-bg">
 			<div class="border-b border-border px-6 py-5">
 				<SectionLabel text="Account" />
-				<h1 class="mt-3 text-2xl font-light tracking-tight text-text">
+				<h1 class="mt-3 text-2xl font-display italic tracking-tight text-text">
 					Trusted sign-in only
 				</h1>
 				<!-- TODO: Restore to "Google and Apple" once Apple Sign-In is re-enabled -->
@@ -120,7 +120,7 @@
 								</span>
 							</span>
 							<!-- TODO: Remove the `comingSoon` branch once Apple Sign-In is re-enabled -->
-							<span class="text-xs uppercase tracking-[0.15em] text-dim">
+							<span class="text-xs font-medium uppercase tracking-[0.06em] text-dim">
 								{#if provider.comingSoon}
 									Coming soon
 								{:else if activeProvider === provider.id}
@@ -136,15 +136,15 @@
 				</div>
 
 				<!-- TODO: Restore original info box copy once Apple Sign-In is re-enabled -->
-				<div class="border border-border bg-border/30 px-4 py-3">
+				<div class="border border-border bg-bg px-4 py-3">
 					<p class="text-sm text-dim">
 						Sign in with Google is available now. Apple Sign-In support is coming soon.
 					</p>
 				</div>
 
 				{#if errorMessage}
-					<div class="border border-red-900/40 bg-red-950/10 px-4 py-3">
-						<p class="text-sm text-red-400/80">{errorMessage}</p>
+					<div class="border border-red-300 bg-red-50 px-4 py-3">
+						<p class="text-sm text-red-700">{errorMessage}</p>
 					</div>
 				{/if}
 			</div>

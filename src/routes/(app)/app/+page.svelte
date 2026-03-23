@@ -142,11 +142,13 @@
 	<title>Generate — Celstate</title>
 </svelte:head>
 
-<PageContainer max="4xl" class="py-8">
+<PageContainer max="4xl" class="min-w-0 py-6 sm:py-8">
 		<!-- Header -->
-		<div class="mb-8">
+		<div class="mb-8 min-w-0">
 			<SectionLabel text="Generation workspace" />
-			<h1 class="text-2xl font-light tracking-tight text-text">
+			<h1
+				class="font-display text-2xl font-light tracking-tight text-balance text-text italic"
+			>
 				What do you need?
 			</h1>
 		</div>
@@ -162,15 +164,21 @@
 
 		<!-- Post-generation credit nudge -->
 		{#if creditNudge}
-			<div class="mb-6 flex items-center justify-between px-1">
-				<span class="font-mono text-[10px] tracking-[0.15em] uppercase text-dim">
-					Image ready · {credits} {credits === 1 ? 'credit' : 'credits'} left ·
+			<div
+				class="mb-6 flex flex-wrap items-start gap-2 px-1 sm:flex-nowrap sm:items-center sm:justify-between sm:gap-3"
+			>
+				<span
+					class="min-w-0 flex-1 break-words text-[10px] font-medium tracking-[0.06em] text-dim uppercase"
+				>
+					Image ready · <span class="tabular-nums">{credits}</span>
+					{credits === 1 ? 'credit' : 'credits'} left ·
 					<a href="/app/credits" class="text-accent transition-colors hover:text-text">Get more →</a>
 				</span>
 				<button
+					type="button"
 					onclick={() => (creditNudge = false)}
 					aria-label="Dismiss"
-					class="text-dim/40 transition-colors hover:text-dim"
+					class="shrink-0 text-dim/40 transition-colors hover:text-dim"
 				>
 					<svg class="h-3 w-3" viewBox="0 0 12 12" fill="none">
 						<path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
@@ -181,16 +189,14 @@
 
 		<!-- Success message -->
 		{#if successMessage}
-			<div class="mb-6 border border-accent/40 bg-accent/5 px-4 py-3">
-				<div class="flex items-center justify-between">
-					<div class="flex items-center gap-2">
-						<span class="h-1.5 w-1.5 rounded-full bg-accent"></span>
-						<p class="text-sm text-accent">{successMessage}</p>
-					</div>
+			<div class="mb-6 border border-green-300 bg-green-50 px-4 py-3">
+				<div class="flex items-start gap-3 sm:items-center sm:justify-between">
+					<p class="min-w-0 flex-1 break-words text-sm text-green-700">{successMessage}</p>
 					<button
+						type="button"
 						onclick={() => (successMessage = '')}
 						aria-label="Dismiss"
-						class="text-dim transition-colors hover:text-text"
+						class="shrink-0 text-dim transition-colors hover:text-text"
 					>
 						<svg class="h-4 w-4" viewBox="0 0 16 16" fill="none">
 							<path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
@@ -202,13 +208,13 @@
 
 		<!-- Error message -->
 		{#if errorMessage}
-			<div class="mb-6 border border-red-900/40 bg-red-950/10 px-4 py-3">
-				<div class="flex items-center gap-2">
-					<svg class="h-4 w-4 shrink-0 text-red-500/60" viewBox="0 0 16 16" fill="none">
+			<div class="mb-6 border border-red-300 bg-red-50 px-4 py-3">
+				<div class="flex items-start gap-2">
+					<svg class="mt-0.5 h-4 w-4 shrink-0 text-red-600" viewBox="0 0 16 16" fill="none">
 						<circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.2" />
 						<path d="M8 4v5M8 11v1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
 					</svg>
-					<p class="text-sm text-red-400/80">{errorMessage}</p>
+					<p class="min-w-0 flex-1 break-words text-sm text-red-700">{errorMessage}</p>
 				</div>
 			</div>
 		{/if}
@@ -216,7 +222,7 @@
 		<!-- Generation results -->
 		{#if generations.isLoading}
 			<div class="flex items-center justify-center py-16">
-				<span class="font-mono text-xs tracking-[0.15em] uppercase text-dim">Loading history...</span>
+				<span class="text-xs font-medium uppercase tracking-[0.06em] text-dim">Loading history...</span>
 			</div>
 		{:else if hasGenerations}
 			<!-- Section label -->
@@ -225,7 +231,9 @@
 			</div>
 
 			<!-- Grid of generation cards -->
-			<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+			<div
+				class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 [&>*]:min-w-0"
+			>
 				{#each generations.data! as gen (gen._id)}
 					<GenerationCard
 						prompt={gen.prompt}
@@ -244,14 +252,14 @@
 			</div>
 		{:else}
 			<!-- Empty state -->
-			<div class="flex flex-col items-center justify-center py-20">
+			<div class="flex flex-col items-center justify-center px-2 py-16 sm:py-20">
 				<div class="empty-state-grid mb-6" aria-hidden="true">
 					{#each Array(16) as _, i}
 						<div class="empty-cell" style="animation-delay: {i * 150}ms"></div>
 					{/each}
 				</div>
-				<p class="mb-1 text-sm text-dim">No generations yet</p>
-				<p class="text-xs text-dim/60">
+				<p class="mb-1 max-w-md text-center text-sm text-dim">No generations yet</p>
+				<p class="max-w-md text-pretty text-center text-xs text-dim/60">
 					Type a prompt above to generate your first transparent image.
 				</p>
 			</div>
@@ -279,6 +287,13 @@
 		}
 		50% {
 			opacity: 0.6;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.empty-cell {
+			animation: none;
+			opacity: 0.45;
 		}
 	}
 </style>

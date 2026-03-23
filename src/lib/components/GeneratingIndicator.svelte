@@ -39,16 +39,16 @@
 
 	<!-- Status text -->
 	<div class="flex w-full min-w-0 flex-col items-center gap-1.5 overflow-hidden px-4">
-		<span class="generating-text font-mono text-[11px] tracking-[0.2em] uppercase text-accent">
+		<span class="generating-text text-[11px] font-medium uppercase tracking-[0.06em] text-accent">
 			Generating
 		</span>
 		{#if statusMessage}
-			<p class="text-center text-xs text-dim">{statusMessage}</p>
+			<p class="break-words text-center text-xs text-dim">{statusMessage}</p>
 		{/if}
-		<p class="line-clamp-2 w-full text-center text-xs text-dim/50">
+		<p class="line-clamp-2 w-full break-words text-center text-xs text-dim/50">
 			{prompt}
 		</p>
-		<span class="font-mono text-[10px] tracking-[0.15em] text-dim/40">
+		<span class="text-[10px] font-medium tracking-[0.06em] text-dim/40">
 			{elapsedDisplay}
 		</span>
 	</div>
@@ -75,7 +75,6 @@
 		}
 		40%, 60% {
 			background-color: var(--color-accent);
-			box-shadow: 0 0 4px var(--color-accent);
 		}
 	}
 

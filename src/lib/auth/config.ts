@@ -166,9 +166,36 @@ export const assertCanonicalAuthEnv = (envSource: EnvSource): ValidatedCanonical
 export const getAllowedAuthHosts = (env: CanonicalAuthEnv) =>
 	getCanonicalSiteOrigins(env.siteUrl).map((origin) => new URL(origin).host);
 
+/**
+ * Browsers treat `localhost` and `127.0.0.1` as different origins. Better Auth
+ * validates `Origin` against `trustedOrigins`; include both when `SITE_URL` uses
+ * loopback HTTP so either URL works in local dev.
+ */
+export const getLoopbackAliasOrigins = (siteUrl?: string): string[] => {
+	const url = toHttpUrl(siteUrl);
+
+	if (!url || url.protocol !== 'http:') {
+		return [];
+	}
+
+	const { hostname } = url;
+
+	if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+		return [];
+	}
+
+	const portPart = url.port ? `:${url.port}` : '';
+	const alternateHost = hostname === 'localhost' ? '127.0.0.1' : 'localhost';
+
+	return [`http://${alternateHost}${portPart}`];
+};
+
 export const getTrustedOrigins = (env: CanonicalAuthEnv) => {
 	const providers = getAuthProviderAvailability(env);
-	const trustedOrigins = new Set(getCanonicalSiteOrigins(env.siteUrl));
+	const trustedOrigins = new Set([
+		...getCanonicalSiteOrigins(env.siteUrl),
+		...getLoopbackAliasOrigins(env.siteUrl)
+	]);
 
 	if (providers.apple) {
 		trustedOrigins.add(APPLE_TRUSTED_ORIGIN);

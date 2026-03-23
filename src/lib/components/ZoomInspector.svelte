@@ -26,7 +26,7 @@
 	let normX = $derived(containerEl ? mouseX / containerEl.clientWidth : focusPoint.x);
 	let normY = $derived(containerEl ? mouseY / containerEl.clientHeight : focusPoint.y);
 
-	// Loupe CSS: zoomed image on solid black background
+	// Loupe CSS: zoomed image on checkerboard background
 	let loupeStyle = $derived(() => {
 		if (!containerEl) return '';
 		const bgSize = containerEl.clientWidth * zoomLevel;
@@ -42,7 +42,7 @@
 			`background-size: ${bgSize}px ${bgSizeY}px`,
 			`background-position: ${bgX}px ${bgY}px`,
 			`background-repeat: no-repeat`,
-			`background-color: #000`
+			`background-color: #e8e5dd`
 		].join(';');
 	});
 
@@ -65,7 +65,7 @@
 	<!-- Image container with loupe -->
 	<div
 		bind:this={containerEl}
-		class="zoom-inspector relative cursor-crosshair overflow-hidden border border-border bg-black"
+		class="zoom-inspector relative cursor-crosshair overflow-hidden border border-border zoom-checker-bg"
 		onmouseenter={() => (hovering = true)}
 		onmouseleave={() => (hovering = false)}
 		onmousemove={handleMouseMove}
@@ -88,7 +88,7 @@
 		<!-- Magnifying loupe -->
 		{#if hovering}
 			<div
-				class="zoom-loupe pointer-events-none absolute rounded-full border border-accent/60 shadow-[0_0_0_1px_rgba(0,0,0,0.8),0_0_20px_rgba(0,0,0,0.5)]"
+				class="zoom-loupe pointer-events-none absolute rounded-full border border-accent/60 shadow-[0_0_0_1px_rgba(0,0,0,0.15),0_0_16px_rgba(0,0,0,0.12)]"
 				style={loupeStyle()}
 			>
 				<!-- Center crosshair -->
@@ -103,7 +103,7 @@
 
 		<!-- Instruction hint -->
 		<div
-			class="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 font-mono text-[9px] tracking-[0.15em] uppercase transition-opacity duration-300 {hovering ? 'opacity-0' : 'opacity-100'}"
+			class="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 text-[9px] font-medium tracking-wide uppercase transition-opacity duration-300 {hovering ? 'opacity-0' : 'opacity-100'}"
 		>
 			<span class="rounded-full border border-border bg-bg/80 px-2.5 py-1 text-dim backdrop-blur-sm">
 				Hover to inspect
@@ -112,12 +112,23 @@
 	</div>
 
 	<!-- Label -->
-	<span class="font-mono text-[10px] tracking-[0.15em] uppercase text-dim">
+	<span class="text-[10px] font-medium tracking-wide uppercase text-dim">
 		{label}
 	</span>
 </div>
 
 <style>
+	.zoom-checker-bg {
+		background-image:
+			linear-gradient(45deg, #d6d3cb 25%, transparent 25%),
+			linear-gradient(-45deg, #d6d3cb 25%, transparent 25%),
+			linear-gradient(45deg, transparent 75%, #d6d3cb 75%),
+			linear-gradient(-45deg, transparent 75%, #d6d3cb 75%);
+		background-size: 24px 24px;
+		background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+		background-color: #e8e5dd;
+	}
+
 	.zoom-loupe {
 		z-index: 10;
 	}

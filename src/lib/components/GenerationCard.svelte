@@ -75,22 +75,24 @@
 </script>
 
 {#if status === 'generating'}
-	<div class="border border-border">
+	<div class="min-w-0 border border-border">
 		<div class="aspect-square flex items-center justify-center bg-bg">
 			<GeneratingIndicator {prompt} {statusMessage} {createdAt} />
 		</div>
-		<div class="border-t border-border px-4 py-3">
-			<p class="line-clamp-1 text-xs text-dim">{prompt}</p>
+		<div class="min-w-0 border-t border-border px-4 py-3">
+			<p class="line-clamp-1 break-words text-xs text-dim">{prompt}</p>
 		</div>
 	</div>
 {:else if status === 'complete' && resultUrl}
-	<div class="group flex flex-col border border-border transition-colors hover:border-accent/20">
+	<div
+		class="group flex min-w-0 flex-col border border-border transition-colors hover:border-accent/20"
+	>
 		<CheckerboardPreview src={resultUrl} alt={prompt} class="aspect-square" />
 		<div class="flex flex-1 flex-col border-t border-border">
-			<div class="flex-1 px-4 pt-3 pb-2">
-				<p class="line-clamp-2 text-sm text-dim">{prompt}</p>
+			<div class="min-w-0 flex-1 px-4 pt-3 pb-2">
+				<p class="line-clamp-2 break-words text-sm text-dim">{prompt}</p>
 			</div>
-			<div class="flex items-center gap-3 px-4 pb-3">
+			<div class="flex min-w-0 flex-wrap items-center gap-2 gap-x-3 px-4 pb-3">
 				{#if referenceUrls.length > 0}
 					<div class="flex items-center gap-1.5" title="Generated with style reference">
 						<div class="flex -space-x-1">
@@ -117,7 +119,7 @@
 						<button
 							onclick={() => handleDownload(optimizedUrl!, '')}
 							disabled={!!downloading}
-							class="flex items-center justify-center gap-1.5 whitespace-nowrap py-2.5 font-mono text-[10px] tracking-[0.15em] uppercase text-accent transition-colors hover:bg-accent/10 disabled:opacity-50"
+							class="flex items-center justify-center gap-1.5 whitespace-nowrap py-2.5 text-[10px] font-medium uppercase tracking-[0.06em] text-accent transition-colors hover:bg-accent/10 disabled:opacity-50"
 						>
 							<svg class="h-3 w-3 shrink-0" viewBox="0 0 12 12" fill="none">
 								<path d="M6 1v7M3 6l3 3 3-3M2 10h8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
@@ -127,7 +129,7 @@
 						<button
 							onclick={() => handleDownload(resultUrl!, '-hires')}
 							disabled={!!downloading}
-							class="flex items-center justify-center gap-1.5 whitespace-nowrap border-l border-border py-2.5 font-mono text-[10px] tracking-[0.15em] uppercase text-dim transition-colors hover:bg-accent/10 hover:text-text disabled:opacity-50"
+							class="flex items-center justify-center gap-1.5 whitespace-nowrap border-l border-border py-2.5 text-[10px] font-medium uppercase tracking-[0.06em] text-dim transition-colors hover:bg-accent/10 hover:text-text disabled:opacity-50"
 						>
 							<svg class="h-3 w-3 shrink-0" viewBox="0 0 12 12" fill="none">
 								<path d="M6 1v7M3 6l3 3 3-3M2 10h8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
@@ -139,7 +141,7 @@
 					<button
 						onclick={() => handleDownload(resultUrl!, '')}
 						disabled={!!downloading}
-						class="flex w-full items-center justify-center gap-1.5 whitespace-nowrap py-2.5 font-mono text-[10px] tracking-[0.15em] uppercase text-accent transition-colors hover:bg-accent/10 disabled:opacity-50"
+						class="flex w-full items-center justify-center gap-1.5 whitespace-nowrap py-2.5 text-[10px] font-medium uppercase tracking-[0.06em] text-accent transition-colors hover:bg-accent/10 disabled:opacity-50"
 					>
 						<svg class="h-3 w-3 shrink-0" viewBox="0 0 12 12" fill="none">
 							<path d="M6 1v7M3 6l3 3 3-3M2 10h8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
@@ -151,19 +153,19 @@
 		</div>
 	</div>
 {:else if status === 'failed'}
-	<div class="border border-red-900/40 bg-red-950/10">
-		<div class="aspect-square flex flex-col items-center justify-center gap-3 px-6">
+	<div class="min-w-0 border border-red-300 bg-red-50">
+		<div class="aspect-square flex flex-col items-center justify-center gap-3 px-4 sm:px-6">
 			<svg class="h-6 w-6 text-red-500/60" viewBox="0 0 24 24" fill="none">
 				<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5" />
 				<path d="M8 8l8 8M16 8l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
 			</svg>
-			<MonoLabel class="text-red-500/60">Generation failed</MonoLabel>
+			<MonoLabel class="text-red-600">Generation failed</MonoLabel>
 			{#if error}
-				<p class="max-w-[200px] text-center text-xs text-dim">{error}</p>
+				<p class="w-full max-w-full break-words px-1 text-center text-xs text-dim">{error}</p>
 			{/if}
 		</div>
-		<div class="border-t border-red-900/20 px-4 py-3">
-			<p class="line-clamp-1 text-xs text-dim">{prompt}</p>
+		<div class="min-w-0 border-t border-red-200 px-4 py-3">
+			<p class="line-clamp-1 break-words text-xs text-dim">{prompt}</p>
 		</div>
 	</div>
 {/if}
