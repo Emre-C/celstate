@@ -1,6 +1,7 @@
 <script lang="ts">
 	import HeroShowcase from '$lib/components/HeroShowcase.svelte';
 	import ZoomInspector from '$lib/components/ZoomInspector.svelte';
+	import Button from '$lib/components/ui/Button.svelte';
 	import NavBar from '$lib/components/ui/NavBar.svelte';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import SectionLabel from '$lib/components/ui/SectionLabel.svelte';
@@ -48,12 +49,7 @@
 <div class="min-h-dvh">
 	<!-- Nav -->
 	<NavBar>
-		<a
-			href="/app"
-			class="rounded-full bg-accent px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent/90"
-		>
-			Start Generating
-		</a>
+		<Button href="/app" class="px-4 py-1.5">Start Generating</Button>
 	</NavBar>
 
 	<!-- Hero: Split layout — editorial left, interactive proof right -->
@@ -77,12 +73,7 @@
 						No halos or artifacts. Just your vision, clean and ready to use.
 					</p>
 					<div class="hero-item flex items-center gap-4">
-						<a
-							href="/app"
-							class="rounded-full bg-accent px-7 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent/90"
-						>
-							Start Generating
-						</a>
+						<Button href="/app" class="px-7">Start Generating</Button>
 					</div>
 				</div>
 
@@ -174,12 +165,7 @@
 					<p class="mb-8 flex-1 break-words text-sm leading-relaxed text-dim">
 						3 credits on sign-up, plus 1 free credit every week. Enough to try it — not enough to rely on it.
 					</p>
-					<a
-						href="/app"
-						class="block w-full rounded-full border border-border py-2.5 text-center text-sm text-dim transition-colors hover:border-accent hover:text-text"
-					>
-						Start Free
-					</a>
+					<Button href="/app" variant="ghost" fullWidth>Start Free</Button>
 				</div>
 				<div class="flex flex-col border border-border p-6 sm:p-8">
 					<span class="mb-6 block text-[11px] font-medium uppercase tracking-[0.08em] text-accent">Starter</span>
@@ -188,12 +174,7 @@
 						15 credits, one-time. No subscription.
 						Your free weekly drip continues on top.
 					</p>
-					<a
-						href="/app"
-						class="block w-full rounded-full border border-border py-2.5 text-center text-sm font-medium text-text transition-colors hover:border-accent hover:text-accent"
-					>
-						Get Started
-					</a>
+					<Button href="/app" variant="secondary" fullWidth>Get Started</Button>
 				</div>
 				<div class="flex flex-col border border-border p-6 sm:p-8">
 					<div class="mb-6 flex items-center gap-3">
@@ -205,12 +186,7 @@
 						40 credits at $0.25 each — 25% less than Starter.
 						Same deal: one-time, no subscription, weekly drip continues.
 					</p>
-					<a
-						href="/app"
-						class="block w-full rounded-full bg-accent py-2.5 text-center text-sm font-medium text-white transition-colors hover:bg-accent/90"
-					>
-						Get Pro
-					</a>
+					<Button href="/app" fullWidth>Get Pro</Button>
 				</div>
 			</div>
 

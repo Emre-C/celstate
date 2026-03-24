@@ -2,6 +2,7 @@
 	import { useQuery, useConvexClient } from '@mmailaender/convex-svelte';
 	import { api } from '../../../../convex/_generated/api.js';
 	import type { Id } from '../../../../convex/_generated/dataModel.js';
+	import Button from '$lib/components/ui/Button.svelte';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import SectionLabel from '$lib/components/ui/SectionLabel.svelte';
 	import { initPostHog, posthog } from '$lib/posthog';
@@ -93,23 +94,24 @@
 	{/if}
 
 	<!-- Pricing grid -->
-	<div class="grid grid-cols-1 gap-px border border-border bg-border sm:grid-cols-2">
-		<div class="flex flex-col bg-bg p-6 sm:p-8">
+	<div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+		<div class="flex flex-col border border-border p-6 sm:p-8">
 			<span class="mb-6 block text-[11px] font-medium uppercase tracking-[0.08em] text-accent">Starter</span>
 			<span class="mb-2 block font-display italic text-3xl text-text">$5</span>
 			<p class="mb-8 flex-1 text-sm leading-relaxed text-dim">
 				15 credits, one-time. No subscription.
 				You'll always get 1 free credit each Monday if you're at zero.
 			</p>
-			<button
+			<Button
 				onclick={() => priceIds.data && handlePurchase(priceIds.data.starter)}
 				disabled={!!purchasing || !priceIds.data}
-				class="w-full border border-accent bg-accent/10 py-2.5 text-center text-sm font-medium text-accent transition-colors hover:bg-accent hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+				variant="secondary"
+				fullWidth
 			>
 				{purchasing === priceIds.data?.starter ? 'Redirecting…' : 'Buy Starter'}
-			</button>
+			</Button>
 		</div>
-		<div class="flex flex-col bg-bg p-6 sm:p-8">
+		<div class="flex flex-col border border-border p-6 sm:p-8">
 			<div class="mb-6 flex items-center gap-3">
 				<span class="text-[11px] font-medium uppercase tracking-[0.08em] text-accent">Pro</span>
 				<span class="text-[11px] font-medium uppercase tracking-[0.08em] text-accent/60">Best value</span>
@@ -119,13 +121,14 @@
 				40 credits at $0.25 each — 25% less than Starter.
 				One-time, no subscription. Free weekly credit replenishes when you hit zero.
 			</p>
-			<button
+			<Button
 				onclick={() => priceIds.data && handlePurchase(priceIds.data.pro)}
 				disabled={!!purchasing || !priceIds.data}
-				class="w-full border border-accent bg-accent py-2.5 text-center text-sm font-medium text-white transition-colors hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed"
+				variant="primary"
+				fullWidth
 			>
 				{purchasing === priceIds.data?.pro ? 'Redirecting…' : 'Buy Pro'}
-			</button>
+			</Button>
 		</div>
 	</div>
 
