@@ -104,9 +104,10 @@ Client: requestGeneration(prompt, referenceStorageIds?: Id<'_storage'>[])
 Worker: load each id via ctx.storage.get → base64 → GeminiImageResult[]   // TS type in gemini.ts; requests go to Vertex
 ```
 
-- `generateUploadUrl` — authenticated mutation; returns a Convex storage upload URL
+- `generateUploadUrl` — authenticated mutation; returns a Convex storage upload URL. Also rate-limits upload URL issuance per user (rolling window).
 - Upload via `POST` with `Content-Type` matching file MIME type
 - Collect `storageId`(s) into `referenceStorageIds` (max count and bytes: `GENERATION_CONFIG.maxReferenceImages`, `referenceMaxSizeBytes`)
+- Reference images are validated against storage metadata (type, size, dedup) in `requestGeneration` before credits are deducted
 
 ### Reference Prompt Variants (`src/convex/lib/prompts.ts`)
 
@@ -154,7 +155,7 @@ INVARIANT: creditRefundedAt set once on refund; failGeneration paths check befor
 ### Step 1: Credit check and deduction
 
 - Atomic check + deduct in `requestGeneration` mutation
-- Enforces `maxConcurrentGenerations` and credit balance
+- Enforces `maxConcurrentGenerations` (index-based lookup via `by_user_status`) and credit balance
 
 ### Step 2: Create generation record
 
@@ -237,7 +238,11 @@ attemptDurationMs = max(0, now - (stageStartedAt ?? lastProgressAt ?? createdAt)
 
 ## Progress, stall, and hard timeout
 
-Cron: `crons.interval("cleanup stale generations", { minutes: 1 }, internal.generations.cleanupStaleGenerations)`.
+Crons:
+
+- `crons.interval("cleanup stale generations", { minutes: 1 }, internal.generations.cleanupStaleGenerations)`
+- `crons.interval("cleanup expired upload url issues", { hours: 1 }, ...)` — garbage-collects rate-limit tracking table for upload URL issuance
+- `crons.interval("cleanup orphaned reference uploads", { hours: 1 }, ...)` — deletes unreferenced image uploads older than 1 hour
 
 Constants (`GENERATION_CONFIG`): `stalledGenerationWarningMs` (5 min), `staleGenerationTimeoutMs` (15 min).
 
@@ -586,6 +591,7 @@ generations: defineTable({
   blackBgStorageId: v.optional(v.id("_storage")),
   optimizedStorageId: v.optional(v.id("_storage")),
   referenceStorageId: v.optional(v.id("_storage")),
+  referenceStorageIds: v.optional(v.array(v.id("_storage"))),
   creditsCost: v.number(),
   aspectRatio: v.string(),
   createdAt: v.number(),
@@ -595,6 +601,7 @@ generations: defineTable({
   retryCount: v.optional(v.number()),
   dimensionMismatch: v.optional(v.boolean()),
 }).index("by_user", ["userId", "createdAt"])
+  .index("by_user_status", ["userId", "status"])
 ```
 
 ## Storage Files
