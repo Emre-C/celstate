@@ -12,11 +12,6 @@ export const CANONICAL_AUTH_SERVER_ENV = {
 	appleAppBundleIdentifier: 'AUTH_APPLE_APP_BUNDLE_IDENTIFIER'
 } as const;
 
-export const CANONICAL_AUTH_PUBLIC_ENV = {
-	publicSiteUrl: 'PUBLIC_SITE_URL',
-	publicConvexSiteUrl: 'PUBLIC_CONVEX_SITE_URL'
-} as const;
-
 export type EnvSource = Record<string, string | undefined>;
 
 export type CanonicalAuthEnv = {

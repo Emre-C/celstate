@@ -11,7 +11,7 @@ isProject: false
 
 - **Vercel**: Serves SvelteKit only (SSR/SSG, CDN, env for frontend). No Convex, no Stripe secrets.
 - **Convex**: Deployed separately (`npx convex deploy --prod`). All backend secrets and Stripe webhooks live here.
-- **Single Vercel env var**: `PUBLIC_CONVEX_URL` (production Convex URL). Set via CLI; never committed.
+- **Public env on Vercel**: `PUBLIC_CONVEX_URL`, `PUBLIC_SITE_URL`, PostHog `PUBLIC_*`, etc. — **Preview and Production** must both define every name your app imports from `$env/static/public` (see [PUBLIC-ENV-CHECKLIST.md](./PUBLIC-ENV-CHECKLIST.md)). Set via CLI; never committed.
 
 ```mermaid
 flowchart LR

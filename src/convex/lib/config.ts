@@ -61,10 +61,14 @@ export const GENERATION_CONFIG = {
   // Abuse prevention
   maxConcurrentGenerations: 3,
   maxPromptLength: 20_000,
+  uploadUrlIssueWindowMs: 15 * 60 * 1000,
+  maxUploadUrlIssuesPerWindow: 3 * 14,
 
   // Reference image constraints
   referenceMaxSizeBytes: 7 * 1024 * 1024, // 7 MB
   maxReferenceImages: 14,
+  orphanedUploadMaxAgeMs: 60 * 60 * 1000, // 1 hour
+  orphanedUploadCleanupBatchSize: 100,
 
   // Image optimization (Normal Resolution variant)
   optimizedMaxDimension: 1024,

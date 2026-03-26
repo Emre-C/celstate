@@ -13,6 +13,13 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      # Match Vercel Preview/Production: every PUBLIC_* used via $env/static/public must exist at build time.
+      # Placeholders only — not real deployments (see docs/runbooks/PUBLIC-ENV-CHECKLIST.md).
+      PUBLIC_SITE_URL: https://celstate-ci.invalid
+      PUBLIC_CONVEX_URL: https://celstate-ci-placeholder.convex.cloud
+      PUBLIC_POSTHOG_KEY: phc_ci_placeholder
+      PUBLIC_POSTHOG_HOST: https://us.i.posthog.com
     steps:
       - uses: actions/checkout@v4
 
@@ -28,5 +35,5 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
-      - name: Verify (typecheck, knip, dupcheck, eslint, test)
+      - name: Verify (public env, typecheck, knip, dupcheck, eslint, test, build)
         run: pnpm verify

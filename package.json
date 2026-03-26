@@ -16,12 +16,13 @@
 		"check:stripe-env": "npx tsx scripts/check-stripe-env.ts",
 		"check:posthog-env": "npx tsx scripts/check-posthog-env.ts",
 		"check:convex-auth": "npx tsx scripts/check-local-convex-auth.ts",
+		"check:public-env": "npx tsx scripts/check-public-env.ts",
 		"check:purchase-observability": "pnpm check:stripe-env && pnpm check:posthog-env",
 		"knip": "knip",
 		"knip:fix": "knip --fix",
 		"dupcheck": "jscpd src/",
 		"lint:ts": "eslint \"src/**/*.ts\"",
-		"verify": "pnpm check && pnpm knip && pnpm dupcheck && pnpm lint:ts && pnpm test"
+		"verify": "pnpm check:public-env && pnpm check && pnpm knip && pnpm dupcheck && pnpm lint:ts && pnpm test && pnpm build"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-vercel": "^6.3.3",

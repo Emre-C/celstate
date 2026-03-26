@@ -22,6 +22,7 @@ import type * as lib_matte from "../lib/matte.js";
 import type * as lib_ops from "../lib/ops.js";
 import type * as lib_optimize from "../lib/optimize.js";
 import type * as lib_prompts from "../lib/prompts.js";
+import type * as lib_stripeCheckout from "../lib/stripeCheckout.js";
 import type * as lib_stripeEnv from "../lib/stripeEnv.js";
 import type * as lib_validation from "../lib/validation.js";
 import type * as lib_validators from "../lib/validators.js";
@@ -52,6 +53,7 @@ declare const fullApi: ApiFromModules<{
   "lib/ops": typeof lib_ops;
   "lib/optimize": typeof lib_optimize;
   "lib/prompts": typeof lib_prompts;
+  "lib/stripeCheckout": typeof lib_stripeCheckout;
   "lib/stripeEnv": typeof lib_stripeEnv;
   "lib/validation": typeof lib_validation;
   "lib/validators": typeof lib_validators;

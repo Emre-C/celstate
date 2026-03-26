@@ -1,11 +1,12 @@
 import type { RequestHandler } from "@sveltejs/kit";
+import { PUBLIC_CONVEX_URL } from "$env/static/public";
 import { env } from "$env/dynamic/public";
 import { proxyAuthRequest } from "$lib/server/auth-proxy.js";
 import { resolveConvexSiteUrlForAuthProxy } from "$lib/server/convex-site-url.js";
 
 const handleAuthProxy: RequestHandler = async ({ getClientAddress, request, locals }) => {
 	const convexSiteUrl = resolveConvexSiteUrlForAuthProxy({
-		publicConvexUrl: env.PUBLIC_CONVEX_URL,
+		publicConvexUrl: PUBLIC_CONVEX_URL,
 		publicConvexSiteUrl: env.PUBLIC_CONVEX_SITE_URL
 	});
 	return proxyAuthRequest(request, convexSiteUrl, {

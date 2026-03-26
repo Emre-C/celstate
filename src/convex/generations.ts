@@ -23,6 +23,7 @@ import {
   normalizeGenerationFailureStage,
 } from "../lib/analytics/generation.js";
 import { applyCreditsToUser, getCurrentAppUser, upsertCurrentUser } from "./users.js";
+import { validateReferenceImageMetadata } from "./lib/validation.js";
 
 async function scheduleGenerationStage(
   ctx: { scheduler: { runAfter: (...args: any[]) => Promise<unknown> } },
@@ -101,6 +102,30 @@ async function scheduleGenerationAlert(
   await ctx.scheduler.runAfter(0, internal.ops.sendGenerationAlert, args);
 }
 
+async function validateReferenceStorageIds(
+  ctx: Pick<MutationCtx, "db">,
+  referenceStorageIds: Id<"_storage">[],
+): Promise<void> {
+  const seenReferenceStorageIds = new Set<string>();
+
+  for (const storageId of referenceStorageIds) {
+    const storageIdKey = String(storageId);
+    if (seenReferenceStorageIds.has(storageIdKey)) {
+      throw new ConvexError("Duplicate reference images are not allowed");
+    }
+
+    seenReferenceStorageIds.add(storageIdKey);
+
+    const validation = validateReferenceImageMetadata(
+      await ctx.db.system.get("_storage", storageId),
+    );
+
+    if (!validation.valid) {
+      throw new ConvexError(validation.reason ?? "Invalid reference image");
+    }
+  }
+}
+
 /**
  * Public mutation: atomically deducts credits, inserts a "generating" row,
  * and schedules the internal Node action worker. Returns the generation ID
@@ -117,7 +142,12 @@ export const requestGeneration = mutation({
     const appUser = (await getCurrentAppUser(ctx)) ?? await upsertCurrentUser(ctx);
     const userId = appUser._id;
 
-    if (args.prompt.length > GENERATION_CONFIG.maxPromptLength) {
+    const prompt = args.prompt.trim();
+    if (!prompt) {
+      throw new ConvexError("Prompt is required");
+    }
+
+    if (prompt.length > GENERATION_CONFIG.maxPromptLength) {
       throw new ConvexError(
         `Prompt too long (max ${GENERATION_CONFIG.maxPromptLength} characters)`,
       );
@@ -135,10 +165,11 @@ export const requestGeneration = mutation({
       );
     }
 
+    await validateReferenceStorageIds(ctx, referenceStorageIds);
+
     const inFlight = await ctx.db
       .query("generations")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .filter((q) => q.eq(q.field("status"), "generating"))
+      .withIndex("by_user_status", (q) => q.eq("userId", userId).eq("status", "generating"))
       .collect();
     if (inFlight.length >= GENERATION_CONFIG.maxConcurrentGenerations) {
       throw new ConvexError("Too many generations in progress. Please wait for one to finish.");
@@ -159,7 +190,7 @@ export const requestGeneration = mutation({
     // Insert the "generating" row — visible to reactive queries immediately
     const generationId = await ctx.db.insert("generations", {
       userId,
-      prompt: args.prompt,
+      prompt,
       status: "generating" as const,
       stage: "white_background" as const,
       statusMessage: getGenerationStageStatusMessage("white_background"),
@@ -196,11 +227,28 @@ export const requestGeneration = mutation({
 export const generateUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
-    const appUser = await getCurrentAppUser(ctx);
-    if (!appUser) throw new Error("Unauthorized");
+    const appUser = (await getCurrentAppUser(ctx)) ?? await upsertCurrentUser(ctx);
     if ((appUser.credits ?? 0) < GENERATION_CONFIG.creditsPerGeneration) {
       throw new ConvexError("Insufficient credits");
     }
+
+    const now = Date.now();
+    const recentUploadUrlIssues = await ctx.db
+      .query("referenceUploadUrlIssues")
+      .withIndex("by_user_createdAt", (q) =>
+        q.eq("userId", appUser._id).gte("createdAt", now - GENERATION_CONFIG.uploadUrlIssueWindowMs)
+      )
+      .take(GENERATION_CONFIG.maxUploadUrlIssuesPerWindow);
+
+    if (recentUploadUrlIssues.length >= GENERATION_CONFIG.maxUploadUrlIssuesPerWindow) {
+      throw new ConvexError("Too many reference uploads requested. Please wait a few minutes and try again.");
+    }
+
+    await ctx.db.insert("referenceUploadUrlIssues", {
+      userId: appUser._id,
+      createdAt: now,
+    });
+
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -621,6 +669,73 @@ export const updateStatusMessage = internalMutation({
       stalledAlertedAt: undefined,
       statusMessage: args.statusMessage,
     });
+    return null;
+  },
+});
+
+export const cleanupExpiredUploadUrlIssues = internalMutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    const cutoff = Date.now() - GENERATION_CONFIG.uploadUrlIssueWindowMs;
+    const expired = await ctx.db
+      .query("referenceUploadUrlIssues")
+      .withIndex("by_createdAt", (q) => q.lt("createdAt", cutoff))
+      .take(GENERATION_CONFIG.orphanedUploadCleanupBatchSize);
+
+    for (const row of expired) {
+      await ctx.db.delete("referenceUploadUrlIssues", row._id);
+    }
+    return null;
+  },
+});
+
+export const cleanupOrphanedReferenceUploads = internalMutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    const cutoff = Date.now() - GENERATION_CONFIG.orphanedUploadMaxAgeMs;
+    const batchSize = GENERATION_CONFIG.orphanedUploadCleanupBatchSize;
+
+    const oldFiles = await ctx.db.system
+      .query("_storage")
+      .order("desc")
+      .take(batchSize * 5);
+
+    const candidates = oldFiles.filter(
+      (f) =>
+        f._creationTime < cutoff &&
+        (f.contentType === "image/jpeg" ||
+          f.contentType === "image/png" ||
+          f.contentType === "image/webp"),
+    );
+
+    if (candidates.length === 0) return null;
+
+    const candidateIds = new Set(candidates.map((f) => f._id));
+
+    const allGenerations = await ctx.db.query("generations").collect();
+    const referencedIds = new Set<string>();
+    for (const gen of allGenerations) {
+      if (gen.referenceStorageId) referencedIds.add(gen.referenceStorageId);
+      if (gen.referenceStorageIds) {
+        for (const id of gen.referenceStorageIds) referencedIds.add(id);
+      }
+      if (gen.resultStorageId) referencedIds.add(gen.resultStorageId);
+      if (gen.whiteBgStorageId) referencedIds.add(gen.whiteBgStorageId);
+      if (gen.blackBgStorageId) referencedIds.add(gen.blackBgStorageId);
+      if (gen.optimizedStorageId) referencedIds.add(gen.optimizedStorageId);
+    }
+
+    let deleted = 0;
+    for (const id of candidateIds) {
+      if (deleted >= batchSize) break;
+      if (!referencedIds.has(id)) {
+        await ctx.storage.delete(id);
+        deleted++;
+      }
+    }
+
     return null;
   },
 });

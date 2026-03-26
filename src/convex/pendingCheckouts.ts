@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import {
   mutation,
   query,
@@ -6,12 +6,26 @@ import {
 } from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
 import { upsertCurrentUser, getCurrentAppUser } from "./users.js";
-import { authComponent } from "./auth.js";
+import { assertStripeEnv } from "./lib/stripeEnv.js";
+import { isKnownCreditPackPriceId } from "./lib/stripeCheckout.js";
+
+const getKnownCreditPackPriceIds = () => {
+  const stripeEnv = assertStripeEnv();
+
+  return {
+    starter: stripeEnv.stripePriceStarter,
+    pro: stripeEnv.stripePricePro,
+  };
+};
 
 export const requestCheckout = mutation({
   args: { priceId: v.string() },
   returns: v.id("pendingCheckouts"),
   handler: async (ctx, args) => {
+    if (!isKnownCreditPackPriceId(args.priceId, getKnownCreditPackPriceIds())) {
+      throw new ConvexError("Invalid credit pack");
+    }
+
     const user = await upsertCurrentUser(ctx);
 
     const checkoutId = await ctx.db.insert("pendingCheckouts", {
@@ -51,8 +65,11 @@ export const getCheckoutStatus = query({
     v.null(),
   ),
   handler: async (ctx, args) => {
+    const appUser = await getCurrentAppUser(ctx);
+    if (!appUser) return null;
+
     const checkout = await ctx.db.get(args.checkoutId);
-    if (!checkout) return null;
+    if (!checkout || checkout.userId !== appUser._id) return null;
 
     if (checkout.status === "ready") {
       return { status: "ready" as const, checkoutUrl: checkout.checkoutUrl ?? "" };

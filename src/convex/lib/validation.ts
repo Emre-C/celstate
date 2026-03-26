@@ -9,6 +9,56 @@ export interface ValidationResult {
   };
 }
 
+export const SUPPORTED_REFERENCE_IMAGE_CONTENT_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+] as const;
+
+export function isSupportedReferenceImageContentType(
+  contentType: string | undefined,
+): contentType is (typeof SUPPORTED_REFERENCE_IMAGE_CONTENT_TYPES)[number] {
+  return contentType !== undefined
+    && SUPPORTED_REFERENCE_IMAGE_CONTENT_TYPES.includes(
+      contentType as (typeof SUPPORTED_REFERENCE_IMAGE_CONTENT_TYPES)[number],
+    );
+}
+
+export function validateReferenceImageMetadata(
+  metadata: { contentType?: string; size?: number } | null | undefined,
+): ValidationResult {
+  if (!metadata) {
+    return {
+      valid: false,
+      reason: "Reference image not found",
+    };
+  }
+
+  if (!isSupportedReferenceImageContentType(metadata.contentType)) {
+    return {
+      valid: false,
+      reason: `Unsupported reference image type: ${metadata.contentType ?? "unknown"}`,
+    };
+  }
+
+  if (typeof metadata.size !== "number" || !Number.isFinite(metadata.size) || metadata.size <= 0) {
+    return {
+      valid: false,
+      reason: "Reference image size is invalid",
+    };
+  }
+
+  if (metadata.size > GENERATION_CONFIG.referenceMaxSizeBytes) {
+    return {
+      valid: false,
+      reason:
+        `Reference image exceeds ${Math.floor(GENERATION_CONFIG.referenceMaxSizeBytes / (1024 * 1024))} MB limit`,
+    };
+  }
+
+  return { valid: true };
+}
+
 /**
  * Sample a square patch of pixels and compute mean and standard deviation
  * of channel values (averaged across R, G, B).

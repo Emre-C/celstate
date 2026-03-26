@@ -46,6 +46,8 @@ Stripe, Vertex, Better Auth secrets, and `SITE_URL` are **per deployment**. See 
 
 ## Vercel vs Convex responsibilities (Celstate)
 
+**Public `PUBLIC_*` names on Vercel (Preview + Production):** see [PUBLIC-ENV-CHECKLIST.md](./PUBLIC-ENV-CHECKLIST.md) — required to avoid broken preview builds and dev/prod drift.
+
 This repo follows **split deploys** (see [VERCEL-DEPLOYMENT.md](./VERCEL-DEPLOYMENT.md)):
 
 - **Vercel** — SvelteKit frontend only. Public vars such as `PUBLIC_CONVEX_URL` / `PUBLIC_CONVEX_SITE_URL` so the browser knows which Convex deployment to use. No Stripe/Vertex/Better Auth secrets in Vercel.

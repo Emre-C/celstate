@@ -57,6 +57,7 @@ export default defineSchema({
     creditRefundedAt: v.optional(v.number()),
   })
     .index("by_user", ["userId", "createdAt"])
+    .index("by_user_status", ["userId", "status"])
     .index("by_status", ["status"]),
 
   generationOpsEvents: defineTable({
@@ -113,4 +114,11 @@ export default defineSchema({
     error: v.optional(v.string()),
     createdAt: v.number(),
   }).index("by_user_status", ["userId", "status"]),
+
+  referenceUploadUrlIssues: defineTable({
+    userId: v.id("users"),
+    createdAt: v.number(),
+  })
+    .index("by_user_createdAt", ["userId", "createdAt"])
+    .index("by_createdAt", ["createdAt"]),
 });
