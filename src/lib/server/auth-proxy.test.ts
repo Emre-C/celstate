@@ -49,6 +49,28 @@ describe('proxyAuthRequest', () => {
 		expect(fetch).toHaveBeenCalledTimes(1);
 	});
 
+	it('removes stale compression headers from upstream fetch responses', async () => {
+		vi.mocked(fetch).mockResolvedValue(
+			new Response('ok', {
+				status: 200,
+				headers: {
+					'content-encoding': 'gzip',
+					'content-length': '99',
+					'content-type': 'application/json'
+				}
+			})
+		);
+
+		const req = new Request('http://localhost/api/auth/get-session', { method: 'GET' });
+		const res = await proxyAuthRequest(req, convexUrl);
+
+		expect(res.status).toBe(200);
+		expect(res.headers.get('content-encoding')).toBeNull();
+		expect(res.headers.get('content-length')).toBeNull();
+		expect(res.headers.get('content-type')).toBe('application/json');
+		expect(await res.text()).toBe('ok');
+	});
+
 	it('retries GET on transient failure then succeeds', async () => {
 		vi.mocked(fetch)
 			.mockRejectedValueOnce(new TypeError('fetch failed'))

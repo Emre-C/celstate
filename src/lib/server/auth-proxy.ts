@@ -114,6 +114,22 @@ const removeHeaders = (headers: Headers, names: Set<string>) => {
 	}
 };
 
+const reconcileProxyResponseHeaders = (response: Response) => {
+	if (!response.headers.has("content-encoding")) {
+		return response;
+	}
+
+	const headers = new Headers(response.headers);
+	headers.delete("content-encoding");
+	headers.delete("content-length");
+
+	return new Response(response.body, {
+		status: response.status,
+		statusText: response.statusText,
+		headers
+	});
+};
+
 export const buildAuthProxyRequest = (
 	request: Request,
 	convexSiteUrl: string,
@@ -167,11 +183,11 @@ export const proxyAuthRequest = async (
 	for (let attempt = 0; attempt < maxAttempts; attempt++) {
 		const proxied = buildAuthProxyRequest(request, convexSiteUrl, options);
 		try {
-			return await fetch(proxied, {
+			return reconcileProxyResponseHeaders(await fetch(proxied, {
 				method: request.method,
 				redirect: "manual",
 				signal: request.signal
-			});
+			}));
 		} catch (error) {
 			if (error instanceof Error && error.name === "AbortError") {
 				throw error;
