@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { PUBLIC_CONVEX_URL } from '$env/static/public';
+	import { env } from '$env/dynamic/public';
 	import { createSvelteAuthClient, useAuth } from '@mmailaender/convex-better-auth-svelte/svelte';
 	import { useConvexClient } from '@mmailaender/convex-svelte';
 	import { authClient } from '$lib/auth-client';
@@ -16,7 +16,7 @@
 
 	createSvelteAuthClient({
 		authClient,
-		convexUrl: PUBLIC_CONVEX_URL,
+		convexUrl: env.PUBLIC_CONVEX_URL,
 		getServerState: () => data.authState
 	});
 
