@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+	assertOkWebhookResponse,
 	buildGenerationAlertRequest,
 	buildPurchaseAlertRequest,
+	buildSignupAlertRequest,
 	formatDurationMs,
 	readOpsAlertRuntimeConfig,
 	summarizeGenerationOpsEvents
@@ -82,6 +84,33 @@ describe('ops helpers', () => {
 		});
 	});
 
+	it('builds generic signup webhook payloads', () => {
+		const request = buildSignupAlertRequest(
+			{
+				webhookKind: 'generic',
+				webhookUrl: 'https://ops.example.com/webhook'
+			},
+			{
+				authProvider: 'google',
+				initialCredits: 3,
+				name: 'Ada',
+				userEmail: 'ada@example.com',
+				userId: 'user_456'
+			}
+		);
+
+		expect(request.headers['content-type']).toBe('application/json');
+		expect(JSON.parse(request.body)).toEqual({
+			event: 'signup_new',
+			auth_provider: 'google',
+			initial_credits: 3,
+			name: 'Ada',
+			title: 'Celstate new user signup',
+			user_email: 'ada@example.com',
+			user_id: 'user_456'
+		});
+	});
+
 	it('summarizes generation ops metrics for AI-readable inspection', () => {
 		const summary = summarizeGenerationOpsEvents([
 			{ eventType: 'generation_requested', generationDurationMs: 0 },
@@ -108,5 +137,17 @@ describe('ops helpers', () => {
 		expect(formatDurationMs(850)).toBe('850ms');
 		expect(formatDurationMs(61_000)).toBe('1m 1s');
 		expect(formatDurationMs(3_661_000)).toBe('1h 1m 1s');
+	});
+
+	it('assertOkWebhookResponse passes when response is ok', () => {
+		const response = new Response(null, { status: 200, statusText: 'OK' });
+		expect(() => assertOkWebhookResponse(response)).not.toThrow();
+	});
+
+	it('assertOkWebhookResponse throws with status when response is not ok', () => {
+		const response = new Response(null, { status: 502, statusText: 'Bad Gateway' });
+		expect(() => assertOkWebhookResponse(response)).toThrow(
+			'Webhook responded with 502 Bad Gateway'
+		);
 	});
 });

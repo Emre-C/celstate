@@ -1,0 +1,15 @@
+{
+	"$schema": "https://unpkg.com/knip@6/schema.json",
+	"entry": [
+		"src/routes/**/+{page,layout,server,error}.{ts,svelte}",
+		"src/convex/**/*.ts",
+		"!src/convex/_generated/**"
+	],
+	"project": ["src/**/*.{ts,svelte}"],
+	"ignoreExportsUsedInFile": true,
+	"ignoreBinaries": ["tsx"],
+	"ignoreDependencies": ["tailwindcss"],
+	"svelte": true,
+	"vitest": true,
+	"vite": true
+}

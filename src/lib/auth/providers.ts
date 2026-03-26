@@ -28,17 +28,7 @@ export const AUTH_PROVIDER_DESCRIPTORS: AuthProviderDescriptor[] = [
 	}
 ];
 
-export const isHttpsUrl = (url: string) => {
-	try {
-		return new URL(url).protocol === 'https:';
-	} catch {
-		return false;
-	}
-};
-
 export const getAuthProviderDescriptors = (siteUrl: string): RuntimeAuthProviderDescriptor[] => {
-	const https = isHttpsUrl(siteUrl);
-
 	return AUTH_PROVIDER_DESCRIPTORS.map((provider) => {
 		// TODO: Remove this early-return block once Apple Sign-In is re-enabled.
 		// Apple auth is fully implemented but temporarily paused on Apple's side.
@@ -49,16 +39,6 @@ export const getAuthProviderDescriptors = (siteUrl: string): RuntimeAuthProvider
 				available: false,
 				comingSoon: true,
 				availabilityHint: 'Apple Sign-In is coming soon. Use Google to sign in for now.'
-			};
-		}
-
-		// TODO: This block is temporarily unreachable — remove the comingSoon block above to restore it.
-		// @ts-expect-error: Dead code while Apple comingSoon override is active
-		if (provider.id === 'apple' && !https) {
-			return {
-				...provider,
-				available: false,
-				availabilityHint: 'Apple Sign in requires HTTPS and cannot complete on local http:// development URLs.'
 			};
 		}
 

@@ -16,19 +16,6 @@ interface VertexServiceAccountCredentials {
   type?: string;
 }
 
-interface GeminiContentPart {
-  inlineData?: {
-    data: string;
-    mimeType: GeminiImageMimeType;
-  };
-  text?: string;
-}
-
-interface GeminiContent {
-  parts: GeminiContentPart[];
-  role: string;
-}
-
 export interface GeminiImageResult {
   imageBase64: string;
   mimeType: GeminiImageMimeType;
@@ -68,7 +55,7 @@ function normalizePrivateKey(value: string): string {
   return value.replace(/\\n/g, "\n");
 }
 
-function normalizeGeminiImageMimeType(value: string | undefined): GeminiImageMimeType {
+export function normalizeGeminiImageMimeType(value: string | undefined): GeminiImageMimeType {
   if (isGeminiImageMimeType(value)) {
     return value;
   }

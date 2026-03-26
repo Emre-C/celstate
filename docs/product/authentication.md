@@ -25,8 +25,8 @@ Celstate does not want to own password storage, reset flows, breach handling, or
 - `src/convex/auth.ts` — Better Auth server configuration via `@convex-dev/better-auth`. Registers Google (and Apple when re-enabled). Uses canonical `SITE_URL` as Better Auth `baseURL`. Validates canonical auth env at startup via `assertCanonicalAuthEnv()` (from `src/lib/auth/config.ts`).
 - `src/convex/auth.config.ts` — Convex auth config using `getAuthConfigProvider()` from `@convex-dev/better-auth/auth-config`.
 - `src/convex/http.ts` — Convex HTTP router. Registers Better Auth routes via `authComponent.registerRoutes(http, createAuth)`.
-- `src/routes/api/auth/[...all]/+server.ts` — SvelteKit proxy for Better Auth requests. Requires `PUBLIC_CONVEX_SITE_URL` explicitly. Delegates to `src/lib/server/auth-proxy.ts`.
-- `src/lib/server/auth-proxy.ts` — Builds the Better Auth proxy request for Convex. Preserves `x-forwarded-host`, `x-forwarded-proto`, `x-forwarded-port`, and `x-request-id`.
+- `src/routes/api/auth/[...all]/+server.ts` — SvelteKit proxy for Better Auth requests. Resolves the Convex site URL from `PUBLIC_CONVEX_URL` (same deployment: `https://…convex.cloud` → `https://…convex.site`) or from optional `PUBLIC_CONVEX_SITE_URL` when realtime uses a local URL; see `src/lib/server/convex-site-url.ts`. Delegates to `src/lib/server/auth-proxy.ts`.
+- `src/lib/server/auth-proxy.ts` — Builds the Better Auth proxy request for Convex. Strips caller-controlled forwarding / IP / hop-by-hop headers and stamps trusted `x-forwarded-host`, `x-forwarded-proto`, `x-forwarded-port`, `x-forwarded-for`, `x-celstate-client-ip`, and `x-request-id` values.
 - `src/lib/auth-client.ts` — Better Auth browser client via `createAuthClient` from `better-auth/svelte`. Prefers `window.location.origin` over `PUBLIC_SITE_URL` so browser auth calls stay same-origin on the live host. Includes the `convexClient()` plugin from `@convex-dev/better-auth/client/plugins`.
 - `src/lib/auth/config.ts` — Canonical auth env contract: reads, validates, exports structured env values; builds social provider config, trusted origins, and provider availability. Apple credential requirements are temporarily relaxed (see Apple section).
 - `src/lib/auth/providers.ts` — UI provider descriptors for `google` and `apple`. Apple is currently forced to `comingSoon: true`.
@@ -59,8 +59,8 @@ Celstate does not want to own password storage, reset flows, breach handling, or
 
 1. User visits `/auth`.
 2. The page calls `authClient.signIn.social(...)` for Google.
-3. SvelteKit proxies Better Auth through `/api/auth/[...all]` to Convex using `PUBLIC_CONVEX_SITE_URL`.
-4. `auth-proxy.ts` forwards the browser’s public host/protocol headers so Better Auth resolves callbacks against the real origin.
+3. SvelteKit proxies Better Auth through `/api/auth/[...all]` to the resolved Convex site URL (`PUBLIC_CONVEX_URL` cloud origin → derived `*.convex.site`, or explicit `PUBLIC_CONVEX_SITE_URL` for local realtime).
+4. `auth-proxy.ts` strips any caller-controlled proxy headers and forwards the trusted public host / protocol / port / client-IP metadata that Better Auth is allowed to trust.
 5. Better Auth completes the provider flow and writes the session cookies plus the Convex JWT cookie.
 6. SSR reads the Convex JWT cookie to derive initial auth state.
 7. The root layout passes the SSR auth snapshot down; the protected app layout initializes `createSvelteAuthClient(...)` with `PUBLIC_CONVEX_URL`.
@@ -88,14 +88,14 @@ SSR uses **cookie presence only** to derive the initial snapshot. Full validatio
 
 1. **One canonical public origin** — `SITE_URL` and `PUBLIC_SITE_URL` must resolve to the same host. The SvelteKit hook redirects non-canonical requests. OAuth must start and finish on the same origin or state cookies drift.
 2. **Browser auth client** — Prefer `window.location.origin` over `PUBLIC_SITE_URL` in `auth-client.ts` so `/api/auth/*` stays same-origin for the host the user loaded.
-3. **Proxy headers** — Forward real public metadata: `x-forwarded-host`, `x-forwarded-proto`, `x-forwarded-port`, `x-request-id`.
+3. **Proxy headers** — Never forward caller-supplied proxy / IP headers into Better Auth. Strip them in SvelteKit and stamp the trusted values yourself: `x-forwarded-host`, `x-forwarded-proto`, `x-forwarded-port`, `x-forwarded-for`, dedicated internal client-IP header `x-celstate-client-ip`, and `x-request-id`.
 4. **Immutable responses in hooks** — Do not mutate headers on arbitrary `Response` objects; use `response.ts` when adding headers.
 5. **Server vs client** — `+layout.server.ts` is the source of truth for route protection; the client layout smooths transient churn, not authorization.
 6. **SSR snapshot** — UX seed only; session authority is Better Auth + Convex after hydration.
 7. **Non-blocking user sync** — `users.storeUser` is app data, not authz. `/app` must not wait for the user row; queries must tolerate a short window without row data.
 8. **Scope bootstrap** — Avoid initializing the Convex Better Auth bridge globally on public pages; keep it explicit in `(app)`.
 9. **Explicit Convex URL** — Pass `PUBLIC_CONVEX_URL` into `createSvelteAuthClient(...)` explicitly.
-10. **Dev vs prod Convex** — `PUBLIC_CONVEX_URL` is the realtime target; `PUBLIC_CONVEX_SITE_URL` is the Better Auth HTTP actions target. Do not mix local realtime with cloud HTTP actions (or vice versa).
+10. **Dev vs prod Convex** — `PUBLIC_CONVEX_URL` is the realtime target; `PUBLIC_CONVEX_SITE_URL` is the Better Auth HTTP actions target when realtime is local. The two may differ by hostname class (`convex.cloud` vs `convex.site` or loopback vs `convex.site`), but they must always refer to the **same logical deployment**.
 
 ## Observability
 
@@ -138,15 +138,15 @@ Legacy names such as `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` are intentional
 
 ### Public (web app)
 
-- `PUBLIC_CONVEX_URL` — Convex deployment URL (realtime client).
-- `PUBLIC_CONVEX_SITE_URL` — Convex HTTP / site URL for the auth proxy.
+- `PUBLIC_CONVEX_URL` — Convex deployment URL (realtime client). When this is `https://<deployment>.convex.cloud`, the auth proxy uses `https://<deployment>.convex.site` automatically (same deployment; no duplicate config).
+- `PUBLIC_CONVEX_SITE_URL` — Optional. Only needed when `PUBLIC_CONVEX_URL` is a **local** Convex URL (e.g. `http://127.0.0.1:3210`) but Better Auth still runs on the cloud site URL; must be the `https://…convex.site` for the **same** logical deployment. If set while `PUBLIC_CONVEX_URL` is a cloud URL, it must match the derived `…convex.site` or startup fails (prevents drift).
 - `PUBLIC_SITE_URL` — Canonical public site origin.
 
 ### Local development
 
 - `PUBLIC_SITE_URL` should match the dev server (e.g. `http://localhost:5173`).
 - Convex **dev** deployment `SITE_URL` should match that origin so `trustedOrigins` includes your dev origin. Production keeps its own canonical `SITE_URL`.
-- `PUBLIC_CONVEX_URL` may point to cloud dev or local Convex (e.g. `http://127.0.0.1:3210`); `PUBLIC_CONVEX_SITE_URL` must match the **same** deployment’s HTTP actions endpoint.
+- `PUBLIC_CONVEX_URL` may point to cloud dev or local Convex (e.g. `http://127.0.0.1:3210`). If it is local, set `PUBLIC_CONVEX_SITE_URL` to the **same** deployment’s origin-only `https://…convex.site` (the app cannot derive it from a loopback URL). If it is `https://…convex.cloud`, the site URL is derived and `PUBLIC_CONVEX_SITE_URL` is optional.
 
 **Do not disable auth in dev** — cookies, redirects, and Convex identity should always be exercised. Use the development Convex deployment and test OAuth credentials.
 

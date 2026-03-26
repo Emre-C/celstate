@@ -9,7 +9,7 @@ import { GENERATION_CONFIG } from "./lib/config.js";
 import {
   createChatSession,
   type GeminiImageResult,
-  isGeminiImageMimeType,
+  normalizeGeminiImageMimeType,
   readGeminiRuntimeConfigFromEnv,
 } from "./lib/gemini.js";
 import {
@@ -25,6 +25,7 @@ import {
   buildWhiteBgRetryPromptWithReference,
 } from "./lib/prompts.js";
 import {
+  buildRepairInstruction,
   validateWhiteBackground,
   validateBlackBackground,
   validateDimensionMatch,
@@ -131,14 +132,6 @@ interface PipelineResult {
   dimensionMismatch: boolean;
 }
 
-function normalizeMimeType(mimeType: string | undefined): GeminiImageResult["mimeType"] {
-  if (isGeminiImageMimeType(mimeType)) {
-    return mimeType;
-  }
-
-  return "image/png";
-}
-
 async function updateStatus(
   ctx: StageActionContext,
   generationId: Id<"generations">,
@@ -169,7 +162,7 @@ async function loadStoredImage(
   const buffer = Buffer.from(await blob.arrayBuffer());
   return {
     imageBase64: buffer.toString("base64"),
-    mimeType: normalizeMimeType(blob.type),
+    mimeType: normalizeGeminiImageMimeType(blob.type),
   };
 }
 
@@ -202,6 +195,7 @@ async function handleStageFailure(
   stage: "white_background" | "black_background" | "finalizing",
   retryCount: number,
   error: unknown,
+  retryInstruction?: string,
 ): Promise<void> {
   const rawError = error instanceof Error ? error.message : String(error);
   console.error(`[${stage}] generationId=${generationId} error=${rawError}`);
@@ -210,6 +204,7 @@ async function handleStageFailure(
     await ctx.runMutation(internal.generations.scheduleStageRetry, {
       generationId,
       retryCount: retryCount + 1,
+      retryInstruction,
       stage,
     });
     return;
@@ -305,20 +300,13 @@ async function finalizePipeline(
   };
 }
 
-export const generateWorker = internalAction({
-  args: {
-    generationId: v.id("generations"),
-    prompt: v.string(),
-    referenceStorageIds: v.optional(v.array(v.id("_storage"))),
-    aspectRatio: v.optional(v.string()),
-  },
-  handler: async () => null,
-});
+const generationIdActionArgs = {
+  generationId: v.id("generations"),
+};
 
 export const generateWhiteBackground = internalAction({
-  args: {
-    generationId: v.id("generations"),
-  },
+  args: generationIdActionArgs,
+  returns: v.null(),
   handler: async (ctx, args) => {
     const generation = await getGeneration(ctx, args.generationId);
     if (!generation || generation.status !== "generating" || generation.stage !== "white_background") {
@@ -336,18 +324,31 @@ export const generateWhiteBackground = internalAction({
       const runtimeConfig = readGeminiRuntimeConfigFromEnv();
       const referenceImages = await loadStoredImages(ctx, generation.referenceStorageIds);
       const session = createChatSession(runtimeConfig, { aspectRatio: generation.aspectRatio });
+      const retryInstruction = retryCount > 0 ? generation.whiteBgRetryInstruction : undefined;
       const prompt = referenceImages.length > 0
-        ? (retryCount === 0 ? buildWhiteBgPromptWithReference(generation.prompt) : buildWhiteBgRetryPromptWithReference(generation.prompt))
-        : (retryCount === 0 ? buildWhiteBgPrompt(generation.prompt) : buildWhiteBgRetryPrompt(generation.prompt));
+        ? (retryCount === 0 ? buildWhiteBgPromptWithReference(generation.prompt) : buildWhiteBgRetryPromptWithReference(generation.prompt, retryInstruction))
+        : (retryCount === 0 ? buildWhiteBgPrompt(generation.prompt) : buildWhiteBgRetryPrompt(generation.prompt, retryInstruction));
 
-      const result = referenceImages.length > 0
-        ? await session.sendMessageWithImages(prompt, referenceImages)
-        : await session.sendMessage(prompt);
+      let result;
+      let rawError: string | undefined;
+      try {
+        result = referenceImages.length > 0
+          ? await session.sendMessageWithImages(prompt, referenceImages)
+          : await session.sendMessage(prompt);
+      } catch (err) {
+        rawError = err instanceof Error ? err.message : String(err);
+        const repair = buildRepairInstruction("white_background", undefined, rawError);
+        throw Object.assign(err instanceof Error ? err : new Error(rawError), { retryInstruction: repair });
+      }
 
       const decoded = await decodeImage(result.imageBase64, result.mimeType);
       const validation = validateWhiteBackground(decoded.pixels, decoded.width, decoded.height);
       if (!validation.valid) {
-        throw new Error(`White background validation failed: ${validation.reason}`);
+        const repair = buildRepairInstruction("white_background", validation);
+        throw Object.assign(
+          new Error(`White background validation failed: ${validation.reason}`),
+          { retryInstruction: repair },
+        );
       }
 
       const whiteBgStorageId = await storeGeneratedImage(ctx, result);
@@ -357,7 +358,8 @@ export const generateWhiteBackground = internalAction({
         whiteBgStorageId,
       });
     } catch (error) {
-      await handleStageFailure(ctx, args.generationId, "white_background", retryCount, error);
+      const repair = (error as { retryInstruction?: string })?.retryInstruction;
+      await handleStageFailure(ctx, args.generationId, "white_background", retryCount, error, repair);
     }
 
     return null;
@@ -365,9 +367,8 @@ export const generateWhiteBackground = internalAction({
 });
 
 export const generateBlackBackground = internalAction({
-  args: {
-    generationId: v.id("generations"),
-  },
+  args: generationIdActionArgs,
+  returns: v.null(),
   handler: async (ctx, args) => {
     const generation = await getGeneration(ctx, args.generationId);
     if (!generation || generation.status !== "generating" || generation.stage !== "black_background") {
@@ -394,13 +395,27 @@ export const generateBlackBackground = internalAction({
       const runtimeConfig = readGeminiRuntimeConfigFromEnv();
       const session = createChatSession(runtimeConfig, { aspectRatio: generation.aspectRatio });
       const whiteBgImage = await loadStoredImage(ctx, generation.whiteBgStorageId);
-      const prompt = retryCount === 0 ? buildBlackBgPrompt() : buildBlackBgRetryPrompt();
-      const result = await session.sendMessageWithImages(prompt, [whiteBgImage]);
+      const retryInstruction = retryCount > 0 ? generation.blackBgRetryInstruction : undefined;
+      const prompt = retryCount === 0 ? buildBlackBgPrompt() : buildBlackBgRetryPrompt(retryInstruction);
+
+      let result;
+      let rawError: string | undefined;
+      try {
+        result = await session.sendMessageWithImages(prompt, [whiteBgImage]);
+      } catch (err) {
+        rawError = err instanceof Error ? err.message : String(err);
+        const repair = buildRepairInstruction("black_background", undefined, rawError);
+        throw Object.assign(err instanceof Error ? err : new Error(rawError), { retryInstruction: repair });
+      }
 
       const decoded = await decodeImage(result.imageBase64, result.mimeType);
       const validation = validateBlackBackground(decoded.pixels, decoded.width, decoded.height);
       if (!validation.valid) {
-        throw new Error(`Black background validation failed: ${validation.reason}`);
+        const repair = buildRepairInstruction("black_background", validation);
+        throw Object.assign(
+          new Error(`Black background validation failed: ${validation.reason}`),
+          { retryInstruction: repair },
+        );
       }
 
       const blackBgStorageId = await storeGeneratedImage(ctx, result);
@@ -410,7 +425,8 @@ export const generateBlackBackground = internalAction({
         retryCount,
       });
     } catch (error) {
-      await handleStageFailure(ctx, args.generationId, "black_background", retryCount, error);
+      const repair = (error as { retryInstruction?: string })?.retryInstruction;
+      await handleStageFailure(ctx, args.generationId, "black_background", retryCount, error, repair);
     }
 
     return null;
@@ -418,9 +434,8 @@ export const generateBlackBackground = internalAction({
 });
 
 export const finalizeGeneration = internalAction({
-  args: {
-    generationId: v.id("generations"),
-  },
+  args: generationIdActionArgs,
+  returns: v.null(),
   handler: async (ctx, args) => {
     const generation = await getGeneration(ctx, args.generationId);
     if (!generation || generation.status !== "generating" || generation.stage !== "finalizing") {

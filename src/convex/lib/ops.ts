@@ -45,6 +45,14 @@ export interface PurchaseAlertContext {
 	userId: string;
 }
 
+export interface SignupAlertContext {
+	userId: string;
+	userEmail?: string;
+	name?: string;
+	authProvider: 'google' | 'apple' | 'unknown';
+	initialCredits: number;
+}
+
 export interface OpsAlertRuntimeConfig {
 	webhookKind: OpsAlertWebhookKind;
 	webhookUrl?: string;
@@ -249,40 +257,51 @@ function buildPurchaseAlertFacts(context: PurchaseAlertContext): string[] {
 	];
 }
 
-export function buildGenerationAlertRequest(config: OpsAlertRuntimeConfig, context: GenerationAlertContext): {
-	body: string;
-	headers: Record<string, string>;
-	url: string;
-} {
+function buildSignupAlertFacts(context: SignupAlertContext): string[] {
+	const facts = [`User: ${context.userEmail ?? context.userId}`];
+	if (context.name) {
+		facts.push(`Name: ${context.name}`);
+	}
+	facts.push(`Provider: ${context.authProvider}`);
+	facts.push(`Starting credits: ${context.initialCredits}`);
+	return facts;
+}
+
+function buildWebhookRequest(
+	config: OpsAlertRuntimeConfig,
+	payload: {
+		summaryLine: string;
+		headerEmoji: string;
+		headerText: string;
+		facts: string[];
+		genericBody: Record<string, unknown>;
+	}
+): { body: string; headers: Record<string, string>; url: string } {
 	if (!config.webhookUrl) {
 		throw new Error('OPS_ALERT_WEBHOOK_URL is not configured');
 	}
 
-	const title = buildAlertTitle(context);
-	const facts = buildAlertFacts(context);
-	const summaryLine = `${context.severity.toUpperCase()}: ${title}`;
+	const headers = { 'content-type': 'application/json' };
 
 	if (config.webhookKind === 'slack') {
 		return {
 			url: config.webhookUrl,
-			headers: {
-				'content-type': 'application/json'
-			},
+			headers,
 			body: JSON.stringify({
-				text: `${summaryLine}\n${facts.join('\n')}`,
+				text: [payload.summaryLine, ...payload.facts].join('\n'),
 				blocks: [
 					{
 						type: 'header',
 						text: {
 							type: 'plain_text',
-							text: `${context.severity === 'critical' ? '🚨' : '⚠️'} ${title}`
+							text: `${payload.headerEmoji} ${payload.headerText}`
 						}
 					},
 					{
 						type: 'section',
 						text: {
 							type: 'mrkdwn',
-							text: facts.map((fact) => `• ${fact}`).join('\n')
+							text: payload.facts.map((fact) => `• ${fact}`).join('\n')
 						}
 					}
 				]
@@ -293,27 +312,40 @@ export function buildGenerationAlertRequest(config: OpsAlertRuntimeConfig, conte
 	if (config.webhookKind === 'discord') {
 		return {
 			url: config.webhookUrl,
-			headers: {
-				'content-type': 'application/json'
-			},
+			headers,
 			body: JSON.stringify({
-				content: [summaryLine, ...facts].join('\n')
+				content: [payload.summaryLine, ...payload.facts].join('\n')
 			})
 		};
 	}
 
 	return {
 		url: config.webhookUrl,
-		headers: {
-			'content-type': 'application/json'
-		},
-		body: JSON.stringify({
+		headers,
+		body: JSON.stringify(payload.genericBody)
+	};
+}
+
+export function buildGenerationAlertRequest(config: OpsAlertRuntimeConfig, context: GenerationAlertContext): {
+	body: string;
+	headers: Record<string, string>;
+	url: string;
+} {
+	const title = buildAlertTitle(context);
+	const facts = buildAlertFacts(context);
+
+	return buildWebhookRequest(config, {
+		summaryLine: `${context.severity.toUpperCase()}: ${title}`,
+		headerEmoji: context.severity === 'critical' ? '🚨' : '⚠️',
+		headerText: title,
+		facts,
+		genericBody: {
 			title,
 			severity: context.severity,
 			alertType: context.alertType,
 			context
-		})
-	};
+		}
+	});
 }
 
 export function buildPurchaseAlertRequest(config: OpsAlertRuntimeConfig, context: PurchaseAlertContext): {
@@ -321,60 +353,15 @@ export function buildPurchaseAlertRequest(config: OpsAlertRuntimeConfig, context
 	headers: Record<string, string>;
 	url: string;
 } {
-	if (!config.webhookUrl) {
-		throw new Error('OPS_ALERT_WEBHOOK_URL is not configured');
-	}
-
-	const title = 'Celstate purchase completed';
 	const facts = buildPurchaseAlertFacts(context);
 	const summaryLine = '💰 New Purchase';
 
-	if (config.webhookKind === 'slack') {
-		return {
-			url: config.webhookUrl,
-			headers: {
-				'content-type': 'application/json'
-			},
-			body: JSON.stringify({
-				text: [summaryLine, ...facts].join('\n'),
-				blocks: [
-					{
-						type: 'header',
-						text: {
-							type: 'plain_text',
-							text: summaryLine
-						}
-					},
-					{
-						type: 'section',
-						text: {
-							type: 'mrkdwn',
-							text: facts.map((fact) => `• ${fact}`).join('\n')
-						}
-					}
-				]
-			})
-		};
-	}
-
-	if (config.webhookKind === 'discord') {
-		return {
-			url: config.webhookUrl,
-			headers: {
-				'content-type': 'application/json'
-			},
-			body: JSON.stringify({
-				content: [summaryLine, ...facts].join('\n')
-			})
-		};
-	}
-
-	return {
-		url: config.webhookUrl,
-		headers: {
-			'content-type': 'application/json'
-		},
-		body: JSON.stringify({
+	return buildWebhookRequest(config, {
+		summaryLine,
+		headerEmoji: '💰',
+		headerText: 'New Purchase',
+		facts,
+		genericBody: {
 			event: 'purchase_new',
 			credits_added: context.creditsAdded,
 			currency: context.currency,
@@ -382,9 +369,34 @@ export function buildPurchaseAlertRequest(config: OpsAlertRuntimeConfig, context
 			stripe_payment_intent_id: context.stripePaymentIntentId,
 			user_id: context.userId,
 			user_email: context.userEmail,
-			title
-		})
-	};
+			title: 'Celstate purchase completed'
+		}
+	});
+}
+
+export function buildSignupAlertRequest(config: OpsAlertRuntimeConfig, context: SignupAlertContext): {
+	body: string;
+	headers: Record<string, string>;
+	url: string;
+} {
+	const facts = buildSignupAlertFacts(context);
+	const summaryLine = '👋 New signup';
+
+	return buildWebhookRequest(config, {
+		summaryLine,
+		headerEmoji: '👋',
+		headerText: 'New signup',
+		facts,
+		genericBody: {
+			event: 'signup_new',
+			auth_provider: context.authProvider,
+			initial_credits: context.initialCredits,
+			name: context.name,
+			title: 'Celstate new user signup',
+			user_email: context.userEmail,
+			user_id: context.userId
+		}
+	});
 }
 
 export function summarizeGenerationOpsEvents(
@@ -430,4 +442,11 @@ export function summarizeGenerationOpsEvents(
 			avgRetriesPerCompletedGeneration: roundMetric(average(completedRetries))
 		}
 	};
+}
+
+/** Ensures ops webhook returned 2xx; throws with status line otherwise. */
+export function assertOkWebhookResponse(response: Response): void {
+	if (!response.ok) {
+		throw new Error(`Webhook responded with ${response.status} ${response.statusText}`);
+	}
 }

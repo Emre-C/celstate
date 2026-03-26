@@ -66,4 +66,4 @@ Convex’s Vercel guide also describes an **integrated** workflow: build command
 ## Local development
 
 - Point `.env.local` at the **development** Convex URLs for `PUBLIC_CONVEX_*`.
-- Use `SITE_URL=http://localhost:5173` on the **dev** Convex deployment for Better Auth; production keeps the real canonical URL (see [Authentication](../product/features/authentication.md)).
+- Use `SITE_URL=http://localhost:5173` on the **dev** Convex deployment for Better Auth; production keeps the real canonical URL (see [Authentication](../product/authentication.md)).

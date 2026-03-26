@@ -1,6 +1,6 @@
 import { redirect } from "@sveltejs/kit";
 import type { ServerLoadEvent } from "@sveltejs/kit";
-import { buildAuthRedirectTarget } from "$lib/server/auth-guard.js";
+import { buildAuthRedirectTarget } from "$lib/auth/redirect.js";
 
 export const load = async ({ locals, url }: ServerLoadEvent) => {
   if (!locals.token) {

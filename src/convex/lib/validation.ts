@@ -158,3 +158,59 @@ export function validateDimensionMatch(
 ): boolean {
   return w1 === w2 && h1 === h2;
 }
+
+const CORNER_LABELS = ["top-left", "top-right", "bottom-left", "bottom-right"] as const;
+
+export function buildRepairInstruction(
+  stage: "white_background" | "black_background",
+  validation: ValidationResult | undefined,
+  rawError?: string,
+): string | undefined {
+  const lines: string[] = [];
+
+  if (rawError?.includes("text-only response")) {
+    lines.push("Return exactly one image and no explanatory text.");
+  }
+
+  if (rawError?.includes("no candidates")) {
+    lines.push("You must generate an image. Do not refuse or return an empty response.");
+  }
+
+  const diagnostics = validation?.diagnostics;
+  if (diagnostics) {
+    if (stage === "black_background") {
+      diagnostics.cornerMeans.forEach((mean, i) => {
+        if (mean > GENERATION_CONFIG.blackBgMaxMean) {
+          lines.push(
+            `The ${CORNER_LABELS[i]} background area is too bright (gray); it must be pure solid black (#000000).`,
+          );
+        }
+      });
+    } else {
+      diagnostics.cornerMeans.forEach((mean, i) => {
+        if (mean < GENERATION_CONFIG.whiteBgMinMean) {
+          lines.push(
+            `The ${CORNER_LABELS[i]} background area is too dark; it must be pure solid white (#FFFFFF).`,
+          );
+        }
+      });
+    }
+
+    diagnostics.cornerStdDevs.forEach((stdDev, i) => {
+      if (stdDev > GENERATION_CONFIG.bgMaxStdDev) {
+        lines.push(
+          `The ${CORNER_LABELS[i]} background area has gradient or texture; make it perfectly flat and uniform.`,
+        );
+      }
+    });
+  }
+
+  if (lines.length === 0) return undefined;
+
+  const colorTarget = stage === "black_background" ? "black" : "white";
+  return [
+    "CRITICAL FIXES FOR THIS RETRY:",
+    ...lines,
+    `All corners and edges must be pure ${colorTarget} with no shadow, vignette, glow, reflection, or texture.`,
+  ].join("\n");
+}

@@ -3,10 +3,14 @@ import { internal } from "./_generated/api.js";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server.js";
 import type { Doc } from "./_generated/dataModel.js";
 import {
+  assertOkWebhookResponse,
   buildGenerationAlertRequest,
+  buildSignupAlertRequest,
   readOpsAlertRuntimeConfig,
   summarizeGenerationOpsEvents,
 } from "./lib/ops.js";
+import { insertGenerationOpsEventRow } from "./lib/generationOpsEvents.js";
+import { generationStageValidator } from "./lib/validators.js";
 
 function clampHoursWindow(hoursWindow: number | undefined): number {
   if (hoursWindow === undefined || !Number.isFinite(hoursWindow)) {
@@ -41,13 +45,7 @@ export const recordAlertEvent = internalMutation({
     userEmail: v.optional(v.string()),
     eventType: v.union(v.literal("alert_sent"), v.literal("alert_failed")),
     severity: v.union(v.literal("warning"), v.literal("critical")),
-    stage: v.optional(
-      v.union(
-        v.literal("white_background"),
-        v.literal("black_background"),
-        v.literal("finalizing"),
-      ),
-    ),
+    stage: v.optional(generationStageValidator),
     retryCount: v.optional(v.number()),
     totalRetryCount: v.optional(v.number()),
     statusMessage: v.optional(v.string()),
@@ -56,20 +54,7 @@ export const recordAlertEvent = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await ctx.db.insert("generationOpsEvents", {
-      createdAt: Date.now(),
-      error: args.error,
-      eventType: args.eventType,
-      generationDurationMs: args.generationDurationMs,
-      generationId: args.generationId,
-      retryCount: args.retryCount,
-      severity: args.severity,
-      stage: args.stage,
-      statusMessage: args.statusMessage,
-      totalRetryCount: args.totalRetryCount,
-      userEmail: args.userEmail,
-      userId: args.userId,
-    });
+    await insertGenerationOpsEventRow(ctx, args);
     return null;
   },
 });
@@ -79,13 +64,7 @@ export const sendGenerationAlert = internalAction({
     alertType: v.union(v.literal("generation_failed"), v.literal("generation_stalled")),
     generationId: v.id("generations"),
     severity: v.union(v.literal("warning"), v.literal("critical")),
-    stage: v.optional(
-      v.union(
-        v.literal("white_background"),
-        v.literal("black_background"),
-        v.literal("finalizing"),
-      ),
-    ),
+    stage: v.optional(generationStageValidator),
     retryCount: v.optional(v.number()),
     totalRetryCount: v.optional(v.number()),
     statusMessage: v.optional(v.string()),
@@ -107,20 +86,23 @@ export const sendGenerationAlert = internalAction({
     });
     const config = readOpsAlertRuntimeConfig();
     const userEmail = user?.email ?? undefined;
+    const alertBase = {
+      generationDurationMs: args.generationDurationMs,
+      generationId: args.generationId,
+      retryCount: args.retryCount,
+      severity: args.severity,
+      stage: args.stage,
+      statusMessage: args.statusMessage,
+      totalRetryCount: args.totalRetryCount,
+      userEmail,
+      userId: generation.userId,
+    };
 
     if (!config.webhookUrl) {
       await ctx.runMutation(internal.ops.recordAlertEvent, {
+        ...alertBase,
         error: "OPS_ALERT_WEBHOOK_URL is not configured",
         eventType: "alert_failed",
-        generationDurationMs: args.generationDurationMs,
-        generationId: args.generationId,
-        retryCount: args.retryCount,
-        severity: args.severity,
-        stage: args.stage,
-        statusMessage: args.statusMessage,
-        totalRetryCount: args.totalRetryCount,
-        userEmail,
-        userId: generation.userId,
       });
       return null;
     }
@@ -147,36 +129,57 @@ export const sendGenerationAlert = internalAction({
         body: request.body,
       });
 
-      if (!response.ok) {
-        throw new Error(`Webhook responded with ${response.status} ${response.statusText}`);
-      }
+      assertOkWebhookResponse(response);
 
       await ctx.runMutation(internal.ops.recordAlertEvent, {
+        ...alertBase,
         eventType: "alert_sent",
-        generationDurationMs: args.generationDurationMs,
-        generationId: args.generationId,
-        retryCount: args.retryCount,
-        severity: args.severity,
-        stage: args.stage,
-        statusMessage: args.statusMessage,
-        totalRetryCount: args.totalRetryCount,
-        userEmail,
-        userId: generation.userId,
       });
     } catch (error) {
       await ctx.runMutation(internal.ops.recordAlertEvent, {
+        ...alertBase,
         error: error instanceof Error ? error.message : String(error),
         eventType: "alert_failed",
-        generationDurationMs: args.generationDurationMs,
-        generationId: args.generationId,
-        retryCount: args.retryCount,
-        severity: args.severity,
-        stage: args.stage,
-        statusMessage: args.statusMessage,
-        totalRetryCount: args.totalRetryCount,
-        userEmail,
-        userId: generation.userId,
       });
+    }
+
+    return null;
+  },
+});
+
+export const sendSignupAlert = internalAction({
+  args: {
+    authProvider: v.union(v.literal("google"), v.literal("apple"), v.literal("unknown")),
+    initialCredits: v.number(),
+    name: v.optional(v.string()),
+    userEmail: v.optional(v.string()),
+    userId: v.string(),
+  },
+  returns: v.null(),
+  handler: async (_ctx, args) => {
+    const opsConfig = readOpsAlertRuntimeConfig();
+    if (!opsConfig.webhookUrl) {
+      return null;
+    }
+
+    try {
+      const request = buildSignupAlertRequest(opsConfig, {
+        authProvider: args.authProvider,
+        initialCredits: args.initialCredits,
+        name: args.name,
+        userEmail: args.userEmail,
+        userId: args.userId,
+      });
+
+      const response = await fetch(request.url, {
+        body: request.body,
+        headers: request.headers,
+        method: "POST",
+      });
+
+      assertOkWebhookResponse(response);
+    } catch (error) {
+      console.error("Failed to send signup Discord notification", error);
     }
 
     return null;
@@ -223,144 +226,3 @@ export const getGenerationOpsSummary = internalQuery({
   },
 });
 
-export const getRecentGenerationOpsFeed = internalQuery({
-  args: {
-    limit: v.optional(v.number()),
-  },
-  handler: async (ctx, args) => {
-    const limit = Math.min(Math.max(Math.floor(args.limit ?? 50), 1), 200);
-    const events = await ctx.db.query("generationOpsEvents").withIndex("by_createdAt").collect();
-
-    return events
-      .sort((left, right) => right.createdAt - left.createdAt)
-      .slice(0, limit)
-      .map(toRecentEvent);
-  },
-});
-
-export const getGenerationActivityReport = internalQuery({
-  args: {},
-  handler: async (ctx) => {
-    const generations = await ctx.db.query("generations").collect();
-    const users = await ctx.db.query("users").collect();
-
-    const userMap = new Map(users.map((u) => [u._id, u]));
-
-    const perUser: Record<
-      string,
-      { email: string | undefined; total: number; complete: number; failed: number; generating: number; prompts: string[] }
-    > = {};
-
-    for (const gen of generations) {
-      const user = userMap.get(gen.userId);
-      const key = String(gen.userId);
-      if (!perUser[key]) {
-        perUser[key] = { email: user?.email ?? undefined, total: 0, complete: 0, failed: 0, generating: 0, prompts: [] };
-      }
-      perUser[key].total++;
-      perUser[key][gen.status]++;
-      perUser[key].prompts.push(gen.prompt.slice(0, 80));
-    }
-
-    const sorted = Object.entries(perUser)
-      .sort(([, a], [, b]) => b.total - a.total)
-      .map(([userId, data]) => ({ userId, ...data }));
-
-    return {
-      totalGenerations: generations.length,
-      totalUsers: users.length,
-      activeUsers: sorted.length,
-      byUser: sorted,
-    };
-  },
-});
-
-export const mergeDuplicateUsers = internalMutation({
-  args: {},
-  returns: v.null(),
-  handler: async (ctx) => {
-    const users = await ctx.db.query("users").collect();
-
-    const byEmail: Record<string, typeof users> = {};
-    for (const user of users) {
-      if (!user.email) continue;
-      if (!byEmail[user.email]) byEmail[user.email] = [];
-      byEmail[user.email].push(user);
-    }
-
-    for (const [, group] of Object.entries(byEmail)) {
-      if (group.length <= 1) continue;
-
-      // Keep the record that has a tokenIdentifier; if both do, keep the newer one
-      const sorted = [...group].sort((a, b) => {
-        if (a.tokenIdentifier && !b.tokenIdentifier) return -1;
-        if (!a.tokenIdentifier && b.tokenIdentifier) return 1;
-        return b._creationTime - a._creationTime;
-      });
-
-      const keep = sorted[0];
-      const duplicates = sorted.slice(1);
-
-      // Sum credits from all duplicates into the keeper
-      let totalCredits = keep.credits ?? 0;
-      for (const dup of duplicates) {
-        totalCredits += dup.credits ?? 0;
-
-        // Re-assign generations from duplicate to keeper
-        const gens = await ctx.db
-          .query("generations")
-          .withIndex("by_user", (q) => q.eq("userId", dup._id))
-          .collect();
-        for (const gen of gens) {
-          await ctx.db.patch(gen._id, { userId: keep._id });
-        }
-
-        // Re-assign creditGrants
-        const grants = await ctx.db
-          .query("creditGrants")
-          .withIndex("by_user", (q) => q.eq("userId", dup._id))
-          .collect();
-        for (const grant of grants) {
-          await ctx.db.patch(grant._id, { userId: keep._id });
-        }
-
-        // Delete the duplicate user record
-        await ctx.db.delete(dup._id);
-      }
-
-      await ctx.db.patch(keep._id, { credits: totalCredits });
-    }
-
-    return null;
-  },
-});
-
-export const getDuplicateUsers = internalQuery({
-  args: {},
-  handler: async (ctx) => {
-    const users = await ctx.db.query("users").collect();
-
-    const byEmail: Record<string, typeof users> = {};
-    for (const user of users) {
-      if (!user.email) continue;
-      if (!byEmail[user.email]) byEmail[user.email] = [];
-      byEmail[user.email].push(user);
-    }
-
-    const duplicates = Object.entries(byEmail)
-      .filter(([, group]) => group.length > 1)
-      .map(([email, group]) => ({
-        email,
-        records: group.map((u) => ({
-          _id: String(u._id),
-          _creationTime: u._creationTime,
-          tokenIdentifier: u.tokenIdentifier,
-          credits: u.credits,
-          name: u.name,
-          stripeCustomerId: u.stripeCustomerId,
-        })),
-      }));
-
-    return duplicates;
-  },
-});

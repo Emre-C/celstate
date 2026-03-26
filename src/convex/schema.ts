@@ -1,5 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { creditGrantReasonValidator, generationStageValidator } from "./lib/validators.js";
 
 export default defineSchema({
   users: defineTable({
@@ -22,11 +23,7 @@ export default defineSchema({
       v.literal("complete"),
       v.literal("failed")
     ),
-    stage: v.optional(v.union(
-      v.literal("white_background"),
-      v.literal("black_background"),
-      v.literal("finalizing")
-    )),
+    stage: v.optional(generationStageValidator),
     statusMessage: v.optional(v.string()),
     resultStorageId: v.optional(v.id("_storage")),
     whiteBgStorageId: v.optional(v.id("_storage")),
@@ -47,16 +44,14 @@ export default defineSchema({
       v.literal("processing_error"),
       v.literal("unknown")
     )),
-    failureStage: v.optional(v.union(
-      v.literal("white_background"),
-      v.literal("black_background"),
-      v.literal("finalizing")
-    )),
+    failureStage: v.optional(generationStageValidator),
     generationTimeMs: v.optional(v.number()),
     retryCount: v.optional(v.number()),
     whiteBgRetryCount: v.optional(v.number()),
     blackBgRetryCount: v.optional(v.number()),
     finalizeRetryCount: v.optional(v.number()),
+    whiteBgRetryInstruction: v.optional(v.string()),
+    blackBgRetryInstruction: v.optional(v.string()),
     dimensionMismatch: v.optional(v.boolean()),
     stalledAlertedAt: v.optional(v.number()),
     creditRefundedAt: v.optional(v.number()),
@@ -83,11 +78,7 @@ export default defineSchema({
       v.literal("warning"),
       v.literal("critical")
     )),
-    stage: v.optional(v.union(
-      v.literal("white_background"),
-      v.literal("black_background"),
-      v.literal("finalizing")
-    )),
+    stage: v.optional(generationStageValidator),
     attemptDurationMs: v.optional(v.number()),
     generationDurationMs: v.optional(v.number()),
     retryCount: v.optional(v.number()),
@@ -103,15 +94,12 @@ export default defineSchema({
   creditGrants: defineTable({
     userId: v.id("users"),
     amount: v.number(),
-    reason: v.union(
-      v.literal("signup_bonus"),
-      v.literal("weekly_drip"),
-      v.literal("purchase"),
-      v.literal("admin_grant"),
-    ),
+    reason: creditGrantReasonValidator,
     stripePaymentIntentId: v.optional(v.string()),
     createdAt: v.number(),
-  }).index("by_user", ["userId", "createdAt"]),
+  })
+    .index("by_user", ["userId", "createdAt"])
+    .index("by_payment_intent", ["stripePaymentIntentId"]),
 
   pendingCheckouts: defineTable({
     userId: v.id("users"),

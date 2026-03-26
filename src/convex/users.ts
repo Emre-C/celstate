@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { authComponent } from "./auth.js";
-import { components } from "./_generated/api.js";
+import { components, internal } from "./_generated/api.js";
 import {
   mutation,
   query,
@@ -9,6 +9,7 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server.js";
+import type { Id } from "./_generated/dataModel.js";
 import { GENERATION_CONFIG } from "./lib/config.js";
 import { assertStripeEnv } from "./lib/stripeEnv.js";
 import { posthog } from "./posthog.js";
@@ -22,13 +23,6 @@ const userDoc = v.object({
   image: v.optional(v.string()),
   credits: v.optional(v.number()),
   stripeCustomerId: v.optional(v.string()),
-});
-
-const userProfile = v.object({
-  tokenIdentifier: v.string(),
-  email: v.optional(v.string()),
-  name: v.optional(v.string()),
-  image: v.optional(v.string()),
 });
 
 const getCurrentTokenIdentifier = async (ctx: QueryCtx | MutationCtx) => {
@@ -134,6 +128,14 @@ const upsertUserRecord = async (
     },
   });
 
+  await ctx.scheduler.runAfter(0, internal.ops.sendSignupAlert, {
+    authProvider: profile.authProvider ?? "unknown",
+    initialCredits: GENERATION_CONFIG.initialCredits,
+    name: user.name,
+    userEmail: user.email,
+    userId: String(userId),
+  });
+
   return user;
 };
 
@@ -164,28 +166,6 @@ export const upsertCurrentUser = async (ctx: MutationCtx) => {
   });
 };
 
-export const getByEmail = internalQuery({
-  args: { email: v.string() },
-  returns: v.union(userDoc, v.null()),
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("users")
-      .withIndex("email", (q) => q.eq("email", args.email))
-      .first();
-  },
-});
-
-export const getByTokenIdentifier = internalQuery({
-  args: { tokenIdentifier: v.string() },
-  returns: v.union(userDoc, v.null()),
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", args.tokenIdentifier))
-      .first();
-  },
-});
-
 export const getById = internalQuery({
   args: { userId: v.id("users") },
   returns: v.union(userDoc, v.null()),
@@ -210,72 +190,30 @@ export const storeUser = mutation({
   },
 });
 
-export const upsertByTokenIdentifier = internalMutation({
-  args: userProfile,
-  returns: v.id("users"),
-  handler: async (ctx, args) => {
-    const user = await upsertUserRecord(ctx, args);
-    return user._id;
-  },
-});
+/** Single implementation for incrementing `users.credits` (grants, refunds, internal tools). */
+export async function applyCreditsToUser(
+  ctx: Pick<MutationCtx, "db">,
+  userId: Id<"users">,
+  amount: number,
+): Promise<boolean> {
+  const user = await ctx.db.get(userId);
 
-export const seedCredits = internalMutation({
-  args: { email: v.string() },
-  returns: v.boolean(),
-  handler: async (ctx, args) => {
-    const user = await ctx.db
-      .query("users")
-      .withIndex("email", (q) => q.eq("email", args.email))
-      .first();
+  if (!user) {
+    return false;
+  }
 
-    if (!user) {
-      return false;
-    }
+  await ctx.db.patch(userId, {
+    credits: (user.credits ?? 0) + amount,
+  });
 
-    await ctx.db.patch(user._id, {
-      credits: GENERATION_CONFIG.initialCredits,
-    });
-
-    return true;
-  },
-});
-
-export const addCredits = internalMutation({
-  args: { email: v.string(), amount: v.number() },
-  returns: v.boolean(),
-  handler: async (ctx, args) => {
-    const user = await ctx.db
-      .query("users")
-      .withIndex("email", (q) => q.eq("email", args.email))
-      .first();
-
-    if (!user) {
-      return false;
-    }
-
-    await ctx.db.patch(user._id, {
-      credits: (user.credits ?? 0) + args.amount,
-    });
-
-    return true;
-  },
-});
+  return true;
+}
 
 export const addCreditsByUserId = internalMutation({
   args: { userId: v.id("users"), amount: v.number() },
   returns: v.boolean(),
   handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
-
-    if (!user) {
-      return false;
-    }
-
-    await ctx.db.patch(args.userId, {
-      credits: (user.credits ?? 0) + args.amount,
-    });
-
-    return true;
+    return await applyCreditsToUser(ctx, args.userId, args.amount);
   },
 });
 

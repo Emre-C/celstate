@@ -3,6 +3,9 @@
 New: Enhancement from Tommy
 - Changes to previously generated images
 
+New: Enhancement
+- When something fails (like generating the black background) lets put another LLM in the loop to improve the prompt based on the failure for the retry
+
 > **Model**: `gemini-3.1-flash-image-preview` only. No other models are in scope.
 >
 > **Source**: [Gemini Image Generation Docs](https://ai.google.dev/gemini-api/docs/image-generation) (verified March 2026)

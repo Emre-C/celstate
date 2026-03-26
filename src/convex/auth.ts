@@ -2,6 +2,7 @@ import { createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { convex } from "@convex-dev/better-auth/plugins";
 import { betterAuth, type BetterAuthOptions } from "better-auth/minimal";
 import {
+  AUTH_PROXY_CLIENT_IP_HEADER,
   assertCanonicalAuthEnv,
   buildSocialProviders,
   getTrustedOrigins,
@@ -79,6 +80,9 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
     socialProviders: buildSocialProviders(authEnv),
     trustedOrigins: getTrustedOrigins(authEnv),
     advanced: {
+      ipAddress: {
+        ipAddressHeaders: [AUTH_PROXY_CLIENT_IP_HEADER],
+      },
       trustedProxyHeaders: true,
     },
     logger: {

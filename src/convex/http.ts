@@ -6,7 +6,11 @@ import type Stripe from "stripe";
 import { authComponent, createAuth } from "./auth.js";
 import { assertStripeEnv } from "./lib/stripeEnv.js";
 import { posthog } from "./posthog.js";
-import { buildPurchaseAlertRequest, readOpsAlertRuntimeConfig } from "./lib/ops.js";
+import {
+  assertOkWebhookResponse,
+  buildPurchaseAlertRequest,
+  readOpsAlertRuntimeConfig,
+} from "./lib/ops.js";
 
 const stripeEnv = assertStripeEnv();
 
@@ -55,16 +59,29 @@ registerRoutes(http, components.stripe, {
         return;
       }
 
-      // Grant credits and record audit trail
-      await ctx.runMutation(internal.creditGrants.recordGrant, {
+      // Grant credits and record audit trail (mutation is the authoritative idempotency gate)
+      const granted = await ctx.runMutation(internal.creditGrants.recordGrant, {
         userId: userId as Id<"users">,
         amount: credits,
         reason: "purchase",
         stripePaymentIntentId: paymentIntentId,
       });
 
+      if (!granted) {
+        console.log("Credits already granted (mutation dedup) for", paymentIntentId);
+        return;
+      }
+
       const amountUsd = (session.amount_total ?? 0) / 100;
       const currency = session.currency ?? "usd";
+
+      if (!process.env.POSTHOG_API_KEY?.trim()) {
+        console.error(
+          "POSTHOG_API_KEY is unset on this Convex deployment: credits_purchase_completed will not reach PostHog. " +
+            "Set POSTHOG_API_KEY (same phc_ key as PUBLIC_POSTHOG_KEY) and POSTHOG_HOST (https://us.i.posthog.com or https://eu.i.posthog.com). " +
+            "Run `pnpm check:posthog-env` against production.",
+        );
+      }
 
       // Server-side authoritative revenue event (exact-once, inside idempotency gate)
       await posthog.capture(ctx, {
@@ -102,9 +119,7 @@ registerRoutes(http, components.stripe, {
             body: request.body,
           });
 
-          if (!response.ok) {
-            throw new Error(`Webhook responded with ${response.status} ${response.statusText}`);
-          }
+          assertOkWebhookResponse(response);
         } catch (error) {
           console.error("Failed to send purchase Discord notification", error);
         }

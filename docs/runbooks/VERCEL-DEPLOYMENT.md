@@ -62,9 +62,10 @@ PUBLIC_CONVEX_URL=https://<prod-project>.convex.cloud
 
 ### 3. Set environment variable
 
-- `vercel env add PUBLIC_CONVEX_URL production` — paste production Convex URL when prompted.
+- `vercel env add PUBLIC_CONVEX_URL production` — paste production Convex URL when prompted. Must be an **origin-only** value (e.g. `https://foo-bar-123.convex.cloud` — no trailing slash, no path).
 - `vercel env add PUBLIC_CONVEX_URL preview` — same value (preview deploys use prod Convex unless you add preview Convex later).
 - **Verify**: `vercel env ls` shows `PUBLIC_CONVEX_URL` for Production and Preview.
+- `PUBLIC_CONVEX_SITE_URL` is **optional** — only set it when `PUBLIC_CONVEX_URL` is not a standard `*.convex.cloud` URL (see [AUTH-PROXY-CONVEX-HARDENING.md](../implementation/AUTH-PROXY-CONVEX-HARDENING.md) §5).
 
 No secrets (Stripe, Gemini) in Vercel; they stay in Convex.
 

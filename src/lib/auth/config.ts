@@ -1,5 +1,7 @@
 export const APPLE_TRUSTED_ORIGIN = 'https://appleid.apple.com';
 
+export const AUTH_PROXY_CLIENT_IP_HEADER = 'x-celstate-client-ip';
+
 export const CANONICAL_AUTH_SERVER_ENV = {
 	siteUrl: 'SITE_URL',
 	betterAuthSecret: 'BETTER_AUTH_SECRET',

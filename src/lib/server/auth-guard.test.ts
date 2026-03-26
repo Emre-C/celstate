@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildAuthRedirectTarget } from './auth-guard.js';
+import { buildAuthRedirectTarget } from '$lib/auth/redirect.js';
 
 describe('auth guard redirect helper', () => {
 	it('redirects unauthenticated requests to /auth with a redirect target', () => {

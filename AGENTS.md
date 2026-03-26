@@ -11,6 +11,7 @@
 - DO NOT use npm, use pnpm instead.
 - **Convex + Stripe**: Live keys only on prod; `convex env set` defaults to dev (`--prod` for production)—`docs/implementation/STRIPE-CONVEX-ENVIRONMENTS.md`.
 - **Design System**: All UI must conform to `docs/product/design-system.md` — color tokens, typography rules, button hierarchy, component inventory, and prohibited patterns. Read it before creating or modifying any frontend component.
+- **Convex**: Follow `docs/conventions/convex.md` — idempotency inside mutations (no query-then-mutation TOCTOU), and index every field used in filters or indexed lookups.
 
 ## Common Svelte 5 Mistakes
 1. Using `let` without `$state` - Variables are not reactive without `$state()`

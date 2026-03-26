@@ -31,7 +31,7 @@ pnpm install
 pnpm dev
 ```
 
-Runs the Vite dev server and Convex dev in parallel.
+Runs the Vite dev server and Convex dev in parallel (both are required for sign-in: the app proxies `/api/auth/*` to Convex’s `*.convex.site` URL, not to Vite). If you only run `vite dev`, auth requests have nowhere to go. The auth proxy URL is derived from `PUBLIC_CONVEX_URL` (`https://…convex.cloud` → `https://…convex.site`) so it cannot drift; use `PUBLIC_CONVEX_SITE_URL` only when realtime uses a local Convex URL. Verify connectivity: `pnpm check:convex-auth`.
 
 ## Build & check
 

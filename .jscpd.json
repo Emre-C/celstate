@@ -1,0 +1,8 @@
+{
+	"threshold": 3.5,
+	"reporters": ["console"],
+	"ignore": ["node_modules", "src/convex/_generated", ".svelte-kit", "**/*.test.ts"],
+	"minTokens": 50,
+	"minLines": 5,
+	"format": ["typescript", "svelte"]
+}

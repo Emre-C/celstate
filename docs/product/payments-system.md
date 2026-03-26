@@ -51,8 +51,7 @@ Double-spend is prevented by doing check-and-deduct in a single mutation.
 If the generation fails (Gemini errors, validation failures after max retries, dimension mismatch, or timeout):
 
 1. Worker catches the error.
-2. `generations.refundCredits` restores `creditsCost` to the user.
-3. `generations.failGeneration` marks the row as `status: "failed"` with an error message.
+2. `generations.failGeneration` (via `failGenerationRecord` in `src/convex/generations.ts`) marks the row as `status: "failed"` with an error message and, if not already refunded, calls `users.applyCreditsToUser` to restore `creditsCost` and sets `creditRefundedAt` on the generation.
 
 ### 4. Stale Generation Cleanup
 
@@ -70,7 +69,7 @@ Refunds keep user balance correct when the worker never completes.
 3. Convex schedules `stripe.processCheckout` (internal action): get-or-create Stripe customer, create Checkout Session (mode `"payment"`), store the checkout URL on the `pendingCheckouts` row; the client polls `getCheckoutStatus` then redirects to Stripe Checkout.
 4. User completes Stripe-hosted Checkout, then redirected back to `/app?success=true` or `/app?canceled=true` (see `src/convex/stripe.ts`).
 5. Stripe sends `checkout.session.completed` to Convex HTTP webhook (`src/convex/http.ts`).
-6. Custom handler: reads `userId` and `priceId` from session metadata, maps price to credits using the `CREDIT_PACKS` map in `src/convex/http.ts` (keys match `stripePriceStarter` / `stripePricePro` from env), checks idempotency by `stripePaymentIntentId`, then runs `creditGrants.recordGrant` (which calls `users.addCreditsByUserId` and inserts an audit row). After a successful grant, server-side PostHog emits `credits_purchase_completed` and an optional ops webhook alert runs (see Observability below).
+6. Custom handler: reads `userId` and `priceId` from session metadata, maps price to credits using the `CREDIT_PACKS` map in `src/convex/http.ts` (keys match `stripePriceStarter` / `stripePricePro` from env), checks idempotency by `stripePaymentIntentId`, then runs `creditGrants.recordGrant` (which applies credits via `users.applyCreditsToUser` and inserts a `creditGrants` audit row). After a successful grant, server-side PostHog emits `credits_purchase_completed` and an optional ops webhook alert runs (see Observability below).
 7. Balance updates reactively via `getMe`; no polling.
 
 Credits are granted **only** from the webhook, not from the success redirect.
