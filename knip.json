@@ -7,7 +7,6 @@
 	],
 	"project": ["src/**/*.{ts,svelte}"],
 	"ignoreExportsUsedInFile": true,
-	"ignoreBinaries": [],
 	"ignoreDependencies": ["tailwindcss"],
 	"svelte": true,
 	"vitest": true,
