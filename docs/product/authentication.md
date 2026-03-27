@@ -138,19 +138,21 @@ Relevant tests:
 - `src/lib/server/canonical-site.test.ts`
 - `src/lib/server/response.test.ts`
 
-CI runs these as a dedicated **auth regression suite** (`pnpm test:auth`) before the full verify pipeline. The test list is maintained in `package.json` under the `test:auth` script.
+CI runs these as a dedicated **auth regression suite** (`pnpm test:auth`) before the full verify pipeline. The test list is maintained in `package.json` under the `test:auth` script (includes `scripts/auth-canary-probe.test.ts` for the production canary contract).
 
 ### Scheduled auth canary
 
-A GitHub Actions workflow (`.github/workflows/auth-canary.yml`) runs every 5 minutes and can also be triggered manually. It executes `scripts/check-auth-health.mjs`, which:
+A GitHub Actions workflow (`.github/workflows/auth-canary.yml`) runs every **15 minutes** and can also be triggered manually. It executes `scripts/check-auth-health.mjs`, which:
 
 - Verifies `/auth` renders the expected sign-in UI (checks stable `data-testid` markers, not copy text).
-- Verifies `/api/auth/get-session` returns valid JSON with a 200 or 401 status.
+- Verifies `/api/auth/get-session` returns valid JSON with a **final** **200** or **401** after **following redirects** (default `fetch` behavior). Apex → `www` **308** redirects must not be treated as the final response; use the canonical production origin in `AUTH_CANARY_BASE_URL` when possible (see `docs/runbooks/CI-AND-CANARIES.md`).
 - Posts failures to the ops webhook.
 
 This is a **smoke check** — it validates page availability and session endpoint health, not full OAuth redirect/callback flows.
 
-Required GitHub secrets: `AUTH_CANARY_BASE_URL` (production origin), `OPS_ALERT_WEBHOOK_URL`, and optionally `OPS_ALERT_WEBHOOK_KIND`.
+**GitHub Actions secrets** (not `.env` on your machine): `AUTH_CANARY_BASE_URL` (production origin), `OPS_ALERT_WEBHOOK_URL`, and optionally `OPS_ALERT_WEBHOOK_KIND`.
+
+The get-session status contract is shared with tests in `scripts/auth-canary-probe.mjs` / `scripts/auth-canary-probe.test.ts`.
 
 Additional areas worth covering over time: protected-route hydration after social login, first authenticated render when the Convex user row does not exist yet, and env selection when switching between cloud dev and local Convex.
 

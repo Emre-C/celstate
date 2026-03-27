@@ -701,7 +701,10 @@ sentry:
   - "src/lib/server/auth-alerts.ts"
 canary:
   - "scripts/check-auth-health.mjs"
+  - "scripts/auth-canary-probe.mjs"
+  - "scripts/auth-canary-probe.test.ts"
   - ".github/workflows/auth-canary.yml"
+  - "docs/runbooks/CI-AND-CANARIES.md"
 ```
 
 ---

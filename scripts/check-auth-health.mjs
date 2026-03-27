@@ -1,3 +1,5 @@
+import { isFinalGetSessionProbeOk } from './auth-canary-probe.mjs';
+
 const baseUrl = process.env.AUTH_CANARY_BASE_URL?.trim();
 const webhookUrl = process.env.OPS_ALERT_WEBHOOK_URL?.trim();
 const webhookKind = process.env.OPS_ALERT_WEBHOOK_KIND?.trim().toLowerCase() || 'discord';
@@ -49,7 +51,7 @@ const checkSessionEndpoint = async () => {
 			signal: controller.signal
 		});
 
-		if (![200, 401].includes(response.status)) {
+		if (!isFinalGetSessionProbeOk(response.status)) {
 			throw new Error(`/api/auth/get-session returned ${response.status}`);
 		}
 
