@@ -27,6 +27,7 @@ Celstate does not want to own password storage, reset flows, breach handling, or
 - `src/convex/http.ts` — Convex HTTP router. Registers Better Auth routes via `authComponent.registerRoutes(http, createAuth)`.
 - `src/routes/api/auth/[...all]/+server.ts` — SvelteKit proxy for Better Auth requests. Resolves the Convex site URL from `PUBLIC_CONVEX_URL` (imported via `$env/static/public`; same deployment: `https://…convex.cloud` → `https://…convex.site`) or from optional `PUBLIC_CONVEX_SITE_URL` (dynamic, for when realtime uses a local URL); see `src/lib/server/convex-site-url.ts`. Delegates to `src/lib/server/auth-proxy.ts`.
 - `src/lib/server/auth-proxy.ts` — Builds the Better Auth proxy request for Convex. Strips caller-controlled forwarding / IP / hop-by-hop headers and stamps trusted `x-forwarded-host`, `x-forwarded-proto`, `x-forwarded-port`, `x-forwarded-for`, `x-celstate-client-ip`, and `x-request-id` values.
+- `src/lib/server/auth-alerts.ts` — SvelteKit-side auth outage alerting. Provides rate-limited Sentry + webhook alerts for auth proxy failures (immediate, 5m cooldown) and repeated auth endpoint 5xx responses (threshold of 3 in 60s, then 5m cooldown). Reuses the shared `buildAuthAlertRequest` from `src/convex/lib/ops.ts`.
 - `src/lib/auth-client.ts` — Better Auth browser client via `createAuthClient` from `better-auth/svelte`. Prefers `window.location.origin` over `PUBLIC_SITE_URL` so browser auth calls stay same-origin on the live host. Includes the `convexClient()` plugin from `@convex-dev/better-auth/client/plugins`.
 - `src/lib/auth/config.ts` — Canonical auth env contract: reads, validates, exports structured env values; builds social provider config, trusted origins, and provider availability. Apple credential requirements are temporarily relaxed (see Apple section).
 - `src/lib/auth/providers.ts` — UI provider descriptors for `google` and `apple`. Apple is currently forced to `comingSoon: true`.
@@ -99,11 +100,27 @@ SSR uses **cookie presence only** to derive the initial snapshot. Full validatio
 
 ## Observability
 
-This section describes **auth-route visibility on the SvelteKit server**, not the full product observability stack (PostHog, Convex-side capture, ops webhooks). For that partition, see [`docs/product/observability-generation.md`](observability-generation.md).
+This section describes **auth-route visibility on the SvelteKit server**, not the full product observability stack (PostHog, Convex-side capture, ops webhooks). For that partition, see [`docs/product/observability.md`](observability.md).
+
+### Console logging
 
 Structured **console** logging lives in `src/hooks.server.ts` (JSON lines with `scope: "auth"`). A request is observed when the path is `/auth`, starts with `/api/auth`, **or** the URL has an `error` query parameter (so OAuth failures on redirects are captured even off those paths). Events include `request_started`, `request_finished`, and `request_failed`; payloads include request ID, method, host, pathname, origin/referer where relevant, `hasAuthToken` (Convex JWT from cookies), response status, redirect location summary, and URL `error` when present.
 
-The same hook chain wraps **`@sentry/sveltekit`** (`Sentry.sentryHandle()` and `handleErrorWithSentry()`), so unhandled errors and Sentry’s own instrumentation are separate from the auth-scoped console logs.
+### Auth outage alerting
+
+Rate-limited alerting fires through both **Sentry** and the **ops webhook** (`OPS_ALERT_WEBHOOK_URL`). Alerting uses a stricter predicate than logging — only `/auth` and `/api/auth/*` paths trigger alerts (not arbitrary URLs with `?error=`).
+
+| Signal | Trigger | Sentry | Webhook |
+|--------|---------|--------|---------|
+| `auth_proxy_failure` | Auth proxy exhausts retries | ✓ | ✓ (5m cooldown per path) |
+| `auth_endpoint_5xx` | ≥3 auth 5xx in 60s | ✓ | ✓ (5m cooldown per path+status) |
+| `better_auth_api_error` | Better Auth `onAPIError` fires | — | ✓ (5m cooldown, Convex-side) |
+
+Rate-limit state is **process-local** (in-memory map on SvelteKit, module variable on Convex). It is not durable across cold starts or multiple instances. Sentry's global `handleErrorWithSentry()` separately captures unhandled exceptions thrown from auth routes.
+
+### Sentry boundary
+
+The same hook chain wraps **`@sentry/sveltekit`** (`Sentry.sentryHandle()` and `handleErrorWithSentry()`), so unhandled errors and Sentry's own instrumentation are separate from the auth-scoped console logs. Convex-side auth code does **not** import Sentry (per the `invariant_convex_sentry` rule).
 
 Auth-route console logging does not fully diagnose **client-only** flicker inside an already-loaded `/app` tab; pair server logs with browser automation or temporary client instrumentation in the protected layout when debugging UX regressions.
 
@@ -112,12 +129,28 @@ Auth-route console logging does not fully diagnose **client-only** flicker insid
 Relevant tests:
 
 - `src/lib/auth-client.test.ts`
+- `src/lib/auth/config.test.ts`
 - `src/lib/auth/protected-app.test.ts`
+- `src/lib/server/auth-alerts.test.ts`
 - `src/lib/server/auth-guard.test.ts`
 - `src/lib/server/auth-proxy.test.ts`
 - `src/lib/server/auth.test.ts`
 - `src/lib/server/canonical-site.test.ts`
 - `src/lib/server/response.test.ts`
+
+CI runs these as a dedicated **auth regression suite** (`pnpm test:auth`) before the full verify pipeline. The test list is maintained in `package.json` under the `test:auth` script.
+
+### Scheduled auth canary
+
+A GitHub Actions workflow (`.github/workflows/auth-canary.yml`) runs every 5 minutes and can also be triggered manually. It executes `scripts/check-auth-health.mjs`, which:
+
+- Verifies `/auth` renders the expected sign-in UI (checks stable `data-testid` markers, not copy text).
+- Verifies `/api/auth/get-session` returns valid JSON with a 200 or 401 status.
+- Posts failures to the ops webhook.
+
+This is a **smoke check** — it validates page availability and session endpoint health, not full OAuth redirect/callback flows.
+
+Required GitHub secrets: `AUTH_CANARY_BASE_URL` (production origin), `OPS_ALERT_WEBHOOK_URL`, and optionally `OPS_ALERT_WEBHOOK_KIND`.
 
 Additional areas worth covering over time: protected-route hydration after social login, first authenticated render when the Convex user row does not exist yet, and env selection when switching between cloud dev and local Convex.
 

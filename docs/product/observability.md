@@ -29,7 +29,10 @@ ROUTE(signal):
   IF signal.requires_immediate_human_action AND signal.type IN (
     "purchase_settled",
     "generation_failed",
-    "generation_stalled"
+    "generation_stalled",
+    "auth_proxy_failure",
+    "auth_endpoint_5xx",
+    "better_auth_api_error"
   ) THEN HUMAN_OPS_WEBHOOK  // early-stage: low volume; revisit ~50+ users
   ELIF signal.supports_growth_or_product_analysis THEN LLM_ANALYTICS
   ELIF signal.is_exception THEN SENTRY
@@ -548,6 +551,51 @@ generic_json_payload_includes:
 slack_discord: "same structural pattern as generation alerts (header + facts)"
 ```
 
+### 13.3 Auth alert
+
+```typescript
+interface AuthAlertContext {
+  alertType: "auth_proxy_failure" | "auth_endpoint_5xx" | "better_auth_api_error";
+  severity: "warning" | "critical";
+  pathname?: string;
+  method?: string;
+  host?: string;
+  origin?: string;
+  referer?: string;
+  requestId?: string;
+  status?: number;
+  attempts?: number;
+  count?: number;
+  windowMs?: number;
+  error?: string;
+  provider?: string;
+}
+```
+
+| `webhookKind` | body |
+|---------------|------|
+| `slack` | `{ text, blocks }` |
+| `discord` | `{ content: string }` |
+| `generic` | `{ event: "auth_outage", title, severity, alert_type, context }` |
+
+#### SvelteKit-side rate limiting (`src/lib/server/auth-alerts.ts`)
+
+```yaml
+auth_proxy_failure:
+  sentry_and_webhook: "on first occurrence, then cooldown 5m per pathname"
+auth_endpoint_5xx:
+  sentry_and_webhook: "after 3 failures in 60s per pathname+status, then cooldown 5m"
+rate_limit_scope: "process-local in-memory; not durable across instances or cold starts"
+```
+
+#### Better Auth server-side (`src/convex/auth.ts`)
+
+```yaml
+better_auth_api_error:
+  channel: "webhook only (Convex does not import Sentry)"
+  cooldown: "5m process-local; best-effort across isolate recycling"
+```
+
 ---
 
 ## 14. Action `internal.ops.sendGenerationAlert`
@@ -629,6 +677,7 @@ convex:
   merge_duplicate_users: "src/convex/ops.ts" # mergeDuplicateUsers
   ops_queries_actions: "src/convex/ops.ts"
   ops_pure: "src/convex/lib/ops.ts"
+  auth_server_alerting: "src/convex/auth.ts"  # Better Auth onAPIError → webhook
   stripe_webhook_posthog_discord: "src/convex/http.ts"
   posthog_component_wrapper: "src/convex/posthog.ts"
   app_config: "src/convex/convex.config.ts"
@@ -644,10 +693,15 @@ tests:
   - "src/lib/analytics/generation.test.ts"
   - "src/lib/analytics/session-attribution.test.ts"
   - "src/convex/lib/ops.test.ts"
+  - "src/lib/server/auth-alerts.test.ts"
 sentry:
   - "src/instrumentation.server.ts"
   - "src/hooks.server.ts"
   - "src/hooks.client.ts"
+  - "src/lib/server/auth-alerts.ts"
+canary:
+  - "scripts/check-auth-health.mjs"
+  - ".github/workflows/auth-canary.yml"
 ```
 
 ---
@@ -667,6 +721,9 @@ NEW generationOps eventType:
 
 NEW ops alert field:
   - GenerationAlertContext + buildAlertFacts + recordAlertEvent args
+
+NEW auth alert field:
+  - AuthAlertContext + buildAuthAlertFacts + auth-alerts.ts thresholding constants
 
 Feed scale:
   - Replace full scan in getRecentGenerationOpsFeed if row count explodes

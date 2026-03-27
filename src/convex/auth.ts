@@ -11,12 +11,16 @@ import { components } from "./_generated/api.js";
 import type { DataModel } from "./_generated/dataModel.js";
 import { internalAction, query } from "./_generated/server.js";
 import authConfig from "./auth.config.js";
+import { assertOkWebhookResponse, buildAuthAlertRequest, readOpsAlertRuntimeConfig } from "./lib/ops.js";
 
 export const authComponent = createClient<DataModel>(components.betterAuth);
 export const getValidatedAuthEnv = (envSource: Record<string, string | undefined> = process.env) =>
   assertCanonicalAuthEnv(envSource);
 
 const AUTH_LOG_SCOPE = "auth";
+const BETTER_AUTH_ALERT_COOLDOWN_MS = 5 * 60 * 1000;
+/** Best-effort process-local cooldown; not durable across cold starts or isolate recycling. */
+let lastBetterAuthApiAlertAt = 0;
 
 const toConsoleMethod = (level: string) => {
   switch (level) {
@@ -71,6 +75,41 @@ const logAuthServerEvent = (
   );
 };
 
+const sendBetterAuthApiErrorAlert = async (error: unknown, context: ReturnType<typeof summarizeAuthContext>) => {
+  const now = Date.now();
+  if (now - lastBetterAuthApiAlertAt < BETTER_AUTH_ALERT_COOLDOWN_MS) {
+    return;
+  }
+
+  lastBetterAuthApiAlertAt = now;
+  const config = readOpsAlertRuntimeConfig();
+  if (!config.webhookUrl) {
+    return;
+  }
+
+  try {
+    const request = buildAuthAlertRequest(config, {
+      alertType: "better_auth_api_error",
+      severity: "critical",
+      error: error instanceof Error ? error.message : String(error),
+      method: context?.method,
+      pathname: context?.path,
+      provider: "better-auth",
+    });
+    const response = await fetch(request.url, {
+      method: "POST",
+      headers: request.headers,
+      body: request.body,
+    });
+
+    assertOkWebhookResponse(response);
+  } catch (alertError) {
+    logAuthServerEvent("error", "better_auth_api_error_alert_failed", {
+      error: summarizeAuthError(alertError),
+    });
+  }
+};
+
 export const createAuth = (ctx: GenericCtx<DataModel>) => {
   const authEnv = getValidatedAuthEnv();
   const options = {
@@ -96,10 +135,12 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
     onAPIError: {
       errorURL: "/auth",
       onError: (error, context) => {
+        const summarizedContext = summarizeAuthContext(context);
         logAuthServerEvent("error", "better_auth_api_error", {
           error: summarizeAuthError(error),
-          context: summarizeAuthContext(context),
+          context: summarizedContext,
         });
+        void sendBetterAuthApiErrorAlert(error, summarizedContext);
       },
     },
     plugins: [

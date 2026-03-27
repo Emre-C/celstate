@@ -1,5 +1,5 @@
-import * as Sentry from "@sentry/sveltekit";
 import { AUTH_PROXY_CLIENT_IP_HEADER } from "../auth/config.js";
+import { reportAuthProxyFailure } from "./auth-alerts.js";
 
 const RETRYABLE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const CLIENT_CONTROLLED_PROXY_HEADERS = new Set([
@@ -96,18 +96,6 @@ const upstreamUnavailableResponse = () =>
 		}
 	);
 
-const logConvexUnreachable = (pathname: string, attempts: number) => {
-	if (import.meta.env.DEV) {
-		return;
-	}
-	Sentry.captureMessage("Auth proxy: upstream Convex unreachable", {
-		level: "warning",
-		fingerprint: ["auth-proxy", "convex-unreachable"],
-		tags: { auth_proxy: "true" },
-		extra: { pathname, attempts }
-	});
-};
-
 const removeHeaders = (headers: Headers, names: Set<string>) => {
 	for (const headerName of names) {
 		headers.delete(headerName);
@@ -178,7 +166,9 @@ export const proxyAuthRequest = async (
 ): Promise<Response> => {
 	const method = request.method.toUpperCase();
 	const maxAttempts = RETRYABLE_METHODS.has(method) ? MAX_ATTEMPTS_SAFE_METHOD : 1;
-	const pathname = new URL(request.url).pathname;
+	const sourceUrl = new URL(request.url);
+	const pathname = sourceUrl.pathname;
+	let lastError: unknown;
 
 	for (let attempt = 0; attempt < maxAttempts; attempt++) {
 		const proxied = buildAuthProxyRequest(request, convexSiteUrl, options);
@@ -192,6 +182,7 @@ export const proxyAuthRequest = async (
 			if (error instanceof Error && error.name === "AbortError") {
 				throw error;
 			}
+			lastError = error;
 			if (!isRetryableUpstreamFetchError(error)) {
 				throw error;
 			}
@@ -201,6 +192,15 @@ export const proxyAuthRequest = async (
 		}
 	}
 
-	logConvexUnreachable(pathname, maxAttempts);
+	void reportAuthProxyFailure({
+		attempts: maxAttempts,
+		error: lastError instanceof Error ? lastError.message : lastError ? String(lastError) : undefined,
+		host: sourceUrl.host,
+		method: request.method,
+		origin: request.headers.get("origin") ?? undefined,
+		pathname,
+		referer: request.headers.get("referer") ?? undefined,
+		requestId: options.requestId
+	});
 	return upstreamUnavailableResponse();
 };

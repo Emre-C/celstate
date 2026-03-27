@@ -3,6 +3,7 @@ import * as Sentry from "@sentry/sveltekit";
 import type { Handle } from "@sveltejs/kit";
 import { PUBLIC_SITE_URL } from "$env/static/public";
 import { getConvexJwtToken } from "$lib/server/auth.js";
+import { recordRepeatedAuthEndpoint5xx } from "$lib/server/auth-alerts.js";
 import {
 				createCanonicalRedirectResponse,
 				getCanonicalRedirectUrl
@@ -42,7 +43,10 @@ const getRedirectSummary = (location: string | null, baseUrl: URL) => {
 };
 
 const isAuthObservedRequest = (url: URL) =>
-				url.pathname.startsWith("/api/auth") || url.pathname === "/auth" || url.searchParams.has("error");
+	url.pathname.startsWith("/api/auth") || url.pathname === "/auth" || url.searchParams.has("error");
+
+const isAuthAlertableRequest = (url: URL) =>
+	url.pathname.startsWith("/api/auth") || url.pathname === "/auth";
 
 const logAuthRequestEvent = (
 				level: "info" | "warn" | "error",
@@ -72,6 +76,7 @@ export const handle: Handle = sequence(Sentry.sentryHandle(), async ({ event, re
 
 	event.locals.token = getConvexJwtToken(event.cookies);
 	const observedRequest = isAuthObservedRequest(event.url);
+	const alertableRequest = isAuthAlertableRequest(event.url);
 
 	if (observedRequest) {
 		logAuthRequestEvent("info", "request_started", {
@@ -88,6 +93,18 @@ export const handle: Handle = sequence(Sentry.sentryHandle(), async ({ event, re
 
 	try {
 		const response = withResponseHeader(await resolve(event), "x-request-id", event.locals.requestId);
+
+		if (alertableRequest && response.status >= 500) {
+			void recordRepeatedAuthEndpoint5xx({
+				host: event.url.host,
+				method: event.request.method,
+				origin: event.request.headers.get("origin") ?? undefined,
+				pathname: event.url.pathname,
+				referer: event.request.headers.get("referer") ?? undefined,
+				requestId: event.locals.requestId,
+				status: response.status
+			});
+		}
 
 		if (observedRequest) {
 			logAuthRequestEvent(response.status >= 400 ? "warn" : "info", "request_finished", {

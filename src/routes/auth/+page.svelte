@@ -74,7 +74,7 @@
 	<title>Sign in — Celstate</title>
 </svelte:head>
 
-<div class="min-h-dvh">
+<div class="min-h-dvh" data-testid="auth-page">
 	<NavBar />
 
 	<PageContainer max="4xl" class="py-28">
@@ -95,6 +95,7 @@
 					{#each providers as provider}
 						<button
 							type="button"
+							data-provider={provider.id}
 							disabled={!provider.available || activeProvider !== null}
 							onclick={() => handleSocialAuth(provider.id)}
 							class="flex w-full items-center justify-between border border-border bg-bg px-4 py-3 text-left text-sm transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	assertOkWebhookResponse,
+	buildAuthAlertRequest,
 	buildGenerationAlertRequest,
 	buildPurchaseAlertRequest,
 	buildSignupAlertRequest,
@@ -108,6 +109,43 @@ describe('ops helpers', () => {
 			title: 'Celstate new user signup',
 			user_email: 'ada@example.com',
 			user_id: 'user_456'
+		});
+	});
+
+	it('builds generic auth outage webhook payloads', () => {
+		const request = buildAuthAlertRequest(
+			{
+				webhookKind: 'generic',
+				webhookUrl: 'https://ops.example.com/webhook'
+			},
+			{
+				alertType: 'auth_proxy_failure',
+				severity: 'critical',
+				attempts: 3,
+				error: 'fetch failed',
+				host: 'celstate.com',
+				method: 'GET',
+				pathname: '/api/auth/get-session',
+				requestId: 'req-123'
+			}
+		);
+
+		expect(request.headers['content-type']).toBe('application/json');
+		expect(JSON.parse(request.body)).toEqual({
+			event: 'auth_outage',
+			title: 'Celstate auth proxy failure',
+			severity: 'critical',
+			alert_type: 'auth_proxy_failure',
+			context: {
+				alertType: 'auth_proxy_failure',
+				severity: 'critical',
+				attempts: 3,
+				error: 'fetch failed',
+				host: 'celstate.com',
+				method: 'GET',
+				pathname: '/api/auth/get-session',
+				requestId: 'req-123'
+			}
 		});
 	});
 

@@ -1,0 +1,28 @@
+name: Auth Canary
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: auth-canary
+  cancel-in-progress: true
+
+jobs:
+  auth-canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      AUTH_CANARY_BASE_URL: ${{ secrets.AUTH_CANARY_BASE_URL }}
+      OPS_ALERT_WEBHOOK_URL: ${{ secrets.OPS_ALERT_WEBHOOK_URL }}
+      OPS_ALERT_WEBHOOK_KIND: ${{ secrets.OPS_ALERT_WEBHOOK_KIND }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run auth canary
+        run: node scripts/check-auth-health.mjs

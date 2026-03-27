@@ -53,6 +53,25 @@ export interface SignupAlertContext {
 	initialCredits: number;
 }
 
+export interface AuthAlertContext {
+	alertType: 'auth_proxy_failure' | 'auth_endpoint_5xx' | 'better_auth_api_error';
+	severity: Exclude<OpsAlertSeverity, 'info'>;
+	pathname?: string;
+	method?: string;
+	host?: string;
+	origin?: string;
+	referer?: string;
+	requestId?: string;
+	status?: number;
+	attempts?: number;
+	count?: number;
+	windowMs?: number;
+	error?: string;
+	provider?: string;
+	contextPath?: string;
+	contextMethod?: string;
+}
+
 export interface OpsAlertRuntimeConfig {
 	webhookKind: OpsAlertWebhookKind;
 	webhookUrl?: string;
@@ -267,6 +286,83 @@ function buildSignupAlertFacts(context: SignupAlertContext): string[] {
 	return facts;
 }
 
+function buildAuthAlertTitle(context: AuthAlertContext): string {
+	switch (context.alertType) {
+		case 'auth_proxy_failure':
+			return 'Celstate auth proxy failure';
+		case 'better_auth_api_error':
+			return 'Celstate Better Auth API error';
+		default:
+			return 'Celstate auth endpoint returned repeated 5xx responses';
+	}
+}
+
+function buildAuthAlertFacts(context: AuthAlertContext): string[] {
+	const facts = [`Severity: ${context.severity}`];
+
+	if (context.pathname) {
+		facts.push(`Path: ${context.pathname}`);
+	}
+
+	if (context.method) {
+		facts.push(`Method: ${context.method}`);
+	}
+
+	if (context.status !== undefined) {
+		facts.push(`Status: ${context.status}`);
+	}
+
+	if (context.host) {
+		facts.push(`Host: ${context.host}`);
+	}
+
+	if (context.origin) {
+		facts.push(`Origin: ${context.origin}`);
+	}
+
+	if (context.referer) {
+		facts.push(`Referer: ${context.referer}`);
+	}
+
+	if (context.requestId) {
+		facts.push(`Request ID: ${context.requestId}`);
+	}
+
+	if (context.attempts !== undefined) {
+		facts.push(`Attempts: ${context.attempts}`);
+	}
+
+	if (context.count !== undefined) {
+		facts.push(`Failure count: ${context.count}`);
+	}
+
+	if (context.windowMs !== undefined) {
+		const duration = formatDurationMs(context.windowMs);
+		if (duration) {
+			facts.push(`Window: ${duration}`);
+		}
+	}
+
+	if (context.provider) {
+		facts.push(`Provider: ${context.provider}`);
+	}
+
+	if (context.contextMethod) {
+		facts.push(`Context method: ${context.contextMethod}`);
+	}
+
+	if (context.contextPath) {
+		facts.push(`Context path: ${context.contextPath}`);
+	}
+
+	const error = truncateError(context.error);
+	if (error) {
+		facts.push(`Error: ${error}`);
+	}
+
+	return facts;
+}
+
 function buildWebhookRequest(
 	config: OpsAlertRuntimeConfig,
 	payload: {
@@ -395,6 +491,29 @@ export function buildSignupAlertRequest(config: OpsAlertRuntimeConfig, context: 
 			title: 'Celstate new user signup',
 			user_email: context.userEmail,
 			user_id: context.userId
+		}
+	});
+}
+
+export function buildAuthAlertRequest(config: OpsAlertRuntimeConfig, context: AuthAlertContext): {
+	body: string;
+	headers: Record<string, string>;
+	url: string;
+} {
+	const title = buildAuthAlertTitle(context);
+	const facts = buildAuthAlertFacts(context);
+
+	return buildWebhookRequest(config, {
+		summaryLine: `${context.severity.toUpperCase()}: ${title}`,
+		headerEmoji: context.severity === 'critical' ? '🚨' : '⚠️',
+		headerText: title,
+		facts,
+		genericBody: {
+			event: 'auth_outage',
+			title,
+			severity: context.severity,
+			alert_type: context.alertType,
+			context
 		}
 	});
 }

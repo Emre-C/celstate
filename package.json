@@ -13,6 +13,7 @@
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"test": "vitest run",
 		"test:watch": "vitest",
+		"test:auth": "vitest run src/lib/server/auth-proxy.test.ts src/lib/server/auth-alerts.test.ts src/lib/server/response.test.ts src/lib/auth-client.test.ts src/lib/server/canonical-site.test.ts src/lib/auth/protected-app.test.ts src/lib/server/auth-guard.test.ts src/lib/server/auth.test.ts src/lib/auth/config.test.ts",
 		"check:stripe-env": "npx tsx scripts/check-stripe-env.ts",
 		"check:posthog-env": "npx tsx scripts/check-posthog-env.ts",
 		"check:convex-auth": "npx tsx scripts/check-local-convex-auth.ts",

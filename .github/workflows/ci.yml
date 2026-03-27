@@ -35,5 +35,8 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
+      - name: Auth regression suite
+        run: pnpm test:auth
+
       - name: Verify (public env, typecheck, knip, dupcheck, eslint, test, build)
         run: pnpm verify
