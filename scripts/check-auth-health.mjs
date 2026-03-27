@@ -43,9 +43,9 @@ const checkSessionEndpoint = async () => {
 	const timeout = setTimeout(() => controller.abort(), 15_000);
 
 	try {
+		// Follow redirects (default). Apex → www (308) must not be treated as failure.
 		const response = await fetch(joinUrl('/api/auth/get-session'), {
 			headers: { accept: 'application/json' },
-			redirect: 'manual',
 			signal: controller.signal
 		});
 

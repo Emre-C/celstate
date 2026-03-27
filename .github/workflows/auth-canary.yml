@@ -2,7 +2,8 @@ name: Auth Canary
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    # Enough for prod signal without alert fatigue (was every 5m).
+    - cron: '*/15 * * * *'
   workflow_dispatch:
 
 concurrency:
