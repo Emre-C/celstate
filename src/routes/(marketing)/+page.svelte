@@ -104,9 +104,7 @@
 	<meta name="twitter:description" content={pageDescription} />
 	<meta name="twitter:image" content={ogImageUrl} />
 	<link rel="preload" as="image" href={heroImageSrc} />
-	<svelte:element this={'script'} type="application/ld+json">
-		{@html jsonLd}
-	</svelte:element>
+	{@html `<script type="application/ld+json">${jsonLd}</script>`}
 </svelte:head>
 
 <div class="min-h-dvh">
