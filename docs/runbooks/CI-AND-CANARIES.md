@@ -4,9 +4,18 @@ Short reference for what runs on GitHub Actions, common failure modes, and how t
 
 ## CI (`/.github/workflows/ci.yml`)
 
+Two steps after checkout/install:
+
+1. **`pnpm test:auth`** — Fast Vitest subset (auth proxy, guards, canary probe contract, etc.). See `package.json` → `test:auth`.
+2. **`pnpm verify`** — Typecheck, Knip, jscpd, ESLint, full Vitest, production `vite build`, then **`pnpm test:e2e`** (Playwright against `vite preview`).
+
+Other notes:
+
 - **pnpm:** Version comes only from `package.json` → `"packageManager": "pnpm@…"`. Do not also pin `version:` on `pnpm/action-setup` (the action errors if both disagree).
 - **`tsx`:** Scripts such as `check:public-env` use `tsx` and it is a **devDependency**. Relying on `npx tsx` without installing `tsx` breaks CI.
-- **Public env in CI:** The workflow sets placeholder `PUBLIC_*` values so `pnpm verify` can build without real Convex/PostHog secrets. See `PUBLIC-ENV-CHECKLIST.md`.
+- **Playwright:** The workflow runs `pnpm exec playwright install chromium --with-deps` so E2E can launch Chromium on the runner.
+- **Public env in CI:** The workflow sets placeholder `PUBLIC_*` values so `pnpm verify` can build without real Convex/PostHog secrets. **`PUBLIC_SITE_URL` is `http://127.0.0.1:4174`** so the built canonical origin matches the preview URL used by Playwright (see [PUBLIC-ENV-CHECKLIST.md](./PUBLIC-ENV-CHECKLIST.md), rule **4. CI**).
+- **E2E:** `playwright.config.ts` starts **`vite preview`** on port **4174**; `e2e/marketing-landing.spec.ts` loads `/` and fails if the console reports Svelte **`hydration_mismatch`** or if primary hero CTAs are missing.
 
 ## Auth Canary (`/.github/workflows/auth-canary.yml`)
 
@@ -34,5 +43,6 @@ If the bare domain (`https://example.com`) **308-redirects** to `https://www.exa
 
 ## Related docs
 
-- `docs/product/authentication.md` — Scheduled auth canary section  
+- `docs/product/authentication.md` — Regression coverage and scheduled auth canary  
+- `docs/runbooks/PUBLIC-ENV-CHECKLIST.md` — CI `PUBLIC_SITE_URL` vs production  
 - `docs/product/observability.md` — Canary file references  

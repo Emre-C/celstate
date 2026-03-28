@@ -15,7 +15,7 @@ export default tseslint.config(
 		]
 	},
 	{
-		files: ['src/**/*.{ts,tsx}', 'scripts/**/*.{ts,tsx,mjs}'],
+		files: ['src/**/*.{ts,tsx}', 'scripts/**/*.{ts,tsx,mjs}', 'e2e/**/*.ts', 'playwright.config.ts'],
 		languageOptions: {
 			parser: tseslint.parser,
 			parserOptions: {

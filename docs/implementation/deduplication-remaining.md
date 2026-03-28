@@ -68,7 +68,7 @@ This is **not** about chasing 0% duplication (often impossible or harmful with v
 
 1. Document **invariants** in a comment block (e.g. “must only run while `status === 'generating'`”).
 2. Factor shared **read-guard-patch** into a private function in `generations.ts` *if* it does not worsen TOCTOU clarity (see [Convex conventions](../conventions/convex.md)).
-3. Re-run tests and `pnpm verify`.
+3. Re-run tests and `pnpm verify` (includes Playwright E2E when the full gate runs).
 
 ---
 
@@ -114,5 +114,5 @@ This is **not** about chasing 0% duplication (often impossible or harmful with v
 ## How to use this doc
 
 - **Planning:** Pick one numbered section per PR; avoid mixing unrelated refactors.
-- **Definition of done:** `pnpm verify` green; `pnpm dupcheck` still green; behavior unchanged or explicitly approved (product/testing).
+- **Definition of done:** `pnpm verify` green (including `pnpm test:e2e` in that flow); `pnpm dupcheck` still green; behavior unchanged or explicitly approved (product/testing).
 - **Related reading:** [hardening.md](./hardening.md), [Convex conventions](../conventions/convex.md), [CODE-CLEAN.md](./CODE-CLEAN.md).

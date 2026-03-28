@@ -4,7 +4,7 @@
 
 Repeated manual testing against the live image model (Vertex / Gemini) is **expensive** and **non-deterministic**: the same prompt can yield different pixels, retries multiply cost, and CI cannot rely on network access or billing. Once the generation pipeline (white pass → black pass → validation → matte → finalize) is **behaviorally stable**, most day-to-day work should exercise **code paths and data contracts** without paying per request.
 
-This is complementary to “hardening” checks (`pnpm verify`, Knip, jscpd, ESLint): those catch structural drift; a mock/fixture layer catches **regressions in orchestration, validation, and image math** without hitting the network.
+This is complementary to “hardening” checks (`pnpm verify`, Knip, jscpd, ESLint): those catch structural drift and (via Playwright) a **browser smoke** on the marketing route; a mock/fixture layer catches **regressions in orchestration, validation, and image math** without hitting the network.
 
 ---
 
@@ -89,7 +89,7 @@ For this codebase, **A (fixtures + fake session)** usually gives the best cost/b
 
 ### Phase 4 — CI split
 
-- **PR pipeline**: `pnpm verify` + tests that use mocks only (no `VERTEX_*` secrets required).
+- **PR pipeline**: `pnpm verify` (includes Vitest + Playwright E2E on marketing `/`) + tests that use mocks only (no `VERTEX_*` secrets required).
 - **Optional cadence**: weekly or pre-release **manual** or **staging** run with real API to validate model drift.
 
 ### Phase 5 — Guardrails

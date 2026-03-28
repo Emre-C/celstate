@@ -138,7 +138,7 @@ Relevant tests:
 - `src/lib/server/canonical-site.test.ts`
 - `src/lib/server/response.test.ts`
 
-CI runs these as a dedicated **auth regression suite** (`pnpm test:auth`) before the full verify pipeline. The test list is maintained in `package.json` under the `test:auth` script (includes `scripts/auth-canary-probe.test.ts` for the production canary contract).
+CI runs these as a dedicated **auth regression suite** (`pnpm test:auth`) first, then the full **`pnpm verify`** pipeline (typecheck, Knip, duplication check, ESLint, all Vitest tests, production build, **`pnpm test:e2e`** Playwright smoke on the marketing landing page—including a console guard for Svelte **`hydration_mismatch`**). The test list is maintained in `package.json` under the `test:auth` script (includes `scripts/auth-canary-probe.test.ts` for the production canary contract). See `docs/runbooks/CI-AND-CANARIES.md`.
 
 ### Scheduled auth canary
 
