@@ -1,6 +1,12 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import { useConvexClient } from '@mmailaender/convex-svelte';
 	import { api } from '../../convex/_generated/api.js';
+	import {
+		growthEvents,
+		type CreditsPurchaseCtaSurface
+	} from '$lib/analytics/growth-events.js';
+	import { initPostHog, posthog } from '$lib/posthog';
 	import AspectRatioSelector from './AspectRatioSelector.svelte';
 
 	let {
@@ -92,6 +98,39 @@
 
 	const noCredits = $derived(credits !== undefined && credits <= 0);
 	const canSubmit = $derived(value.trim().length > 0 && !disabled && !noCredits && !uploading);
+
+	let zeroCreditsPromptLogged = $state(false);
+
+	$effect(() => {
+		if (!browser) {
+			return;
+		}
+		if (credits === undefined) {
+			return;
+		}
+		if (credits > 0) {
+			zeroCreditsPromptLogged = false;
+			return;
+		}
+		if (zeroCreditsPromptLogged) {
+			return;
+		}
+		zeroCreditsPromptLogged = true;
+		if (!initPostHog()) {
+			return;
+		}
+		posthog.capture(growthEvents.zeroCreditsPromptShown, { surface: 'prompt_input' });
+	});
+
+	function capturePurchaseCta(surface: CreditsPurchaseCtaSurface) {
+		if (!browser) {
+			return;
+		}
+		if (!initPostHog()) {
+			return;
+		}
+		posthog.capture(growthEvents.creditsPurchaseCtaClicked, { surface });
+	}
 </script>
 
 <div class="prompt-input-wrapper min-w-0 max-w-full">
@@ -120,24 +159,26 @@
 		</div>
 	{/if}
 
-	<!-- Zero-credit inline CTA -->
+	<!-- Zero-credit purchase bridge (GH-003) -->
 	{#if noCredits}
-		<div class="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-1">
-			<span class="text-[10px] font-medium uppercase tracking-[0.06em] text-red-600">
-				Out of credits
-			</span>
+		<div class="mb-3 border border-red-300 bg-red-50 px-3 py-3 sm:px-4">
+			<p class="text-sm font-medium text-red-800">You're out of credits</p>
+			<p class="mt-1 text-sm leading-relaxed text-red-700">
+				Buy a pack to keep generating, or wait for your free weekly credit when the balance is zero.
+			</p>
 			<a
 				href="/app/credits"
-				class="min-w-0 break-words text-end text-[10px] font-medium uppercase tracking-[0.06em] text-accent transition-colors hover:text-text"
+				class="mt-3 inline-flex text-sm font-medium text-accent underline decoration-accent/30 underline-offset-2 transition-colors hover:text-text"
+				onclick={() => capturePurchaseCta('prompt_input')}
 			>
-				15 for $5, 40 for $10 · Get more →
+				View credits & pricing →
 			</a>
 		</div>
 	{/if}
 
 	<div
 		class="flex min-w-0 items-center border transition-all duration-200 {noCredits
-			? 'border-red-900/30'
+			? 'border-red-300'
 			: focused
 				? 'border-accent/40 shadow-[0_0_12px_-4px_var(--color-accent)]'
 				: 'border-border'}"
@@ -228,7 +269,7 @@
 					<a href="/app/credits" class="text-accent transition-colors hover:text-text">Stock up →</a>
 				{/if}
 			{:else if noCredits}
-				<span class="text-red-400/70">0 credits</span>
+				<span class="text-red-700">0 credits</span>
 			{:else}
 				1 credit per generation
 			{/if}

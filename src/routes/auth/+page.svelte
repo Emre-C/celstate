@@ -4,6 +4,8 @@
 	import { getAuthProviderDescriptors, type AuthProviderId } from '$lib/auth/providers';
 	import { authClient } from '$lib/auth-client';
 	import { resolveAuthClientBaseUrl } from '$lib/auth-client';
+	import { growthEvents } from '$lib/analytics/growth-events.js';
+	import { initPostHog, posthog } from '$lib/posthog';
 	import NavBar from '$lib/components/ui/NavBar.svelte';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import SectionLabel from '$lib/components/ui/SectionLabel.svelte';
@@ -52,6 +54,13 @@
 
 		activeProvider = providerId;
 		errorMessage = '';
+
+		if (initPostHog()) {
+			posthog.capture(growthEvents.authSignInStarted, {
+				provider: providerId,
+				redirect_to: redirectTo
+			});
+		}
 
 		try {
 			const result = await authClient.signIn.social({

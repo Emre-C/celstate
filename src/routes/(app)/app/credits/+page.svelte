@@ -75,7 +75,7 @@
 
 	<!-- Current balance -->
 	<div class="mb-10">
-		<span class="text-xs font-medium uppercase tracking-[0.06em] {credits === 0 ? 'text-red-400' : 'text-dim'}">
+		<span class="text-xs font-medium uppercase tracking-[0.06em] {credits === 0 ? 'text-red-700' : 'text-dim'}">
 			{credits} {credits === 1 ? 'credit' : 'credits'} remaining
 		</span>
 	</div>

@@ -11,6 +11,7 @@
 	import GenerationCard from '$lib/components/GenerationCard.svelte';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import SectionLabel from '$lib/components/ui/SectionLabel.svelte';
+	import { growthEvents } from '$lib/analytics/growth-events.js';
 	import { initPostHog, posthog } from '$lib/posthog';
 
 	const client = useConvexClient();
@@ -172,7 +173,15 @@
 				>
 					Image ready · <span class="tabular-nums">{credits}</span>
 					{credits === 1 ? 'credit' : 'credits'} left ·
-					<a href="/app/credits" class="text-accent transition-colors hover:text-text">Get more →</a>
+					<a
+						href="/app/credits"
+						class="text-accent transition-colors hover:text-text"
+						onclick={() => {
+							initPostHog();
+							posthog.capture(growthEvents.creditsPurchaseCtaClicked, {
+								surface: 'post_generation_banner'
+							});
+						}}>Get more →</a>
 				</span>
 				<button
 					type="button"

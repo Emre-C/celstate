@@ -15,7 +15,7 @@ export default tseslint.config(
 		]
 	},
 	{
-		files: ['**/*.{ts,tsx}'],
+		files: ['src/**/*.{ts,tsx}', 'scripts/**/*.{ts,tsx,mjs}'],
 		languageOptions: {
 			parser: tseslint.parser,
 			parserOptions: {

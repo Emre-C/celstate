@@ -1,4 +1,9 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
+	import { onMount } from 'svelte';
+	import { PUBLIC_SITE_URL } from '$env/static/public';
+	import { growthEvents } from '$lib/analytics/growth-events.js';
+	import { initPostHog, posthog } from '$lib/posthog';
 	import HeroShowcase from '$lib/components/HeroShowcase.svelte';
 	import ZoomInspector from '$lib/components/ZoomInspector.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -7,6 +12,27 @@
 	import SectionLabel from '$lib/components/ui/SectionLabel.svelte';
 
 	const heroImageSrc = '/images/celstate-a-majestic-phoenix-bird-in-midflight-win.png';
+
+	const siteOrigin = PUBLIC_SITE_URL.replace(/\/$/, '');
+	const canonicalUrl = `${siteOrigin}/`;
+	const ogImageUrl = `${siteOrigin}${heroImageSrc}`;
+	const pageTitle = 'AI transparent PNG generator — Celstate';
+	const pageDescription =
+		'Generate transparent PNGs from text with a real alpha channel — no background removal, no halos. AI image generation for logos, characters, and product shots.';
+	const jsonLd = JSON.stringify({
+		'@context': 'https://schema.org',
+		'@type': 'SoftwareApplication',
+		name: 'Celstate',
+		applicationCategory: 'DesignApplication',
+		operatingSystem: 'Web',
+		description: pageDescription,
+		offers: {
+			'@type': 'Offer',
+			price: '0',
+			priceCurrency: 'USD'
+		},
+		url: canonicalUrl
+	}).replace(/</g, '\\u003c');
 
 	const features = [
 		{
@@ -40,16 +66,55 @@
 			stat: 'Pay-as-you-go'
 		}
 	];
+
+	onMount(() => {
+		if (!browser) {
+			return;
+		}
+		if (!initPostHog()) {
+			return;
+		}
+		posthog.capture(growthEvents.landingViewed, { pathname: '/' });
+	});
+
+	function captureLandingCta(ctaId: string) {
+		if (!browser) {
+			return;
+		}
+		if (!initPostHog()) {
+			return;
+		}
+		posthog.capture(growthEvents.landingCtaClicked, { cta_id: ctaId, destination: '/app' });
+	}
 </script>
 
 <svelte:head>
+	<title>{pageTitle}</title>
+	<meta name="description" content={pageDescription} />
+	<link rel="canonical" href={canonicalUrl} />
+	<meta property="og:type" content="website" />
+	<meta property="og:site_name" content="Celstate" />
+	<meta property="og:title" content={pageTitle} />
+	<meta property="og:description" content={pageDescription} />
+	<meta property="og:url" content={canonicalUrl} />
+	<meta property="og:image" content={ogImageUrl} />
+	<meta property="og:image:alt" content="Celstate sample — phoenix artwork with transparent background" />
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content={pageTitle} />
+	<meta name="twitter:description" content={pageDescription} />
+	<meta name="twitter:image" content={ogImageUrl} />
 	<link rel="preload" as="image" href={heroImageSrc} />
+	<svelte:element this={'script'} type="application/ld+json">
+		{@html jsonLd}
+	</svelte:element>
 </svelte:head>
 
 <div class="min-h-dvh">
 	<!-- Nav -->
 	<NavBar>
-		<Button href="/app" class="px-4 py-1.5">Start Generating</Button>
+		<Button href="/app" class="px-4 py-1.5" onclick={() => captureLandingCta('nav_start')}>
+			Start Generating
+		</Button>
 	</NavBar>
 
 	<!-- Hero: Split layout — editorial left, interactive proof right -->
@@ -59,7 +124,7 @@
 				<!-- Left: editorial -->
 				<div class="hero-stagger min-w-0 pt-4 lg:pt-8">
 					<div class="hero-item mb-4">
-						<SectionLabel text="AI image generation" />
+						<SectionLabel text="AI transparent PNG generator" />
 					</div>
 					<h1
 						class="hero-item mb-6 text-4xl font-display italic leading-[1.12] tracking-tight text-balance text-text sm:text-5xl sm:leading-[1.1] lg:text-6xl"
@@ -73,7 +138,9 @@
 						No halos or artifacts. Just your vision, clean and ready to use.
 					</p>
 					<div class="hero-item flex items-center gap-4">
-						<Button href="/app" class="px-7">Start Generating</Button>
+						<Button href="/app" class="px-7" onclick={() => captureLandingCta('hero_start')}>
+							Start Generating
+						</Button>
 					</div>
 				</div>
 
@@ -165,7 +232,9 @@
 					<p class="mb-8 flex-1 break-words text-sm leading-relaxed text-dim">
 						3 credits on sign-up, plus 1 free credit every week. Enough to try it — not enough to rely on it.
 					</p>
-					<Button href="/app" variant="ghost" fullWidth>Start Free</Button>
+					<Button href="/app" variant="ghost" fullWidth onclick={() => captureLandingCta('pricing_free')}>
+						Start Free
+					</Button>
 				</div>
 				<div class="flex flex-col border border-border p-6 sm:p-8">
 					<span class="mb-6 block text-[11px] font-medium uppercase tracking-[0.08em] text-accent">Starter</span>
@@ -174,7 +243,9 @@
 						15 credits, one-time. No subscription.
 						Your free weekly drip continues on top.
 					</p>
-					<Button href="/app" variant="secondary" fullWidth>Get Started</Button>
+					<Button href="/app" variant="secondary" fullWidth onclick={() => captureLandingCta('pricing_starter')}>
+						Get Started
+					</Button>
 				</div>
 				<div class="flex flex-col border border-border p-6 sm:p-8">
 					<div class="mb-6 flex items-center gap-3">
@@ -186,7 +257,7 @@
 						40 credits at $0.25 each — 25% less than Starter.
 						Same deal: one-time, no subscription, weekly drip continues.
 					</p>
-					<Button href="/app" fullWidth>Get Pro</Button>
+					<Button href="/app" fullWidth onclick={() => captureLandingCta('pricing_pro')}>Get Pro</Button>
 				</div>
 			</div>
 

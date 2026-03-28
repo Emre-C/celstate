@@ -10,6 +10,7 @@ if (!baseUrl) {
 
 const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
 
+/** @param {string} pathname */
 const joinUrl = (pathname) => `${normalizedBaseUrl}${pathname}`;
 
 const checkAuthPage = async () => {
@@ -71,6 +72,7 @@ const checkSessionEndpoint = async () => {
 	}
 };
 
+/** @param {string} message */
 const sendAlert = async (message) => {
 	if (!webhookUrl) {
 		return;

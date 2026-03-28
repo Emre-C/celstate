@@ -87,7 +87,7 @@ SSR uses **cookie presence only** to derive the initial snapshot. Full validatio
 
 ## Enduring lessons
 
-1. **One canonical public origin** — `SITE_URL` and `PUBLIC_SITE_URL` must resolve to the same host. The SvelteKit hook redirects non-canonical requests. OAuth must start and finish on the same origin or state cookies drift.
+1. **One canonical public origin** — `SITE_URL` and `PUBLIC_SITE_URL` must resolve to the same host. The SvelteKit hook redirects non-canonical requests. OAuth must start and finish on the same origin or state cookies drift. The marketing landing (`src/routes/(marketing)/+page.svelte`) builds `rel=canonical`, `og:url`, and absolute `og:image` URLs from `PUBLIC_SITE_URL` so crawlers and social previews align with that host; `pnpm check:public-env` enforces an origin-only `PUBLIC_SITE_URL` (see [PUBLIC-ENV-CHECKLIST.md](../runbooks/PUBLIC-ENV-CHECKLIST.md)).
 2. **Browser auth client** — Prefer `window.location.origin` over `PUBLIC_SITE_URL` in `auth-client.ts` so `/api/auth/*` stays same-origin for the host the user loaded.
 3. **Proxy headers** — Never forward caller-supplied proxy / IP headers into Better Auth. Strip them in SvelteKit and stamp the trusted values yourself: `x-forwarded-host`, `x-forwarded-proto`, `x-forwarded-port`, `x-forwarded-for`, dedicated internal client-IP header `x-celstate-client-ip`, and `x-request-id`.
 4. **Immutable responses in hooks** — Do not mutate headers on arbitrary `Response` objects; use `response.ts` when adding headers.

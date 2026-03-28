@@ -15,6 +15,7 @@ Thumbs.db
 # Env
 .env
 .env.*
+!.env.example
 
 # Google Cloud — service account key downloads (never commit)
 celstate-*-*.json
@@ -23,6 +24,9 @@ celstate-*-*.json
 
 # Playwright
 .playwright-cli/
+
+# Growth tooling artifacts
+.growth/
 
 # NPM
 .npmrc

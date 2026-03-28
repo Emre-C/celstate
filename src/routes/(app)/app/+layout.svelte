@@ -2,6 +2,7 @@
 	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { authClient } from '$lib/auth-client';
+	import { growthEvents } from '$lib/analytics/growth-events.js';
 	import { initPostHog, posthog } from '$lib/posthog';
 	import { useQuery } from '@mmailaender/convex-svelte';
 	import { api } from '../../../convex/_generated/api.js';
@@ -11,7 +12,7 @@
 	const user = useQuery(api.users.getMe, {});
 	const credits = $derived(user.data?.credits ?? 0);
 	const creditColor = $derived(
-		credits === 0 ? 'text-red-400' : credits <= 2 ? 'text-accent' : 'text-dim'
+		credits === 0 ? 'text-red-700' : credits <= 2 ? 'text-accent' : 'text-dim'
 	);
 	let signingOut = $state(false);
 
@@ -49,6 +50,13 @@
 			<a
 				href="/app/credits"
 				class="flex min-w-0 items-center gap-1.5 transition-colors hover:text-accent"
+				onclick={() => {
+					if (!browser || credits !== 0) {
+						return;
+					}
+					initPostHog();
+					posthog.capture(growthEvents.creditsPurchaseCtaClicked, { surface: 'navbar' });
+				}}
 			>
 				<span class="text-xs font-medium tracking-[0.06em] uppercase {creditColor}">
 					<span class="tabular-nums">{credits}</span>

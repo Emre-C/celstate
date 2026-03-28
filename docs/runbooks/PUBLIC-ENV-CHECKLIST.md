@@ -6,11 +6,21 @@ SvelteKit exposes `PUBLIC_*` variables to the client. Anything imported from `$e
 
 | Variable | Role |
 |----------|------|
-| `PUBLIC_SITE_URL` | **This SvelteKit app** — canonical origin (e.g. `https://your-app.vercel.app`). Used for auth client base URL and canonical redirects. |
+| `PUBLIC_SITE_URL` | **This SvelteKit app** — canonical origin (e.g. `https://your-app.vercel.app`). Used for auth client base URL, canonical host redirects, and marketing SEO/social metadata (`rel=canonical`, `og:url`, absolute `og:image` on the landing page). |
 | `PUBLIC_CONVEX_URL` | **Convex realtime / client API** — `https://<deployment>.convex.cloud` (or loopback when using local Convex). |
 | `PUBLIC_CONVEX_SITE_URL` | **Optional.** Only when `PUBLIC_CONVEX_URL` is loopback: set to the **same deployment’s** `https://<deployment>.convex.site` so Better Auth HTTP routes resolve. If `PUBLIC_CONVEX_URL` is already `*.convex.cloud`, omit this — the app derives `*.convex.site`. |
 
 Convex secrets and `SITE_URL` **inside Convex** are separate; see [CONVEX-VERCEL-ENVIRONMENTS.md](./CONVEX-VERCEL-ENVIRONMENTS.md).
+
+### What `pnpm check:public-env` requires for `PUBLIC_SITE_URL`
+
+`scripts/check-public-env.ts` parses the value with `new URL(...)` and **must** accept it as an origin-only `http(s)` URL:
+
+- Protocol is `http:` or `https:` only.
+- No userinfo, query string, or fragment.
+- Pathname must be empty or `/` (so the value denotes an origin, not a path). A trailing slash alone is fine; validation normalizes to `u.origin`.
+
+That keeps client-built absolute URLs for SEO and Open Graph consistent with the host enforced in `src/hooks.server.ts` and `src/lib/server/canonical-site.ts`.
 
 ## Rules that prevent ping-pong
 
