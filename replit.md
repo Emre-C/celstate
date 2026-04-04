@@ -60,4 +60,4 @@ Copy `.env.example` to `.env.local` and fill in:
 - **Matte algorithm optimization**: Merged two-pass pixel processing into a single pass for better CPU/memory efficiency
 - **PNG encoding parallelization**: `finalizePipeline` now encodes white/black/final PNGs concurrently with `Promise.all`
 - **Credit refund idempotency**: Added re-read guard before refund to prevent double-credit scenarios
-- **Prompt length limit**: Reduced from 20,000 to 2,000 characters as an abuse prevention measure
+- **Scaling docs**: Added `docs/implementation/weekly-credit-grant-at-scale.md` for future `grantWeeklyCredit` pagination plan

@@ -60,7 +60,7 @@ export const GENERATION_CONFIG = {
 
   // Abuse prevention
   maxConcurrentGenerations: 3,
-  maxPromptLength: 2_000,
+  maxPromptLength: 20_000,
   uploadUrlIssueWindowMs: 15 * 60 * 1000,
   maxUploadUrlIssuesPerWindow: 3 * 14,
 
