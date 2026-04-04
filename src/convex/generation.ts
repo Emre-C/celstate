@@ -288,9 +288,11 @@ async function finalizePipeline(
   });
 
   await updateStatus(ctx, generation._id, "Preparing final image…");
-  const finalPng = await encodePng(matteOutput.pixels, matteOutput.width, matteOutput.height);
-  const whiteBgPng = await encodePng(whiteDecoded.pixels, whiteDecoded.width, whiteDecoded.height);
-  const blackBgPng = await encodePng(blackDecoded.pixels, blackDecoded.width, blackDecoded.height);
+  const [finalPng, whiteBgPng, blackBgPng] = await Promise.all([
+    encodePng(matteOutput.pixels, matteOutput.width, matteOutput.height),
+    encodePng(whiteDecoded.pixels, whiteDecoded.width, whiteDecoded.height),
+    encodePng(blackDecoded.pixels, blackDecoded.width, blackDecoded.height),
+  ]);
 
   return {
     finalPng,

@@ -51,3 +51,13 @@ Copy `.env.example` to `.env.local` and fill in:
 1. `vite.config.ts`: Added `server.host = '0.0.0.0'`, `server.port = 5000`, `server.allowedHosts = true`
 2. `src/hooks.server.ts`: Canonical redirect (`308`) is disabled in dev mode to prevent redirect loops through the Replit proxy
 3. Dependencies installed with `npm install` (pnpm has installation issues in the Replit sandbox)
+
+## Recent Bug Fixes & Optimizations (2026-04-04)
+
+- **Auth state hydration fix**: `(app)/+layout.server.ts` now passes `authState` to the client layout, fixing undefined auth seed and potential redirect loops
+- **Sentry trace sampling**: Reduced from 100% to 10% to control production observability costs
+- **Generation history pagination**: `getByUserWithUrls` now uses `.take(50)` instead of `.collect()` to prevent unbounded payload growth
+- **Matte algorithm optimization**: Merged two-pass pixel processing into a single pass for better CPU/memory efficiency
+- **PNG encoding parallelization**: `finalizePipeline` now encodes white/black/final PNGs concurrently with `Promise.all`
+- **Credit refund idempotency**: Added re-read guard before refund to prevent double-credit scenarios
+- **Prompt length limit**: Reduced from 20,000 to 2,000 characters as an abuse prevention measure

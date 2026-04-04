@@ -322,14 +322,16 @@ async function failGenerationRecord(
     return;
   }
 
-  const refunded = await applyCreditsToUser(ctx, generation.userId, generation.creditsCost);
-  if (!refunded) {
+  const freshGeneration = await ctx.db.get(generationId);
+  if (!freshGeneration || freshGeneration.creditRefundedAt) {
     return;
   }
 
   await ctx.db.patch(generationId, {
     creditRefundedAt: now,
   });
+
+  await applyCreditsToUser(ctx, generation.userId, generation.creditsCost);
 }
 
 export const completeGeneration = internalMutation({
@@ -632,7 +634,7 @@ export const getByUserWithUrls = query({
       .query("generations")
       .withIndex("by_user", (q) => q.eq("userId", appUser._id))
       .order("desc")
-      .collect();
+      .take(50);
 
     return Promise.all(
       generations.map(async (gen) => {

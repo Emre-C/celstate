@@ -235,28 +235,47 @@ export const getStripePriceIds = query({
 export const grantWeeklyCredit = internalMutation({
   args: {},
   handler: async (ctx) => {
-    const users = await ctx.db.query("users").collect();
     const cap = GENERATION_CONFIG.weeklyDripCap;
+    const batchSize = 100;
+    let cursor = null;
+    let hasMore = true;
 
-    for (const user of users) {
-      const current = user.credits ?? 0;
+    while (hasMore) {
+      const query = ctx.db.query("users");
+      const batch = cursor
+        ? await query.take(batchSize)
+        : await query.take(batchSize);
 
-      if (current >= cap) {
-        continue;
+      if (batch.length < batchSize) {
+        hasMore = false;
       }
 
-      const grant = cap - current;
+      for (const user of batch) {
+        const current = user.credits ?? 0;
 
-      await ctx.db.patch(user._id, {
-        credits: cap,
-      });
+        if (current >= cap) {
+          continue;
+        }
 
-      await ctx.db.insert("creditGrants", {
-        userId: user._id,
-        amount: grant,
-        reason: "weekly_drip",
-        createdAt: Date.now(),
-      });
+        const grant = cap - current;
+
+        await ctx.db.patch(user._id, {
+          credits: cap,
+        });
+
+        await ctx.db.insert("creditGrants", {
+          userId: user._id,
+          amount: grant,
+          reason: "weekly_drip",
+          createdAt: Date.now(),
+        });
+      }
+
+      if (batch.length > 0) {
+        cursor = batch[batch.length - 1]._id;
+      }
+
+      hasMore = false;
     }
   },
 });
