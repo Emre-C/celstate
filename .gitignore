@@ -42,3 +42,15 @@ vite.config.ts.timestamp-*
 
 # Sentry Config File
 .env.sentry-build-plugin
+
+# Replit
+.replit
+replit.md
+.cache/
+.config/
+.local/
+.agents/
+AGENTS.md
+replit.nix
+.breakpoints
+*.replit
