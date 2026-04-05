@@ -36,6 +36,12 @@ If the bare domain (`https://example.com`) **308-redirects** to `https://www.exa
 `scripts/auth-canary-probe.mjs` defines which **final** HTTP statuses count as OK for the get-session probe (`200`, `401`).  
 `scripts/auth-canary-probe.test.ts` locks that in (including that `308` is not OK as a final status).
 
+### Interpreting failures (`scripts/check-auth-health.mjs`)
+
+- Failures are prefixed with **`[auth_page]`** (HTML `/auth` marker probe) or **`[get_session]`** (JSON `/api/auth/get-session` probe) so logs and ops webhooks name the failing step.
+- **`request timed out after …ms`** means the probe’s `fetch` hit the per-request abort budget (cold starts, edge/network blips, or GitHub runner egress). A single timeout with surrounding runs **green** usually points to **transience**, not a bad HTTP status from the app.
+- For sustained outages, expect explicit status / content-type / marker errors rather than only timeouts.
+
 ## Optional hardening (not in repo by default)
 
 - **actionlint:** Validate workflow YAML in CI (`rhysd/actionlint` or install locally). Catches some workflow mistakes early.

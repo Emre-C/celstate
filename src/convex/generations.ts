@@ -5,9 +5,10 @@ import {
   internalMutation,
   internalQuery,
   type MutationCtx,
+  type QueryCtx,
 } from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
-import type { Id } from "./_generated/dataModel.js";
+import type { Doc, Id } from "./_generated/dataModel.js";
 import { GENERATION_CONFIG, isValidAspectRatio } from "./lib/config.js";
 import { insertGenerationOpsEventRow } from "./lib/generationOpsEvents.js";
 import { generationStageValidator } from "./lib/validators.js";
@@ -124,6 +125,38 @@ async function validateReferenceStorageIds(
       throw new ConvexError(validation.reason ?? "Invalid reference image");
     }
   }
+}
+
+const generationStatusFilterValidator = v.union(
+  v.literal("complete"),
+  v.literal("generating"),
+  v.literal("failed"),
+);
+
+async function resolveGenerationWithUrls(
+  ctx: Pick<QueryCtx, "storage">,
+  generation: Doc<"generations">,
+): Promise<Doc<"generations"> & {
+  optimizedUrl: string | null;
+  referenceUrls: string[];
+  resultUrl: string | null;
+}> {
+  const referenceStorageIds = generation.referenceStorageIds ??
+    (generation.referenceStorageId ? [generation.referenceStorageId] : []);
+  const referenceUrls = await Promise.all(
+    referenceStorageIds.map((storageId) => ctx.storage.getUrl(storageId)),
+  );
+
+  return {
+    ...generation,
+    optimizedUrl: generation.optimizedStorageId
+      ? await ctx.storage.getUrl(generation.optimizedStorageId)
+      : null,
+    referenceUrls: referenceUrls.filter((url): url is string => url !== null),
+    resultUrl: generation.resultStorageId
+      ? await ctx.storage.getUrl(generation.resultStorageId)
+      : null,
+  };
 }
 
 /**
@@ -636,26 +669,55 @@ export const getByUserWithUrls = query({
       .order("desc")
       .take(50);
 
-    return Promise.all(
-      generations.map(async (gen) => {
-        // Resolve reference URLs from new array field, falling back to legacy single field
-        const refIds = gen.referenceStorageIds ?? (gen.referenceStorageId ? [gen.referenceStorageId] : []);
-        const referenceUrls = await Promise.all(
-          refIds.map((id) => ctx.storage.getUrl(id)),
-        );
+    return Promise.all(generations.map((generation) => resolveGenerationWithUrls(ctx, generation)));
+  },
+});
 
-        return {
-          ...gen,
-          resultUrl: gen.resultStorageId
-            ? await ctx.storage.getUrl(gen.resultStorageId)
-            : null,
-          optimizedUrl: gen.optimizedStorageId
-            ? await ctx.storage.getUrl(gen.optimizedStorageId)
-            : null,
-          referenceUrls: referenceUrls.filter((url): url is string => url !== null),
-        };
-      })
-    );
+export const listByUserWithUrls = query({
+  args: {
+    limit: v.optional(v.number()),
+    status: v.optional(generationStatusFilterValidator),
+  },
+  handler: async (ctx, args) => {
+    const appUser = await getCurrentAppUser(ctx);
+    if (!appUser) {
+      return [];
+    }
+
+    const limit = Math.min(Math.max(args.limit ?? 5, 1), 10);
+    const status = args.status;
+    const generations = status
+      ? await ctx.db
+        .query("generations")
+        .withIndex("by_user_status", (q) => q.eq("userId", appUser._id).eq("status", status))
+        .order("desc")
+        .take(limit)
+      : await ctx.db
+        .query("generations")
+        .withIndex("by_user", (q) => q.eq("userId", appUser._id))
+        .order("desc")
+        .take(limit);
+
+    return Promise.all(generations.map((generation) => resolveGenerationWithUrls(ctx, generation)));
+  },
+});
+
+export const getByUserAndIdWithUrls = query({
+  args: {
+    generationId: v.id("generations"),
+  },
+  handler: async (ctx, args) => {
+    const appUser = await getCurrentAppUser(ctx);
+    if (!appUser) {
+      return null;
+    }
+
+    const generation = await ctx.db.get(args.generationId);
+    if (!generation || generation.userId !== appUser._id) {
+      return null;
+    }
+
+    return resolveGenerationWithUrls(ctx, generation);
   },
 });
 

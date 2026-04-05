@@ -33,10 +33,18 @@ celstate-*-*.json
 
 # NPM
 .npmrc
+package-lock.json
 
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Prevent accidental local TypeScript emits from polluting Convex sources.
+src/convex/**/*.d.ts
+src/convex/**/*.js
+src/convex/**/*.js.map
+!src/convex/_generated/**/*.d.ts
+!src/convex/_generated/**/*.js
 
 .vercel
 
