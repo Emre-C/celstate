@@ -1,4 +1,8 @@
-import { isFinalGetSessionProbeOk } from './auth-canary-probe.mjs';
+import {
+	AUTH_CANARY_PROBE_TIMEOUT_MS,
+	formatAuthCanaryProbeFailure,
+	isFinalGetSessionProbeOk
+} from './auth-canary-probe.mjs';
 
 const baseUrl = process.env.AUTH_CANARY_BASE_URL?.trim();
 const webhookUrl = process.env.OPS_ALERT_WEBHOOK_URL?.trim();
@@ -15,7 +19,7 @@ const joinUrl = (pathname) => `${normalizedBaseUrl}${pathname}`;
 
 const checkAuthPage = async () => {
 	const controller = new AbortController();
-	const timeout = setTimeout(() => controller.abort(), 15_000);
+	const timeout = setTimeout(() => controller.abort(), AUTH_CANARY_PROBE_TIMEOUT_MS);
 
 	try {
 		const response = await fetch(joinUrl('/auth'), {
@@ -43,7 +47,7 @@ const checkAuthPage = async () => {
 
 const checkSessionEndpoint = async () => {
 	const controller = new AbortController();
-	const timeout = setTimeout(() => controller.abort(), 15_000);
+	const timeout = setTimeout(() => controller.abort(), AUTH_CANARY_PROBE_TIMEOUT_MS);
 
 	try {
 		// Follow redirects (default). Apex → www (308) must not be treated as failure.
@@ -100,11 +104,16 @@ const main = async () => {
 	const failures = [];
 	const results = [];
 
-	for (const check of [checkAuthPage, checkSessionEndpoint]) {
+	const probes = [
+		{ name: 'auth_page', run: checkAuthPage },
+		{ name: 'get_session', run: checkSessionEndpoint }
+	];
+
+	for (const { name, run } of probes) {
 		try {
-			results.push(await check());
+			results.push(await run());
 		} catch (error) {
-			failures.push(error instanceof Error ? error.message : String(error));
+			failures.push(formatAuthCanaryProbeFailure(name, error));
 		}
 	}
 
