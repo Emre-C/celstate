@@ -54,7 +54,7 @@ export async function getGenerationById(
   generationId: string,
 ): Promise<CelstateGenerationRecord | null> {
   return client.query(celstateApi.generations.getByUserAndIdWithUrls, {
-    generationId: generationId as GenerationId,
+    generationId,
   });
 }
 

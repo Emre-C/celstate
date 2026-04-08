@@ -16,6 +16,7 @@ export class AuthenticationError extends Error {
 
 export interface CelstateRequestContext {
   convex: ConvexHttpClient;
+  requestId: string;
   token: string;
   user: CelstateCurrentUser;
 }
@@ -45,20 +46,32 @@ export function parseBearerToken(authHeader: string | undefined): string {
 
 export async function authenticateRequest(
   authHeader: string | undefined,
+  requestId: string,
 ): Promise<CelstateRequestContext> {
-  const token = parseBearerToken(authHeader);
-  const convex = createConvexClient(token);
-  const user = await getCurrentUser(convex);
+  try {
+    const token = parseBearerToken(authHeader);
+    const convex = createConvexClient(token);
+    const user = await getCurrentUser(convex);
 
-  if (!user) {
+    if (!user) {
+      throw new AuthenticationError(
+        "Authentication failed. Generate a new Celstate MCP API key in settings and reconnect the MCP client.",
+      );
+    }
+
+    return {
+      convex,
+      requestId,
+      token,
+      user,
+    };
+  } catch (error) {
+    if (error instanceof AuthenticationError) {
+      throw error;
+    }
+
     throw new AuthenticationError(
       "Authentication failed. Generate a new Celstate MCP API key in settings and reconnect the MCP client.",
     );
   }
-
-  return {
-    convex,
-    token,
-    user,
-  };
 }

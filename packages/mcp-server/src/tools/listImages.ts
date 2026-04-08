@@ -14,6 +14,7 @@ import {
   READ_ONLY_TOOL_ANNOTATIONS,
   truncateText,
 } from "../tool-results.js";
+import { logToolFailure, logToolResult } from "../logging.js";
 
 export function registerListImageTools(
   server: McpServer,
@@ -42,6 +43,11 @@ export function registerListImageTools(
         const generations = await listGenerations(context.convex, { limit, status });
 
         if (generations.length === 0) {
+          logToolResult(context, "celstate_list_images", "succeeded", {
+            count: 0,
+            limit,
+            status,
+          });
           return createTextResult(
             status === "all"
               ? "No generations found. Use celstate_generate to create one."
@@ -67,6 +73,12 @@ export function registerListImageTools(
           return parts.join("\n");
         });
 
+        logToolResult(context, "celstate_list_images", "succeeded", {
+          count: generations.length,
+          limit,
+          status,
+        });
+
         return createTextResult(
           [
             `Showing ${generations.length} generation${generations.length === 1 ? "" : "s"}:`,
@@ -75,6 +87,10 @@ export function registerListImageTools(
           ].join("\n"),
         );
       } catch (error) {
+        logToolFailure(context, "celstate_list_images", error, {
+          limit,
+          status,
+        });
         return createErrorResult(`Failed to list generations: ${getErrorMessage(error)}`);
       }
     },

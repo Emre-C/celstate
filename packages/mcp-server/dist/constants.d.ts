@@ -4,6 +4,9 @@ export declare const MCP_SERVER_INFO: {
 };
 export declare const MCP_ENDPOINT_PATH = "/mcp";
 export declare const HEALTH_ENDPOINT_PATH = "/health";
+export declare const MCP_CORS_ALLOWED_METHODS: readonly ["DELETE", "GET", "OPTIONS", "POST"];
+export declare const MCP_CORS_ALLOWED_HEADERS: readonly ["Accept", "Authorization", "Content-Type", "Last-Event-ID", "Mcp-Session-Id", "MCP-Protocol-Version"];
+export declare const MCP_CORS_EXPOSED_HEADERS: readonly ["Mcp-Session-Id", "x-request-id"];
 export declare const DEFAULT_HOST = "127.0.0.1";
 export declare const DEFAULT_PORT = 3100;
 export declare const DEFAULT_LIST_IMAGES_LIMIT = 5;

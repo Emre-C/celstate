@@ -4,6 +4,24 @@ export const MCP_SERVER_INFO = {
 };
 export const MCP_ENDPOINT_PATH = "/mcp";
 export const HEALTH_ENDPOINT_PATH = "/health";
+export const MCP_CORS_ALLOWED_METHODS = [
+    "DELETE",
+    "GET",
+    "OPTIONS",
+    "POST",
+];
+export const MCP_CORS_ALLOWED_HEADERS = [
+    "Accept",
+    "Authorization",
+    "Content-Type",
+    "Last-Event-ID",
+    "Mcp-Session-Id",
+    "MCP-Protocol-Version",
+];
+export const MCP_CORS_EXPOSED_HEADERS = [
+    "Mcp-Session-Id",
+    "x-request-id",
+];
 export const DEFAULT_HOST = "127.0.0.1";
 export const DEFAULT_PORT = 3100;
 export const DEFAULT_LIST_IMAGES_LIMIT = 5;

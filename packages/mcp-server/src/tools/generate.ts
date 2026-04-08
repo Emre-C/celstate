@@ -14,6 +14,7 @@ import {
   getErrorMessage,
   truncateText,
 } from "../tool-results.js";
+import { logToolFailure, logToolResult } from "../logging.js";
 
 export function registerGenerateTools(
   server: McpServer,
@@ -42,6 +43,11 @@ export function registerGenerateTools(
           prompt,
         });
 
+        logToolResult(context, "celstate_generate", "succeeded", {
+          aspectRatio: aspect_ratio,
+          generationId,
+        });
+
         return createTextResult(
           [
             "Generation started.",
@@ -56,17 +62,24 @@ export function registerGenerateTools(
         const message = getErrorMessage(error);
 
         if (message.includes("Insufficient credits")) {
+          logToolResult(context, "celstate_generate", "returned_error", {
+            reason: "insufficient_credits",
+          });
           return createErrorResult(
             "Insufficient credits. The user needs to purchase more credits at celstate.com before generating images.",
           );
         }
 
         if (message.includes("Too many generations")) {
+          logToolResult(context, "celstate_generate", "returned_error", {
+            reason: "too_many_generations",
+          });
           return createErrorResult(
             "Too many concurrent generations. Wait for an in-progress generation to finish, then try again.",
           );
         }
 
+        logToolFailure(context, "celstate_generate", error);
         return createErrorResult(`Generation failed: ${message}`);
       }
     },

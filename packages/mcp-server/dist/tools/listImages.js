@@ -2,6 +2,7 @@ import { z } from "zod";
 import { DEFAULT_LIST_IMAGES_LIMIT, MAX_LIST_IMAGES_LIMIT, } from "../constants.js";
 import { listGenerations } from "../convex-client.js";
 import { createErrorResult, createTextResult, getErrorMessage, READ_ONLY_TOOL_ANNOTATIONS, truncateText, } from "../tool-results.js";
+import { logToolFailure, logToolResult } from "../logging.js";
 export function registerListImageTools(server, context) {
     server.registerTool("celstate_list_images", {
         annotations: READ_ONLY_TOOL_ANNOTATIONS,
@@ -22,6 +23,11 @@ export function registerListImageTools(server, context) {
         try {
             const generations = await listGenerations(context.convex, { limit, status });
             if (generations.length === 0) {
+                logToolResult(context, "celstate_list_images", "succeeded", {
+                    count: 0,
+                    limit,
+                    status,
+                });
                 return createTextResult(status === "all"
                     ? "No generations found. Use celstate_generate to create one."
                     : `No generations with status "${status}".`);
@@ -40,6 +46,11 @@ export function registerListImageTools(server, context) {
                 }
                 return parts.join("\n");
             });
+            logToolResult(context, "celstate_list_images", "succeeded", {
+                count: generations.length,
+                limit,
+                status,
+            });
             return createTextResult([
                 `Showing ${generations.length} generation${generations.length === 1 ? "" : "s"}:`,
                 "",
@@ -47,6 +58,10 @@ export function registerListImageTools(server, context) {
             ].join("\n"));
         }
         catch (error) {
+            logToolFailure(context, "celstate_list_images", error, {
+                limit,
+                status,
+            });
             return createErrorResult(`Failed to list generations: ${getErrorMessage(error)}`);
         }
     });

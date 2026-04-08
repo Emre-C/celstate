@@ -1,4 +1,5 @@
 node_modules
+packages/*/node_modules/
 
 # Output
 .output
@@ -7,6 +8,7 @@ node_modules
 .wrangler
 /.svelte-kit
 /build
+packages/*/dist/
 
 # OS
 .DS_Store
@@ -30,6 +32,10 @@ celstate-*-*.json
 
 # Growth tooling artifacts
 .growth/
+
+# Bulky generated output — never commit (was bloating git history)
+/jobs/
+/experiments/video_frames/
 
 # NPM
 .npmrc

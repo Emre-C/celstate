@@ -1,8 +1,12 @@
 import {
+	AUTH_CANARY_PROBE,
 	AUTH_CANARY_PROBE_TIMEOUT_MS,
 	formatAuthCanaryProbeFailure,
 	isFinalGetSessionProbeOk
 } from './auth-canary-probe.mjs';
+
+/** @typedef {import('./auth-canary-probe.mjs').AuthCanaryProbeDefinition} AuthCanaryProbeDefinition */
+/** @typedef {import('./auth-canary-probe.mjs').AuthCanaryProbeResult} AuthCanaryProbeResult */
 
 const baseUrl = process.env.AUTH_CANARY_BASE_URL?.trim();
 const webhookUrl = process.env.OPS_ALERT_WEBHOOK_URL?.trim();
@@ -17,6 +21,7 @@ const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl
 /** @param {string} pathname */
 const joinUrl = (pathname) => `${normalizedBaseUrl}${pathname}`;
 
+/** @returns {Promise<number>} */
 const checkAuthPage = async () => {
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), AUTH_CANARY_PROBE_TIMEOUT_MS);
@@ -39,12 +44,13 @@ const checkAuthPage = async () => {
 			throw new Error('/auth did not render the Google sign-in provider');
 		}
 
-		return { name: 'auth_page', status: response.status };
+		return response.status;
 	} finally {
 		clearTimeout(timeout);
 	}
 };
 
+/** @returns {Promise<number>} */
 const checkSessionEndpoint = async () => {
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), AUTH_CANARY_PROBE_TIMEOUT_MS);
@@ -70,7 +76,7 @@ const checkSessionEndpoint = async () => {
 			JSON.parse(text);
 		}
 
-		return { name: 'get_session', status: response.status };
+		return response.status;
 	} finally {
 		clearTimeout(timeout);
 	}
@@ -101,17 +107,20 @@ const sendAlert = async (message) => {
 };
 
 const main = async () => {
+	/** @type {string[]} */
 	const failures = [];
+	/** @type {AuthCanaryProbeResult[]} */
 	const results = [];
 
+	/** @type {readonly AuthCanaryProbeDefinition[]} */
 	const probes = [
-		{ name: 'auth_page', run: checkAuthPage },
-		{ name: 'get_session', run: checkSessionEndpoint }
+		{ name: AUTH_CANARY_PROBE.AUTH_PAGE, run: checkAuthPage },
+		{ name: AUTH_CANARY_PROBE.GET_SESSION, run: checkSessionEndpoint }
 	];
 
 	for (const { name, run } of probes) {
 		try {
-			results.push(await run());
+			results.push({ name, status: await run() });
 		} catch (error) {
 			failures.push(formatAuthCanaryProbeFailure(name, error));
 		}

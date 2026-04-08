@@ -37,10 +37,10 @@ export const celstateApi = {
   generations: {
     getByUserAndIdWithUrls: makeFunctionReference<
       "query",
-      { generationId: GenerationId },
+      { generationId: string },
       CelstateGenerationRecord | null
     >("generations:getByUserAndIdWithUrls") as QueryRef<
-      { generationId: GenerationId },
+      { generationId: string },
       CelstateGenerationRecord | null
     >,
     listByUserWithUrls: makeFunctionReference<

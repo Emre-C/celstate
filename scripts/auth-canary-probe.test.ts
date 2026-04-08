@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	AUTH_CANARY_PROBE,
 	AUTH_CANARY_PROBE_TIMEOUT_MS,
 	formatAuthCanaryProbeFailure,
 	isFinalGetSessionProbeOk
@@ -20,20 +21,28 @@ describe('formatAuthCanaryProbeFailure', () => {
 	it('maps AbortError to a labeled timeout message', () => {
 		const err = new Error('This operation was aborted');
 		err.name = 'AbortError';
-		expect(formatAuthCanaryProbeFailure('auth_page', err)).toBe(
-			`[auth_page] request timed out after ${AUTH_CANARY_PROBE_TIMEOUT_MS}ms`
+		expect(formatAuthCanaryProbeFailure(AUTH_CANARY_PROBE.AUTH_PAGE, err)).toBe(
+			`[${AUTH_CANARY_PROBE.AUTH_PAGE}] request timed out after ${AUTH_CANARY_PROBE_TIMEOUT_MS}ms`
 		);
 	});
 
 	it('maps "aborted" message without AbortError name to timeout', () => {
-		expect(formatAuthCanaryProbeFailure('get_session', new Error('This operation was aborted'))).toBe(
-			`[get_session] request timed out after ${AUTH_CANARY_PROBE_TIMEOUT_MS}ms`
+		expect(
+			formatAuthCanaryProbeFailure(
+				AUTH_CANARY_PROBE.GET_SESSION,
+				new Error('This operation was aborted')
+			)
+		).toBe(
+			`[${AUTH_CANARY_PROBE.GET_SESSION}] request timed out after ${AUTH_CANARY_PROBE_TIMEOUT_MS}ms`
 		);
 	});
 
 	it('prefixes other errors with probe name', () => {
 		expect(
-			formatAuthCanaryProbeFailure('get_session', new Error('/api/auth/get-session returned 500'))
-		).toBe('[get_session] /api/auth/get-session returned 500');
+			formatAuthCanaryProbeFailure(
+				AUTH_CANARY_PROBE.GET_SESSION,
+				new Error('/api/auth/get-session returned 500')
+			)
+		).toBe(`[${AUTH_CANARY_PROBE.GET_SESSION}] /api/auth/get-session returned 500`);
 	});
 });

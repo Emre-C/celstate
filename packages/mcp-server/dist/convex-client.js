@@ -23,7 +23,7 @@ export async function requestGeneration(client, args) {
 }
 export async function getGenerationById(client, generationId) {
     return client.query(celstateApi.generations.getByUserAndIdWithUrls, {
-        generationId: generationId,
+        generationId,
     });
 }
 export async function listGenerations(client, args) {

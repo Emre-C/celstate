@@ -6,8 +6,9 @@ export declare class AuthenticationError extends Error {
 }
 export interface CelstateRequestContext {
     convex: ConvexHttpClient;
+    requestId: string;
     token: string;
     user: CelstateCurrentUser;
 }
 export declare function parseBearerToken(authHeader: string | undefined): string;
-export declare function authenticateRequest(authHeader: string | undefined): Promise<CelstateRequestContext>;
+export declare function authenticateRequest(authHeader: string | undefined, requestId: string): Promise<CelstateRequestContext>;

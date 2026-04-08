@@ -704,7 +704,7 @@ export const listByUserWithUrls = query({
 
 export const getByUserAndIdWithUrls = query({
   args: {
-    generationId: v.id("generations"),
+    generationId: v.string(),
   },
   handler: async (ctx, args) => {
     const appUser = await getCurrentAppUser(ctx);
@@ -712,7 +712,12 @@ export const getByUserAndIdWithUrls = query({
       return null;
     }
 
-    const generation = await ctx.db.get(args.generationId);
+    const generationId = ctx.db.normalizeId("generations", args.generationId);
+    if (!generationId) {
+      return null;
+    }
+
+    const generation = await ctx.db.get(generationId);
     if (!generation || generation.userId !== appUser._id) {
       return null;
     }

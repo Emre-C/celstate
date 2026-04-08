@@ -19,16 +19,25 @@ export function parseBearerToken(authHeader) {
     }
     return token;
 }
-export async function authenticateRequest(authHeader) {
-    const token = parseBearerToken(authHeader);
-    const convex = createConvexClient(token);
-    const user = await getCurrentUser(convex);
-    if (!user) {
+export async function authenticateRequest(authHeader, requestId) {
+    try {
+        const token = parseBearerToken(authHeader);
+        const convex = createConvexClient(token);
+        const user = await getCurrentUser(convex);
+        if (!user) {
+            throw new AuthenticationError("Authentication failed. Generate a new Celstate MCP API key in settings and reconnect the MCP client.");
+        }
+        return {
+            convex,
+            requestId,
+            token,
+            user,
+        };
+    }
+    catch (error) {
+        if (error instanceof AuthenticationError) {
+            throw error;
+        }
         throw new AuthenticationError("Authentication failed. Generate a new Celstate MCP API key in settings and reconnect the MCP client.");
     }
-    return {
-        convex,
-        token,
-        user,
-    };
 }

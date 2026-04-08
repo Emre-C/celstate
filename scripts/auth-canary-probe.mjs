@@ -3,6 +3,15 @@
  * After fetch follows redirects, the session probe must see a final status here — not 308 (apex→www).
  */
 
+export const AUTH_CANARY_PROBE = /** @type {const} */ ({
+	AUTH_PAGE: 'auth_page',
+	GET_SESSION: 'get_session'
+});
+
+/** @typedef {(typeof AUTH_CANARY_PROBE)[keyof typeof AUTH_CANARY_PROBE]} AuthCanaryProbeName */
+/** @typedef {{ name: AuthCanaryProbeName; status: number }} AuthCanaryProbeResult */
+/** @typedef {{ name: AuthCanaryProbeName; run: () => Promise<number> }} AuthCanaryProbeDefinition */
+
 /** Per-probe `fetch` budget (cold starts / edge latency). */
 export const AUTH_CANARY_PROBE_TIMEOUT_MS = 20_000;
 
@@ -14,7 +23,7 @@ export function isFinalGetSessionProbeOk(status) {
 }
 
 /**
- * @param {string} probeName
+ * @param {AuthCanaryProbeName} probeName
  * @param {unknown} error
  * @param {number} [timeoutMs]
  */

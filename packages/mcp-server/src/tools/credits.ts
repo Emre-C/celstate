@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { CelstateRequestContext } from "../auth.js";
+import { logToolResult } from "../logging.js";
 import {
   createTextResult,
   READ_ONLY_TOOL_ANNOTATIONS,
@@ -18,6 +19,9 @@ export function registerCreditsTools(
       title: "Check credits",
     },
     async (): Promise<CallToolResult> => {
+      logToolResult(context, "celstate_check_credits", "succeeded", {
+        creditsRemaining: context.user.credits ?? 0,
+      });
       return createTextResult(`Credits remaining: ${context.user.credits ?? 0}`);
     },
   );

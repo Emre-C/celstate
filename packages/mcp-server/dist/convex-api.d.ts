@@ -24,7 +24,7 @@ export interface CelstateGenerationRecord {
 export declare const celstateApi: {
     readonly generations: {
         readonly getByUserAndIdWithUrls: QueryRef<{
-            generationId: GenerationId;
+            generationId: string;
         }, CelstateGenerationRecord | null>;
         readonly listByUserWithUrls: QueryRef<{
             limit?: number;
