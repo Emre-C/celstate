@@ -1,9 +1,11 @@
 import { v, ConvexError } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 import {
   mutation,
   query,
   internalMutation,
   internalQuery,
+  internalAction,
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server.js";
@@ -25,6 +27,55 @@ import {
 } from "../lib/analytics/generation.js";
 import { applyCreditsToUser, getCurrentAppUser, upsertCurrentUser } from "./users.js";
 import { validateReferenceImageMetadata } from "./lib/validation.js";
+import { assertVerificationRunnerSecret } from "./lib/verificationRunnerSecret.js";
+
+const generationWithUrlsValidator = v.object({
+  _id: v.id("generations"),
+  _creationTime: v.number(),
+  userId: v.id("users"),
+  prompt: v.string(),
+  status: v.union(
+    v.literal("generating"),
+    v.literal("complete"),
+    v.literal("failed"),
+  ),
+  stage: v.optional(generationStageValidator),
+  statusMessage: v.optional(v.string()),
+  resultStorageId: v.optional(v.id("_storage")),
+  whiteBgStorageId: v.optional(v.id("_storage")),
+  blackBgStorageId: v.optional(v.id("_storage")),
+  optimizedStorageId: v.optional(v.id("_storage")),
+  referenceStorageId: v.optional(v.id("_storage")),
+  referenceStorageIds: v.optional(v.array(v.id("_storage"))),
+  creditsCost: v.number(),
+  aspectRatio: v.string(),
+  createdAt: v.number(),
+  lastProgressAt: v.optional(v.number()),
+  stageStartedAt: v.optional(v.number()),
+  completedAt: v.optional(v.number()),
+  error: v.optional(v.string()),
+  failureKind: v.optional(v.union(
+    v.literal("timeout"),
+    v.literal("provider_error"),
+    v.literal("processing_error"),
+    v.literal("unknown"),
+  )),
+  failureStage: v.optional(generationStageValidator),
+  generationTimeMs: v.optional(v.number()),
+  retryCount: v.optional(v.number()),
+  whiteBgRetryCount: v.optional(v.number()),
+  blackBgRetryCount: v.optional(v.number()),
+  finalizeRetryCount: v.optional(v.number()),
+  whiteBgRetryInstruction: v.optional(v.string()),
+  blackBgRetryInstruction: v.optional(v.string()),
+  dimensionMismatch: v.optional(v.boolean()),
+  stalledAlertedAt: v.optional(v.number()),
+  creditRefundedAt: v.optional(v.number()),
+  // Storage URL fields resolved at query time
+  optimizedUrl: v.union(v.string(), v.null()),
+  referenceUrls: v.array(v.string()),
+  resultUrl: v.union(v.string(), v.null()),
+});
 
 async function scheduleGenerationStage(
   ctx: { scheduler: { runAfter: (...args: any[]) => Promise<unknown> } },
@@ -159,6 +210,78 @@ async function resolveGenerationWithUrls(
   };
 }
 
+async function requestGenerationCore(
+  ctx: MutationCtx,
+  args: {
+    userId: Id<"users">;
+    prompt: string;
+    referenceStorageIds: Id<"_storage">[];
+    aspectRatio: string;
+  },
+): Promise<Id<"generations">> {
+  const appUser = await ctx.db.get(args.userId);
+  if (!appUser) {
+    throw new ConvexError("User not found");
+  }
+  const userId = appUser._id;
+  const prompt = args.prompt;
+  const referenceStorageIds = args.referenceStorageIds;
+  const aspectRatio = args.aspectRatio;
+
+  const inFlight = await ctx.db
+    .query("generations")
+    .withIndex("by_user_status", (q) => q.eq("userId", userId).eq("status", "generating"))
+    .collect();
+  if (inFlight.length >= GENERATION_CONFIG.maxConcurrentGenerations) {
+    throw new ConvexError("Too many generations in progress. Please wait for one to finish.");
+  }
+
+  const creditsCost = GENERATION_CONFIG.creditsPerGeneration;
+
+  const userRecord = await ctx.db.get(userId);
+  if (!userRecord || (userRecord.credits ?? 0) < creditsCost) {
+    throw new ConvexError("Insufficient credits");
+  }
+  await ctx.db.patch(userId, {
+    credits: (userRecord.credits ?? 0) - creditsCost,
+  });
+
+  const now = Date.now();
+  const generationId = await ctx.db.insert("generations", {
+    userId,
+    prompt,
+    status: "generating" as const,
+    stage: "white_background" as const,
+    statusMessage: getGenerationStageStatusMessage("white_background"),
+    referenceStorageIds: referenceStorageIds.length > 0 ? referenceStorageIds : undefined,
+    creditsCost,
+    aspectRatio,
+    createdAt: now,
+    lastProgressAt: now,
+    retryCount: 0,
+    whiteBgRetryCount: 0,
+    blackBgRetryCount: 0,
+    finalizeRetryCount: 0,
+  });
+
+  await insertGenerationOpsEventRow(ctx, {
+    eventType: "generation_requested",
+    generationDurationMs: 0,
+    generationId,
+    retryCount: 0,
+    severity: "info",
+    stage: "white_background",
+    statusMessage: getGenerationStageStatusMessage("white_background"),
+    totalRetryCount: 0,
+    userEmail: appUser.email,
+    userId,
+  });
+
+  await scheduleGenerationStage(ctx, generationId, "white_background");
+
+  return generationId;
+}
+
 /**
  * Public mutation: atomically deducts credits, inserts a "generating" row,
  * and schedules the internal Node action worker. Returns the generation ID
@@ -173,7 +296,6 @@ export const requestGeneration = mutation({
   returns: v.id("generations"),
   handler: async (ctx, args) => {
     const appUser = (await getCurrentAppUser(ctx)) ?? await upsertCurrentUser(ctx);
-    const userId = appUser._id;
 
     const prompt = args.prompt.trim();
     if (!prompt) {
@@ -200,65 +322,110 @@ export const requestGeneration = mutation({
 
     await validateReferenceStorageIds(ctx, referenceStorageIds);
 
-    const inFlight = await ctx.db
-      .query("generations")
-      .withIndex("by_user_status", (q) => q.eq("userId", userId).eq("status", "generating"))
-      .collect();
-    if (inFlight.length >= GENERATION_CONFIG.maxConcurrentGenerations) {
-      throw new ConvexError("Too many generations in progress. Please wait for one to finish.");
-    }
-
-    const creditsCost = GENERATION_CONFIG.creditsPerGeneration;
-
-    // Atomic: check + deduct credits
-    const userRecord = await ctx.db.get(userId);
-    if (!userRecord || (userRecord.credits ?? 0) < creditsCost) {
-      throw new ConvexError("Insufficient credits");
-    }
-    await ctx.db.patch(userId, {
-      credits: (userRecord.credits ?? 0) - creditsCost,
-    });
-
-    const now = Date.now();
-    // Insert the "generating" row — visible to reactive queries immediately
-    const generationId = await ctx.db.insert("generations", {
-      userId,
+    return await requestGenerationCore(ctx, {
+      userId: appUser._id,
       prompt,
-      status: "generating" as const,
-      stage: "white_background" as const,
-      statusMessage: getGenerationStageStatusMessage("white_background"),
-      referenceStorageIds: referenceStorageIds.length > 0 ? referenceStorageIds : undefined,
-      creditsCost,
+      referenceStorageIds,
       aspectRatio,
-      createdAt: now,
-      lastProgressAt: now,
-      retryCount: 0,
-      whiteBgRetryCount: 0,
-      blackBgRetryCount: 0,
-      finalizeRetryCount: 0,
     });
+  },
+});
 
-    await insertGenerationOpsEventRow(ctx, {
-      eventType: "generation_requested",
-      generationDurationMs: 0,
-      generationId,
-      retryCount: 0,
-      severity: "info",
-      stage: "white_background",
-      statusMessage: getGenerationStageStatusMessage("white_background"),
-      totalRetryCount: 0,
-      userEmail: appUser.email,
-      userId,
+export const requestGenerationForCanaryRunner = internalMutation({
+  args: {
+    runnerSecret: v.string(),
+    prompt: v.string(),
+  },
+  returns: v.id("generations"),
+  handler: async (ctx, args) => {
+    assertVerificationRunnerSecret(args.runnerSecret);
+    const principal = await ctx.db
+      .query("canaryPrincipals")
+      .withIndex("by_principal_id", (q) => q.eq("principalId", "CANARY_GENERATION"))
+      .first();
+    if (!principal?.appUserId) {
+      throw new ConvexError(
+        "CANARY_GENERATION is not provisioned (missing canaryPrincipals row or appUserId)",
+      );
+    }
+
+    const prompt = args.prompt.trim();
+    if (!prompt) {
+      throw new ConvexError("Prompt is required");
+    }
+    if (prompt.length > GENERATION_CONFIG.maxPromptLength) {
+      throw new ConvexError(
+        `Prompt too long (max ${GENERATION_CONFIG.maxPromptLength} characters)`,
+      );
+    }
+
+    const aspectRatio = GENERATION_CONFIG.defaultAspectRatio;
+    const referenceStorageIds: Id<"_storage">[] = [];
+    await validateReferenceStorageIds(ctx, referenceStorageIds);
+
+    return await requestGenerationCore(ctx, {
+      userId: principal.appUserId,
+      prompt,
+      referenceStorageIds,
+      aspectRatio,
     });
+  },
+});
 
-    await scheduleGenerationStage(ctx, generationId, "white_background");
-
-    return generationId;
+export const getGenerationStatusForCanaryRunner = internalQuery({
+  args: {
+    runnerSecret: v.string(),
+    generationId: v.id("generations"),
+  },
+  returns: v.union(
+    v.object({
+      status: v.literal("generating"),
+      stage: v.optional(generationStageValidator),
+    }),
+    v.object({
+      status: v.literal("complete"),
+      creditRefundedAt: v.optional(v.number()),
+      resultStorageId: v.optional(v.id("_storage")),
+    }),
+    v.object({
+      status: v.literal("failed"),
+      creditRefundedAt: v.optional(v.number()),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    assertVerificationRunnerSecret(args.runnerSecret);
+    const principal = await ctx.db
+      .query("canaryPrincipals")
+      .withIndex("by_principal_id", (q) => q.eq("principalId", "CANARY_GENERATION"))
+      .first();
+    if (!principal?.appUserId) {
+      return null;
+    }
+    const gen = await ctx.db.get(args.generationId);
+    if (!gen || gen.userId !== principal.appUserId) {
+      return null;
+    }
+    if (gen.status === "generating") {
+      return { status: "generating" as const, stage: gen.stage };
+    }
+    if (gen.status === "complete") {
+      return {
+        status: "complete" as const,
+        creditRefundedAt: gen.creditRefundedAt,
+        resultStorageId: gen.resultStorageId,
+      };
+    }
+    return {
+      status: "failed" as const,
+      creditRefundedAt: gen.creditRefundedAt,
+    };
   },
 });
 
 export const generateUploadUrl = mutation({
   args: {},
+  returns: v.string(),
   handler: async (ctx) => {
     const appUser = (await getCurrentAppUser(ctx)) ?? await upsertCurrentUser(ctx);
     if ((appUser.credits ?? 0) < GENERATION_CONFIG.creditsPerGeneration) {
@@ -658,6 +825,7 @@ export const getById = internalQuery({
 
 export const getByUserWithUrls = query({
   args: {},
+  returns: v.array(generationWithUrlsValidator),
   handler: async (ctx) => {
     const appUser = await getCurrentAppUser(ctx);
     if (!appUser) {
@@ -678,6 +846,7 @@ export const listByUserWithUrls = query({
     limit: v.optional(v.number()),
     status: v.optional(generationStatusFilterValidator),
   },
+  returns: v.array(generationWithUrlsValidator),
   handler: async (ctx, args) => {
     const appUser = await getCurrentAppUser(ctx);
     if (!appUser) {
@@ -706,6 +875,7 @@ export const getByUserAndIdWithUrls = query({
   args: {
     generationId: v.string(),
   },
+  returns: v.union(generationWithUrlsValidator, v.null()),
   handler: async (ctx, args) => {
     const appUser = await getCurrentAppUser(ctx);
     if (!appUser) {
@@ -759,50 +929,128 @@ export const cleanupExpiredUploadUrlIssues = internalMutation({
   },
 });
 
-export const cleanupOrphanedReferenceUploads = internalMutation({
+/**
+ * Returns old image file IDs that are candidates for orphan deletion.
+ * Bounded by scanLimit to avoid reading unbounded storage metadata.
+ */
+export const getOrphanCleanupCandidates = internalQuery({
+  args: { cutoff: v.number(), scanLimit: v.number() },
+  returns: v.array(v.id("_storage")),
+  handler: async (ctx, args) => {
+    const files = await ctx.db.system
+      .query("_storage")
+      .order("desc")
+      .take(args.scanLimit);
+
+    return files
+      .filter(
+        (f) =>
+          f._creationTime < args.cutoff &&
+          (f.contentType === "image/jpeg" ||
+            f.contentType === "image/png" ||
+            f.contentType === "image/webp"),
+      )
+      .map((f) => f._id);
+  },
+});
+
+/**
+ * Returns one page of storage IDs referenced by generations for orphan
+ * cross-referencing. Used by cleanupOrphanedReferenceUploads to paginate
+ * the full generations table without holding it all in memory at once.
+ */
+export const getGenerationStorageIdPage = internalQuery({
+  args: { paginationOpts: paginationOptsValidator },
+  returns: v.object({
+    storageIds: v.array(v.id("_storage")),
+    continueCursor: v.string(),
+    isDone: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    const { page, continueCursor, isDone } = await ctx.db
+      .query("generations")
+      .paginate(args.paginationOpts);
+
+    const storageIds: Id<"_storage">[] = [];
+    for (const gen of page) {
+      if (gen.referenceStorageId) storageIds.push(gen.referenceStorageId);
+      if (gen.referenceStorageIds) storageIds.push(...gen.referenceStorageIds);
+      if (gen.resultStorageId) storageIds.push(gen.resultStorageId);
+      if (gen.whiteBgStorageId) storageIds.push(gen.whiteBgStorageId);
+      if (gen.blackBgStorageId) storageIds.push(gen.blackBgStorageId);
+      if (gen.optimizedStorageId) storageIds.push(gen.optimizedStorageId);
+    }
+
+    return { storageIds, continueCursor, isDone };
+  },
+});
+
+/**
+ * Deletes a batch of storage files; separated from the action so it runs
+ * inside a mutation where ctx.storage.delete is available.
+ */
+export const deleteStorageFiles = internalMutation({
+  args: { storageIds: v.array(v.id("_storage")) },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    for (const storageId of args.storageIds) {
+      await ctx.storage.delete(storageId);
+    }
+    return null;
+  },
+});
+
+/**
+ * Replaces the old unbounded-collect approach. This action paginates through
+ * all generations (200 at a time) to build a referenced-IDs set, then deletes
+ * orphaned storage files up to batchSize per invocation. Safe to run on large
+ * tables because it never issues an unbound .collect() query.
+ */
+export const cleanupOrphanedReferenceUploads = internalAction({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
     const cutoff = Date.now() - GENERATION_CONFIG.orphanedUploadMaxAgeMs;
     const batchSize = GENERATION_CONFIG.orphanedUploadCleanupBatchSize;
 
-    const oldFiles = await ctx.db.system
-      .query("_storage")
-      .order("desc")
-      .take(batchSize * 5);
-
-    const candidates = oldFiles.filter(
-      (f) =>
-        f._creationTime < cutoff &&
-        (f.contentType === "image/jpeg" ||
-          f.contentType === "image/png" ||
-          f.contentType === "image/webp"),
+    // Type annotations required: calling functions defined in the same file.
+    const candidates: Id<"_storage">[] = await ctx.runQuery(
+      internal.generations.getOrphanCleanupCandidates,
+      { cutoff, scanLimit: batchSize * 5 },
     );
 
     if (candidates.length === 0) return null;
 
-    const candidateIds = new Set(candidates.map((f) => f._id));
-
-    const allGenerations = await ctx.db.query("generations").collect();
+    // Paginate the full generations table to collect every referenced storage ID.
     const referencedIds = new Set<string>();
-    for (const gen of allGenerations) {
-      if (gen.referenceStorageId) referencedIds.add(gen.referenceStorageId);
-      if (gen.referenceStorageIds) {
-        for (const id of gen.referenceStorageIds) referencedIds.add(id);
+    let paginationOpts: { numItems: number; cursor: string | null } = {
+      numItems: 200,
+      cursor: null,
+    };
+
+    for (;;) {
+      const result: { storageIds: Id<"_storage">[]; continueCursor: string; isDone: boolean } =
+        await ctx.runQuery(
+          internal.generations.getGenerationStorageIdPage,
+          { paginationOpts },
+        );
+
+      for (const id of result.storageIds) {
+        referencedIds.add(String(id));
       }
-      if (gen.resultStorageId) referencedIds.add(gen.resultStorageId);
-      if (gen.whiteBgStorageId) referencedIds.add(gen.whiteBgStorageId);
-      if (gen.blackBgStorageId) referencedIds.add(gen.blackBgStorageId);
-      if (gen.optimizedStorageId) referencedIds.add(gen.optimizedStorageId);
+
+      if (result.isDone) break;
+      paginationOpts = { numItems: 200, cursor: result.continueCursor };
     }
 
-    let deleted = 0;
-    for (const id of candidateIds) {
-      if (deleted >= batchSize) break;
-      if (!referencedIds.has(id)) {
-        await ctx.storage.delete(id);
-        deleted++;
-      }
+    const orphanedIds = candidates
+      .filter((id) => !referencedIds.has(String(id)))
+      .slice(0, batchSize);
+
+    if (orphanedIds.length > 0) {
+      await ctx.runMutation(internal.generations.deleteStorageFiles, {
+        storageIds: orphanedIds,
+      });
     }
 
     return null;

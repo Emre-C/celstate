@@ -21,6 +21,7 @@
 		"check:public-env": "tsx scripts/check-public-env.ts",
 		"check:ui-contracts": "tsx scripts/check-jsonld-head-pattern.ts",
 		"check:purchase-observability": "pnpm check:stripe-env && pnpm check:posthog-env",
+		"verify:production": "tsx scripts/production-verification.ts",
 		"growth:list": "tsx scripts/growth-ops.ts list",
 		"growth:scaffold": "tsx scripts/growth-ops.ts scaffold",
 		"growth:snapshot": "tsx scripts/growth-ops.ts snapshot",
@@ -29,10 +30,11 @@
 		"knip:fix": "knip --fix",
 		"dupcheck": "jscpd src/",
 		"lint:ts": "eslint \"src/**/*.ts\" \"scripts/**/*.ts\" \"scripts/**/*.mjs\" \"e2e/**/*.ts\" \"playwright.config.ts\"",
+		"typecheck:tsc": "tsc --noEmit",
 		"test:e2e": "playwright test",
 		"test:e2e:build": "cross-env PUBLIC_SITE_URL=http://127.0.0.1:4174 vite build",
 		"verify": "cross-env PUBLIC_SITE_URL=http://127.0.0.1:4174 pnpm run verify:inner",
-		"verify:inner": "pnpm check:public-env && pnpm check:ui-contracts && pnpm check && pnpm knip && pnpm dupcheck && pnpm lint:ts && pnpm test && pnpm build && pnpm test:e2e"
+		"verify:inner": "pnpm check:public-env && pnpm check:ui-contracts && pnpm check && pnpm typecheck:tsc && pnpm knip && pnpm dupcheck && pnpm lint:ts && pnpm test && pnpm build && pnpm test:e2e"
 	},
 	"devDependencies": {
 		"@playwright/test": "^1.58.2",
@@ -61,7 +63,7 @@
 		"@posthog/convex": "^0.1.13",
 		"@sentry/sveltekit": "^10.45.0",
 		"@tailwindcss/vite": "^4.2.1",
-		"better-auth": "1.5.5",
+		"better-auth": "1.6.0",
 		"convex": "^1.33.1",
 		"posthog-js": "^1.363.1",
 		"sharp": "^0.34.5",

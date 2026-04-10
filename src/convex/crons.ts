@@ -21,10 +21,11 @@ crons.interval(
   internal.generations.cleanupOrphanedReferenceUploads,
 );
 
-crons.weekly(
+crons.cron(
   "weekly free credit",
-  { dayOfWeek: "monday", hourUTC: 14, minuteUTC: 0 },
+  "0 14 * * 1", // Mondays at 14:00 UTC
   internal.users.grantWeeklyCredit,
+  {},
 );
 
 export default crons;

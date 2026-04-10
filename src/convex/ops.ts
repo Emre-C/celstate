@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server.js";
 import type { Doc } from "./_generated/dataModel.js";
+import { generationStageValidator } from "./lib/validators.js";
 import {
   assertOkWebhookResponse,
   buildGenerationAlertRequest,
@@ -10,7 +11,6 @@ import {
   summarizeGenerationOpsEvents,
 } from "./lib/ops.js";
 import { insertGenerationOpsEventRow } from "./lib/generationOpsEvents.js";
-import { generationStageValidator } from "./lib/validators.js";
 
 function clampHoursWindow(hoursWindow: number | undefined): number {
   if (hoursWindow === undefined || !Number.isFinite(hoursWindow)) {
@@ -186,13 +186,73 @@ export const sendSignupAlert = internalAction({
   },
 });
 
+const recentOpsEventValidator = v.object({
+  attemptDurationMs: v.optional(v.number()),
+  createdAt: v.number(),
+  error: v.optional(v.string()),
+  eventType: v.union(
+    v.literal("generation_requested"),
+    v.literal("stage_succeeded"),
+    v.literal("stage_retry_scheduled"),
+    v.literal("generation_completed"),
+    v.literal("generation_failed"),
+    v.literal("generation_stalled"),
+    v.literal("alert_sent"),
+    v.literal("alert_failed"),
+  ),
+  generationDurationMs: v.optional(v.number()),
+  generationId: v.id("generations"),
+  retryCount: v.optional(v.number()),
+  severity: v.optional(v.union(
+    v.literal("info"),
+    v.literal("warning"),
+    v.literal("critical"),
+  )),
+  stage: v.optional(generationStageValidator),
+  statusMessage: v.optional(v.string()),
+  totalRetryCount: v.optional(v.number()),
+  userEmail: v.optional(v.string()),
+  userId: v.id("users"),
+});
+
 export const getGenerationOpsSummary = internalQuery({
   args: {
     hoursWindow: v.optional(v.number()),
+    // Caller must supply the observation timestamp so this query is
+    // deterministic and Convex can cache the result correctly.
+    now: v.number(),
   },
+  returns: v.object({
+    recentCriticalEvents: v.array(recentOpsEventValidator),
+    summary: v.object({
+      totals: v.object({
+        requested: v.number(),
+        completed: v.number(),
+        failed: v.number(),
+        stalled: v.number(),
+        retries: v.number(),
+        alertFailures: v.number(),
+        successRate: v.union(v.number(), v.null()),
+        failureRate: v.union(v.number(), v.null()),
+      }),
+      performance: v.object({
+        avgGenerationTimeMs: v.union(v.number(), v.null()),
+        p50GenerationTimeMs: v.union(v.number(), v.null()),
+        p95GenerationTimeMs: v.union(v.number(), v.null()),
+        avgAttemptTimeMs: v.union(v.number(), v.null()),
+        p95AttemptTimeMs: v.union(v.number(), v.null()),
+        avgRetriesPerCompletedGeneration: v.union(v.number(), v.null()),
+      }),
+    }),
+    window: v.object({
+      hoursWindow: v.number(),
+      now: v.number(),
+      since: v.number(),
+    }),
+  }),
   handler: async (ctx, args) => {
     const hoursWindow = clampHoursWindow(args.hoursWindow);
-    const now = Date.now();
+    const now = args.now;
     const since = now - hoursWindow * 60 * 60 * 1000;
     const events = await ctx.db
       .query("generationOpsEvents")

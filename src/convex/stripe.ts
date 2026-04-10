@@ -17,6 +17,7 @@ export const processCheckout = internalAction({
     email: v.optional(v.string()),
     name: v.optional(v.string()),
     cachedStripeCustomerId: v.optional(v.string()),
+    requireExistingStripeCustomerId: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     try {
@@ -26,6 +27,12 @@ export const processCheckout = internalAction({
       let customerId = args.cachedStripeCustomerId;
 
       if (!customerId) {
+        if (args.requireExistingStripeCustomerId) {
+          throw new Error(
+            "Checkout requires an existing Stripe customer with a saved payment method",
+          );
+        }
+
         const customer = await stripeClient.getOrCreateCustomer(ctx, {
           userId: userIdStr,
           email: args.email,
@@ -52,6 +59,7 @@ export const processCheckout = internalAction({
       await ctx.runMutation(internal.pendingCheckouts.markReady, {
         checkoutId: args.checkoutId,
         checkoutUrl: result.url ?? "",
+        stripeCheckoutSessionId: result.sessionId,
       });
     } catch (e) {
       await ctx.runMutation(internal.pendingCheckouts.markFailed, {

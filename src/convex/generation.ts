@@ -3,7 +3,7 @@
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
-import type { Id } from "./_generated/dataModel.js";
+import type { Doc, Id } from "./_generated/dataModel.js";
 import sharp from "sharp";
 import { GENERATION_CONFIG } from "./lib/config.js";
 import {
@@ -146,8 +146,8 @@ async function updateStatus(
 async function getGeneration(
   ctx: StageActionContext,
   generationId: Id<"generations">,
-): Promise<any> {
-  return await ctx.runQuery(internal.generations.getById, { generationId });
+): Promise<Doc<"generations"> | null> {
+  return (await ctx.runQuery(internal.generations.getById, { generationId })) as Doc<"generations"> | null;
 }
 
 async function loadStoredImage(
@@ -219,11 +219,12 @@ async function handleStageFailure(
 
 async function finalizePipeline(
   ctx: StageActionContext,
-  generation: any,
+  generation: Doc<"generations">,
 ): Promise<PipelineResult> {
   await updateStatus(ctx, generation._id, "Extracting transparency…");
-  let white = await loadStoredImage(ctx, generation.whiteBgStorageId);
-  let black = await loadStoredImage(ctx, generation.blackBgStorageId);
+  // Both storage IDs are written by the preceding pipeline stages; assert non-null.
+  let white = await loadStoredImage(ctx, generation.whiteBgStorageId!);
+  let black = await loadStoredImage(ctx, generation.blackBgStorageId!);
 
   let whiteDecoded = await decodeImage(white.imageBase64, white.mimeType);
   let blackDecoded = await decodeImage(black.imageBase64, black.mimeType);
@@ -396,7 +397,7 @@ export const generateBlackBackground = internalAction({
     try {
       const runtimeConfig = readGeminiRuntimeConfigFromEnv();
       const session = createChatSession(runtimeConfig, { aspectRatio: generation.aspectRatio });
-      const whiteBgImage = await loadStoredImage(ctx, generation.whiteBgStorageId);
+      const whiteBgImage = await loadStoredImage(ctx, generation.whiteBgStorageId!);
       const retryInstruction = retryCount > 0 ? generation.blackBgRetryInstruction : undefined;
       const prompt = retryCount === 0 ? buildBlackBgPrompt() : buildBlackBgRetryPrompt(retryInstruction);
 

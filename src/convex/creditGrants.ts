@@ -1,7 +1,91 @@
 import { v } from "convex/values";
-import { internalQuery, internalMutation } from "./_generated/server.js";
+import { internalQuery, internalMutation, type MutationCtx, type QueryCtx } from "./_generated/server.js";
 import { creditGrantReasonValidator } from "./lib/validators.js";
+import { assertVerificationRunnerSecret } from "./lib/verificationRunnerSecret.js";
 import { applyCreditsToUser } from "./users.js";
+
+const settlementSummaryValidator = v.object({
+  stripePaymentIntentId: v.string(),
+  stripeCheckoutSessionId: v.string(),
+  pendingCheckoutId: v.union(v.id("pendingCheckouts"), v.null()),
+  userId: v.id("users"),
+  priceId: v.string(),
+  creditsGranted: v.number(),
+  amountUsd: v.number(),
+  currency: v.string(),
+  creditGrantCount: v.number(),
+  revenueEventCount: v.number(),
+  refundedAt: v.optional(v.number()),
+  stripeRefundId: v.optional(v.string()),
+  refundAmountUsd: v.optional(v.number()),
+});
+
+async function buildSettlementSummary(
+  ctx: QueryCtx | MutationCtx,
+  settlements: {
+    amountUsd: number;
+    creditsGranted: number;
+    currency: string;
+    pendingCheckoutId: any;
+    priceId: string;
+    refundAmountUsd?: number;
+    refundedAt?: number;
+    stripeCheckoutSessionId: string;
+    stripePaymentIntentId: string;
+    stripeRefundId?: string;
+    userId: any;
+  }[],
+) {
+  if (settlements.length === 0) {
+    return null;
+  }
+
+  const latestSettlement = settlements.at(-1)!;
+  const creditGrants = await ctx.db
+    .query("creditGrants")
+    .withIndex("by_payment_intent", (q) => q.eq("stripePaymentIntentId", latestSettlement.stripePaymentIntentId))
+    .collect();
+
+  return {
+    stripePaymentIntentId: latestSettlement.stripePaymentIntentId,
+    stripeCheckoutSessionId: latestSettlement.stripeCheckoutSessionId,
+    pendingCheckoutId: latestSettlement.pendingCheckoutId,
+    userId: latestSettlement.userId,
+    priceId: latestSettlement.priceId,
+    creditsGranted: latestSettlement.creditsGranted,
+    amountUsd: latestSettlement.amountUsd,
+    currency: latestSettlement.currency,
+    creditGrantCount: creditGrants.length,
+    revenueEventCount: settlements.length,
+    refundedAt: latestSettlement.refundedAt,
+    stripeRefundId: latestSettlement.stripeRefundId,
+    refundAmountUsd: latestSettlement.refundAmountUsd,
+  };
+}
+
+async function getSettlementSummaryByPaymentIntentId(
+  ctx: QueryCtx | MutationCtx,
+  stripePaymentIntentId: string,
+) {
+  const settlements = await ctx.db
+    .query("purchaseSettlements")
+    .withIndex("by_payment_intent", (q) => q.eq("stripePaymentIntentId", stripePaymentIntentId))
+    .collect();
+
+  return await buildSettlementSummary(ctx, settlements);
+}
+
+async function getSettlementSummaryByPendingCheckoutId(
+  ctx: QueryCtx | MutationCtx,
+  pendingCheckoutId: any,
+) {
+  const settlements = await ctx.db
+    .query("purchaseSettlements")
+    .withIndex("by_pending_checkout", (q) => q.eq("pendingCheckoutId", pendingCheckoutId))
+    .collect();
+
+  return await buildSettlementSummary(ctx, settlements);
+}
 
 export const getByPaymentIntentId = internalQuery({
   args: { stripePaymentIntentId: v.string() },
@@ -22,7 +106,10 @@ export const recordGrant = internalMutation({
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
-    // Idempotency guard: if a grant for this payment intent already exists, skip
+    // Idempotency: Convex mutations are serialized (ACID, OCC), so the
+    // check-then-insert below cannot race — a concurrent call for the same
+    // payment intent will block until this mutation commits and will then
+    // see the existing row on its own read.
     if (args.stripePaymentIntentId) {
       const existing = await ctx.db
         .query("creditGrants")
@@ -48,5 +135,216 @@ export const recordGrant = internalMutation({
     });
 
     return true;
+  },
+});
+
+export const recordPurchaseSettlement = internalMutation({
+  args: {
+    userId: v.id("users"),
+    creditsGranted: v.number(),
+    priceId: v.string(),
+    stripePaymentIntentId: v.string(),
+    stripeCheckoutSessionId: v.string(),
+    pendingCheckoutId: v.optional(v.id("pendingCheckouts")),
+    amountUsd: v.number(),
+    currency: v.string(),
+  },
+  returns: v.object({
+    alreadyRecorded: v.boolean(),
+    created: v.boolean(),
+    creditApplied: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    if (args.pendingCheckoutId) {
+      const existingCheckoutSettlement = await ctx.db
+        .query("purchaseSettlements")
+        .withIndex("by_pending_checkout", (q) => q.eq("pendingCheckoutId", args.pendingCheckoutId!))
+        .first();
+
+      if (existingCheckoutSettlement) {
+        return {
+          alreadyRecorded: true,
+          created: false,
+          creditApplied: false,
+        };
+      }
+    }
+
+    const existingSettlement = await ctx.db
+      .query("purchaseSettlements")
+      .withIndex("by_payment_intent", (q) => q.eq("stripePaymentIntentId", args.stripePaymentIntentId))
+      .first();
+
+    if (existingSettlement) {
+      return {
+        alreadyRecorded: true,
+        created: false,
+        creditApplied: false,
+      };
+    }
+
+    const existingGrant = await ctx.db
+      .query("creditGrants")
+      .withIndex("by_payment_intent", (q) => q.eq("stripePaymentIntentId", args.stripePaymentIntentId))
+      .first();
+
+    let creditApplied = false;
+    let creditGrantCreatedAt = existingGrant?.createdAt ?? Date.now();
+
+    if (!existingGrant) {
+      const applied = await applyCreditsToUser(ctx, args.userId, args.creditsGranted);
+      if (!applied) {
+        return {
+          alreadyRecorded: false,
+          created: false,
+          creditApplied: false,
+        };
+      }
+
+      creditApplied = true;
+      creditGrantCreatedAt = Date.now();
+
+      await ctx.db.insert("creditGrants", {
+        userId: args.userId,
+        amount: args.creditsGranted,
+        reason: "purchase",
+        stripePaymentIntentId: args.stripePaymentIntentId,
+        createdAt: creditGrantCreatedAt,
+      });
+    }
+
+    const now = Date.now();
+    await ctx.db.insert("purchaseSettlements", {
+      stripePaymentIntentId: args.stripePaymentIntentId,
+      stripeCheckoutSessionId: args.stripeCheckoutSessionId,
+      pendingCheckoutId: args.pendingCheckoutId ?? null,
+      userId: args.userId,
+      priceId: args.priceId,
+      creditsGranted: args.creditsGranted,
+      amountUsd: args.amountUsd,
+      currency: args.currency,
+      creditGrantCreatedAt,
+      revenueEventCreatedAt: now,
+      createdAt: now,
+    });
+
+    return {
+      alreadyRecorded: false,
+      created: true,
+      creditApplied,
+    };
+  },
+});
+
+export const recordRefundForPendingCheckout = internalMutation({
+  args: {
+    pendingCheckoutId: v.id("pendingCheckouts"),
+    stripeRefundId: v.string(),
+    refundAmountUsd: v.number(),
+    refundedAt: v.number(),
+  },
+  returns: v.object({
+    alreadyRefunded: v.boolean(),
+    recorded: v.boolean(),
+    stripeRefundId: v.optional(v.string()),
+    refundAmountUsd: v.optional(v.number()),
+  }),
+  handler: async (ctx, args) => {
+    const settlements = await ctx.db
+      .query("purchaseSettlements")
+      .withIndex("by_pending_checkout", (q) => q.eq("pendingCheckoutId", args.pendingCheckoutId))
+      .collect();
+
+    if (settlements.length === 0) {
+      return {
+        alreadyRefunded: false,
+        recorded: false,
+      };
+    }
+
+    if (settlements.length > 1) {
+      throw new Error(
+        "Multiple settlement rows match this pending checkout; refund recording is not authoritative",
+      );
+    }
+
+    const settlement = settlements[0]!;
+    if (settlement.refundedAt) {
+      if (settlement.stripeRefundId && settlement.stripeRefundId !== args.stripeRefundId) {
+        throw new Error("Settlement was already refunded with a different Stripe refund ID");
+      }
+
+      return {
+        alreadyRefunded: true,
+        recorded: false,
+        stripeRefundId: settlement.stripeRefundId ?? args.stripeRefundId,
+        refundAmountUsd: settlement.refundAmountUsd ?? args.refundAmountUsd,
+      };
+    }
+
+    // Only claw back credits on the first refund record; guard against
+    // duplicate webhook delivery re-deducting an already-clawed-back balance.
+    const user = await ctx.db.get(settlement.userId);
+    if (user) {
+      const current = user.credits ?? 0;
+      // Clamp to zero — the user may have already spent some credits.
+      const clawback = Math.min(current, settlement.creditsGranted);
+      if (clawback > 0) {
+        await ctx.db.patch(settlement.userId, { credits: current - clawback });
+      }
+    }
+
+    await ctx.db.patch(settlement._id, {
+      refundRequestedAt: settlement.refundRequestedAt ?? args.refundedAt,
+      refundedAt: args.refundedAt,
+      stripeRefundId: args.stripeRefundId,
+      refundAmountUsd: args.refundAmountUsd,
+    });
+
+    return {
+      alreadyRefunded: false,
+      recorded: true,
+      stripeRefundId: args.stripeRefundId,
+      refundAmountUsd: args.refundAmountUsd,
+    };
+  },
+});
+
+export const getSettlementByPaymentIntentId = internalQuery({
+  args: { stripePaymentIntentId: v.string() },
+  returns: v.union(settlementSummaryValidator, v.null()),
+  handler: async (ctx, args) => {
+    return await getSettlementSummaryByPaymentIntentId(ctx, args.stripePaymentIntentId);
+  },
+});
+
+export const getSettlementByPendingCheckoutId = internalQuery({
+  args: { pendingCheckoutId: v.id("pendingCheckouts") },
+  returns: v.union(settlementSummaryValidator, v.null()),
+  handler: async (ctx, args) => {
+    return await getSettlementSummaryByPendingCheckoutId(ctx, args.pendingCheckoutId);
+  },
+});
+
+export const getSettlementByPendingCheckoutForCanaryRunner = internalQuery({
+  args: { runnerSecret: v.string(), pendingCheckoutId: v.id("pendingCheckouts") },
+  returns: v.union(settlementSummaryValidator, v.null()),
+  handler: async (ctx, args) => {
+    assertVerificationRunnerSecret(args.runnerSecret);
+
+    const principal = await ctx.db
+      .query("canaryPrincipals")
+      .withIndex("by_principal_id", (q) => q.eq("principalId", "CANARY_SETTLEMENT"))
+      .first();
+    if (!principal?.appUserId) {
+      return null;
+    }
+
+    const checkout = await ctx.db.get(args.pendingCheckoutId);
+    if (!checkout || checkout.userId !== principal.appUserId) {
+      return null;
+    }
+
+    return await getSettlementSummaryByPendingCheckoutId(ctx, args.pendingCheckoutId);
   },
 });

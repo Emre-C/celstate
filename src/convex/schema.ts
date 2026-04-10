@@ -1,6 +1,17 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
-import { creditGrantReasonValidator, generationStageValidator } from "./lib/validators.js";
+import {
+  canaryPrincipalIdValidator,
+  creditGrantReasonValidator,
+  domainVerdictRecordValidator,
+  featureDomainValidator,
+  generationStageValidator,
+  verdictValidator,
+  requirementClassValidator,
+  verificationTriggerValidator,
+} from "./lib/validators.js";
+
+const domainVerdictValidator = domainVerdictRecordValidator;
 
 export default defineSchema({
   users: defineTable({
@@ -111,9 +122,80 @@ export default defineSchema({
       v.literal("failed")
     ),
     checkoutUrl: v.optional(v.string()),
+    stripeCheckoutSessionId: v.optional(v.string()),
     error: v.optional(v.string()),
     createdAt: v.number(),
-  }).index("by_user_status", ["userId", "status"]),
+  })
+    .index("by_user_status", ["userId", "status"])
+    .index("by_stripe_checkout_session", ["stripeCheckoutSessionId"]),
+
+  purchaseSettlements: defineTable({
+    stripePaymentIntentId: v.string(),
+    stripeCheckoutSessionId: v.string(),
+    pendingCheckoutId: v.union(v.id("pendingCheckouts"), v.null()),
+    userId: v.id("users"),
+    priceId: v.string(),
+    creditsGranted: v.number(),
+    amountUsd: v.number(),
+    currency: v.string(),
+    creditGrantCreatedAt: v.number(),
+    revenueEventCreatedAt: v.number(),
+    refundRequestedAt: v.optional(v.number()),
+    refundedAt: v.optional(v.number()),
+    stripeRefundId: v.optional(v.string()),
+    refundAmountUsd: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_payment_intent", ["stripePaymentIntentId"])
+    .index("by_checkout_session", ["stripeCheckoutSessionId"])
+    .index("by_pending_checkout", ["pendingCheckoutId"])
+    .index("by_createdAt", ["createdAt"]),
+
+  canaryPrincipals: defineTable({
+    principalId: canaryPrincipalIdValidator,
+    domain: featureDomainValidator,
+    destructive: v.boolean(),
+    email: v.string(),
+    name: v.string(),
+    betterAuthUserId: v.string(),
+    minimumCredits: v.number(),
+    appUserId: v.union(v.id("users"), v.null()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_principal_id", ["principalId"])
+    .index("by_email", ["email"]),
+
+  verificationEvidence: defineTable({
+    evidenceRef: v.string(),
+    runKey: v.string(),
+    domain: featureDomainValidator,
+    trigger: verificationTriggerValidator,
+    payloadJson: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_evidence_ref", ["evidenceRef"])
+    .index("by_run_key_createdAt", ["runKey", "createdAt"]),
+
+  verificationRuns: defineTable({
+    runKey: v.string(),
+    trigger: verificationTriggerValidator,
+    deploymentId: v.optional(v.string()),
+    gitSha: v.optional(v.string()),
+    siteUrl: v.optional(v.string()),
+    workflowRunId: v.optional(v.string()),
+    startedAt: v.number(),
+    finishedAt: v.optional(v.number()),
+    releaseDecision: v.optional(v.union(v.literal("ALLOW"), v.literal("DENY"))),
+    requiredDomains: v.array(featureDomainValidator),
+    authVerdict: v.optional(domainVerdictValidator),
+    generationVerdict: v.optional(domainVerdictValidator),
+    checkoutSessionVerdict: v.optional(domainVerdictValidator),
+    liveSettlementVerdict: v.optional(domainVerdictValidator),
+  })
+    .index("by_run_key", ["runKey"])
+    .index("by_trigger_startedAt", ["trigger", "startedAt"])
+    .index("by_deployment_trigger_startedAt", ["deploymentId", "trigger", "startedAt"]),
 
   referenceUploadUrlIssues: defineTable({
     userId: v.id("users"),

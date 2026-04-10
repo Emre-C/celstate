@@ -6,6 +6,7 @@ import {
   query,
   internalQuery,
   internalMutation,
+  internalAction,
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server.js";
@@ -232,31 +233,68 @@ export const getStripePriceIds = query({
   },
 });
 
-export const grantWeeklyCredit = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    const users = await ctx.db.query("users").collect();
+/**
+ * Processes one page of users for the weekly credit drip. Returns pagination
+ * state so the action can self-schedule the next batch.
+ */
+export const grantWeeklyCreditBatch = internalMutation({
+  args: {
+    cursor: v.union(v.string(), v.null()),
+  },
+  returns: v.object({
+    continueCursor: v.string(),
+    isDone: v.boolean(),
+    processed: v.number(),
+  }),
+  handler: async (ctx, args) => {
     const cap = GENERATION_CONFIG.weeklyDripCap;
+    const { page, continueCursor, isDone } = await ctx.db
+      .query("users")
+      .paginate({ numItems: 100, cursor: args.cursor });
 
-    for (const user of users) {
+    let processed = 0;
+    for (const user of page) {
       const current = user.credits ?? 0;
-
-      if (current >= cap) {
-        continue;
-      }
+      if (current >= cap) continue;
 
       const grant = cap - current;
-
-      await ctx.db.patch(user._id, {
-        credits: cap,
-      });
-
+      await ctx.db.patch(user._id, { credits: cap });
       await ctx.db.insert("creditGrants", {
         userId: user._id,
         amount: grant,
         reason: "weekly_drip",
         createdAt: Date.now(),
       });
+      processed++;
     }
+
+    return { continueCursor, isDone, processed };
+  },
+});
+
+/**
+ * Entry point called by the weekly cron. Processes users in pages of 100 and
+ * self-schedules until all users have been visited, preventing the unbounded
+ * table scan that would block a single mutation.
+ */
+export const grantWeeklyCredit = internalAction({
+  args: {
+    cursor: v.optional(v.union(v.string(), v.null())),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    // Type annotation required to avoid TypeScript circularity on same-file calls.
+    const result: { continueCursor: string; isDone: boolean; processed: number } =
+      await ctx.runMutation(internal.users.grantWeeklyCreditBatch, {
+        cursor: args.cursor ?? null,
+      });
+
+    if (!result.isDone) {
+      await ctx.scheduler.runAfter(0, internal.users.grantWeeklyCredit, {
+        cursor: result.continueCursor,
+      });
+    }
+
+    return null;
   },
 });

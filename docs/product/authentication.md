@@ -49,7 +49,7 @@ Celstate does not want to own password storage, reset flows, breach handling, or
 | Package | Version | Role |
 |--------|---------|------|
 | `@convex-dev/better-auth` | `^0.11.1` | Convex integration for Better Auth |
-| `better-auth` | `1.5.5` | Core auth framework |
+| `better-auth` | `1.6.0` | Core auth framework |
 | `@mmailaender/convex-better-auth-svelte` | `^0.6.2` | SvelteKit handler + Svelte client helpers |
 | `@mmailaender/convex-svelte` | `^0.17.0` | Convex Svelte client |
 | `convex` | `^1.33.1` | Core Convex client |

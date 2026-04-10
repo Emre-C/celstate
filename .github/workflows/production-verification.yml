@@ -1,0 +1,52 @@
+name: Production verification
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly scheduled health (includes LIVE_SETTLEMENT when secrets are configured).
+    - cron: "0 6 * * 1"
+
+concurrency:
+  group: production-verification
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VERIFICATION_RUNNER_SECRET: ${{ secrets.VERIFICATION_RUNNER_SECRET }}
+      CONVEX_URL: ${{ secrets.CONVEX_URL }}
+      AUTH_CANARY_BASE_URL: ${{ secrets.AUTH_CANARY_BASE_URL }}
+      PUBLIC_SITE_URL: ${{ secrets.AUTH_CANARY_BASE_URL }}
+      VERIFICATION_TRIGGER: ${{ github.event_name == 'schedule' && 'SCHEDULED' || 'POST_DEPLOY' }}
+      AUTH_CANARY_REQUIRE_PROTECTED_ROUTE: ${{ vars.AUTH_CANARY_REQUIRE_PROTECTED_ROUTE }}
+      GITHUB_SHA: ${{ github.sha }}
+      GITHUB_RUN_ID: ${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright (Chromium)
+        run: pnpm exec playwright install chromium --with-deps
+
+      - name: Write canary auth storage (optional)
+        env:
+          AUTH_JSON: ${{ secrets.AUTH_CANARY_STORAGE_JSON }}
+        run: |
+          if [ -n "$AUTH_JSON" ]; then
+            printf '%s\n' "$AUTH_JSON" > /tmp/canary-auth-storage.json
+            echo "AUTH_CANARY_PROTECTED_STORAGE_STATE=/tmp/canary-auth-storage.json" >> "$GITHUB_ENV"
+          fi
+
+      - name: Run production verification
+        run: pnpm verify:production

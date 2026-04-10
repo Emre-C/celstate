@@ -26,11 +26,15 @@ import type * as lib_stripeCheckout from "../lib/stripeCheckout.js";
 import type * as lib_stripeEnv from "../lib/stripeEnv.js";
 import type * as lib_validation from "../lib/validation.js";
 import type * as lib_validators from "../lib/validators.js";
+import type * as lib_verificationRunnerSecret from "../lib/verificationRunnerSecret.js";
 import type * as ops from "../ops.js";
 import type * as pendingCheckouts from "../pendingCheckouts.js";
 import type * as posthog from "../posthog.js";
 import type * as stripe from "../stripe.js";
+import type * as stripeRefundVerification from "../stripeRefundVerification.js";
 import type * as users from "../users.js";
+import type * as verification from "../verification.js";
+import type * as verificationRuns from "../verificationRuns.js";
 
 import type {
   ApiFromModules,
@@ -57,11 +61,15 @@ declare const fullApi: ApiFromModules<{
   "lib/stripeEnv": typeof lib_stripeEnv;
   "lib/validation": typeof lib_validation;
   "lib/validators": typeof lib_validators;
+  "lib/verificationRunnerSecret": typeof lib_verificationRunnerSecret;
   ops: typeof ops;
   pendingCheckouts: typeof pendingCheckouts;
   posthog: typeof posthog;
   stripe: typeof stripe;
+  stripeRefundVerification: typeof stripeRefundVerification;
   users: typeof users;
+  verification: typeof verification;
+  verificationRuns: typeof verificationRuns;
 }>;
 
 /**
