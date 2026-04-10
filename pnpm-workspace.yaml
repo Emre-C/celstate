@@ -8,3 +8,5 @@ onlyBuiltDependencies:
   - esbuild
   - protobufjs
   - sharp
+patchedDependencies:
+  '@convex-dev/better-auth@0.11.1': patches/@convex-dev__better-auth@0.11.1.patch

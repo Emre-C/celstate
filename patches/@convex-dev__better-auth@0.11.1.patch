@@ -1,0 +1,25 @@
+diff --git a/dist/client/adapter-utils.js b/dist/client/adapter-utils.js
+index 1f804714d7bbfaf135fa64870842fd88e9002539..40cd2323cd71d5e3ce8dcdb39023d43dc9284ae4 100644
+--- a/dist/client/adapter-utils.js
++++ b/dist/client/adapter-utils.js
+@@ -8,6 +8,8 @@ export const adapterWhereValidator = v.object({
+     operator: v.optional(v.union(v.literal("lt"), v.literal("lte"), v.literal("gt"), v.literal("gte"), v.literal("eq"), v.literal("in"), v.literal("not_in"), v.literal("ne"), v.literal("contains"), v.literal("starts_with"), v.literal("ends_with"))),
+     value: v.union(v.string(), v.number(), v.boolean(), v.array(v.string()), v.array(v.number()), v.null()),
+     connector: v.optional(v.union(v.literal("AND"), v.literal("OR"))),
++    // Better Auth >=1.6 sends mode on where clauses; Convex queries ignore it for now (see get-convex/better-auth#324).
++    mode: v.optional(v.union(v.literal("sensitive"), v.literal("insensitive"))),
+ });
+ export const adapterArgsValidator = v.object({
+     model: v.string(),
+diff --git a/dist/client/create-api.js b/dist/client/create-api.js
+index d8faa6cf3ec63db230118c6eb97ccd21302d79a8..dab7ef00fa2e5b41cae5a73453f91f18d5784bea 100644
+--- a/dist/client/create-api.js
++++ b/dist/client/create-api.js
+@@ -9,6 +9,7 @@ const whereValidator = (schema, tableName) => v.object({
+     operator: v.optional(v.union(v.literal("lt"), v.literal("lte"), v.literal("gt"), v.literal("gte"), v.literal("eq"), v.literal("in"), v.literal("not_in"), v.literal("ne"), v.literal("contains"), v.literal("starts_with"), v.literal("ends_with"))),
+     value: v.union(v.string(), v.number(), v.boolean(), v.array(v.string()), v.array(v.number()), v.null()),
+     connector: v.optional(v.union(v.literal("AND"), v.literal("OR"))),
++    mode: v.optional(v.union(v.literal("sensitive"), v.literal("insensitive"))),
+ });
+ export const createApi = (schema, createAuthOptions) => {
+     const betterAuthSchema = getAuthTables(createAuthOptions({}));
