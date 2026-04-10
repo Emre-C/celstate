@@ -4,7 +4,9 @@ import {
 	CANARY_PRINCIPAL_IDS,
 	DEFAULT_GATE_CONFIG,
 	FEATURE_DOMAINS,
-	PROBE_OUTCOMES,
+	MAX_GENERATION_STAGES,
+	MAX_WEBHOOK_DELIVERIES,
+	VERDICTS,
 	acceptDeploy,
 	assertValidGateConfig,
 	buildDeploymentVerificationRun,
@@ -41,6 +43,13 @@ const req = (domain: DomainVerdictRecord["domain"], verdict: DomainVerdictRecord
 	finishedAt: 2,
 });
 
+describe("production confidence spec bounds", () => {
+	it("matches formal spec §2.3 numeric limits", () => {
+		expect(MAX_GENERATION_STAGES).toBe(3);
+		expect(MAX_WEBHOOK_DELIVERIES).toBe(3);
+	});
+});
+
 describe("production confidence gate evaluation", () => {
 	it("requires all post-deploy required domains to pass", () => {
 		const verdicts: DomainVerdictRecord[] = [
@@ -69,7 +78,7 @@ describe("production confidence gate evaluation", () => {
 		const requiredDomains = FEATURE_DOMAINS.filter(
 			(domain) => getRequirementClass(domain, "POST_DEPLOY") === "REQUIRED_ON_DEPLOY",
 		);
-		const requiredOutcomes = PROBE_OUTCOMES;
+		const requiredOutcomes = VERDICTS;
 		let totalVectors = 0;
 		let allowedVectors = 0;
 

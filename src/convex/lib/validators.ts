@@ -44,9 +44,6 @@ export const verdictValidator = v.union(
   v.literal("TIMEOUT"),
 );
 
-/** @deprecated Use verdictValidator */
-export const probeOutcomeValidator = verdictValidator;
-
 export const settlementOutcomeValidator = v.union(
   v.literal("UNOBSERVED"),
   v.literal("GRANTED_ONCE"),

@@ -21,13 +21,6 @@ export type VerificationTrigger = (typeof VERIFICATION_TRIGGERS)[number];
 export const VERDICTS = ["PENDING", "RUNNING", "PASSED", "FAILED", "TIMEOUT", "SKIPPED"] as const;
 export type Verdict = (typeof VERDICTS)[number];
 
-export type TerminalVerdict = Exclude<Verdict, "PENDING" | "RUNNING">;
-
-/** @deprecated Use Verdict — alias for existing call sites */
-export type ProbeOutcome = Verdict;
-/** @deprecated Use VERDICTS */
-export const PROBE_OUTCOMES = VERDICTS;
-
 export const REQUIREMENT_CLASSES = ["REQUIRED_ON_DEPLOY", "REQUIRED_ON_SCHEDULE", "OPTIONAL"] as const;
 export type RequirementClass = (typeof REQUIREMENT_CLASSES)[number];
 
@@ -64,9 +57,6 @@ export interface DomainVerdictRecord {
 	readonly startedAt: number;
 	readonly finishedAt?: number;
 }
-
-/** @deprecated Use DomainVerdictRecord */
-export type DomainVerdict = DomainVerdictRecord;
 
 export interface DeploymentVerificationRun {
 	readonly deploymentId: string;
@@ -105,27 +95,6 @@ export interface LiveSettlementCanaryEvidence {
 	readonly creditGrantCount: 0 | 1;
 	readonly authoritativeRevenueCount: 0 | 1;
 	readonly refundObserved: boolean;
-}
-
-// --- §5.4 Existing runtime abstractions
-
-export type ExistingPendingCheckoutState = "pending" | "ready" | "failed";
-
-export type ExistingGenerationStage = "white_background" | "black_background" | "finalizing";
-
-export type ExistingGenerationStatus = "generating" | "complete" | "failed";
-
-export interface ExistingPendingCheckoutModel {
-	readonly status: ExistingPendingCheckoutState;
-	readonly checkoutUrl?: string;
-	readonly error?: string;
-}
-
-export interface ExistingGenerationModel {
-	readonly status: ExistingGenerationStatus;
-	readonly stage?: ExistingGenerationStage;
-	readonly creditRefundedAt?: number;
-	readonly resultStorageId?: string;
 }
 
 // --- Gate configuration (§5.5, §11.2 RP1–RP3)
@@ -205,15 +174,6 @@ export const CANARY_PRINCIPAL_CONFIG: Record<CanaryPrincipalId, CanaryPrincipalD
 	},
 };
 
-const DOMAIN_VERDICT_FIELD_BY_DOMAIN = {
-	AUTH: "authVerdict",
-	GENERATION: "generationVerdict",
-	CHECKOUT_SESSION: "checkoutSessionVerdict",
-	LIVE_SETTLEMENT: "liveSettlementVerdict",
-} as const;
-
-export type DomainVerdictField = (typeof DOMAIN_VERDICT_FIELD_BY_DOMAIN)[FeatureDomain];
-
 export const getRequiredDomainsForTrigger = (
 	trigger: VerificationTrigger,
 	gateConfig: GateConfig = DEFAULT_GATE_CONFIG,
@@ -233,10 +193,6 @@ export const getRequirementClass = (
 		return gateConfig.requiredOnDeploy.includes(domain) ? "REQUIRED_ON_DEPLOY" : "OPTIONAL";
 	}
 	return gateConfig.requiredOnSchedule.includes(domain) ? "REQUIRED_ON_SCHEDULE" : "OPTIONAL";
-};
-
-export const getDomainVerdictField = (domain: FeatureDomain): DomainVerdictField => {
-	return DOMAIN_VERDICT_FIELD_BY_DOMAIN[domain];
 };
 
 export const createRunKey = ({
@@ -267,15 +223,6 @@ export const createEvidenceRef = ({
 };
 
 export const isPassingVerdict = (verdict: Verdict): boolean => verdict === "PASSED";
-
-/** @deprecated Use isPassingVerdict */
-export const isPassingOutcome = isPassingVerdict;
-
-export const isTerminalVerdict = (verdict: Verdict): verdict is TerminalVerdict =>
-	verdict !== "PENDING" && verdict !== "RUNNING";
-
-export const isBlockingTerminalVerdict = (verdict: TerminalVerdict): boolean =>
-	verdict === "FAILED" || verdict === "TIMEOUT" || verdict === "SKIPPED";
 
 // --- §14 Predicates
 
@@ -731,55 +678,3 @@ export const transitionLiveSettlementCanary = (
 	}
 	return state;
 };
-
-// --- Legacy evidence union (optional consumers)
-
-export interface AuthProbeEvidence {
-	authPageStatus?: number;
-	authPageMarkerPresent?: boolean;
-	getSessionStatus?: number;
-	getSessionJsonValid?: boolean;
-	authenticatedGetSessionStatus?: number;
-	authenticatedProtectedPathStatus?: number;
-	authenticatedProtectedPathReachable?: boolean;
-	protectedPathFinalUrl?: string;
-	failures: string[];
-}
-
-export interface GenerationProbeEvidence {
-	generationId: string;
-	terminalStatus: "complete" | "failed" | "timeout";
-	completedAt?: number;
-	creditRefundedAt?: number;
-	generationTimeMs?: number;
-	resultUrlPresent?: boolean;
-	statusMessage?: string;
-	error?: string;
-}
-
-export interface CheckoutProbeEvidence {
-	checkoutId: string;
-	terminalStatus: "ready" | "failed" | "timeout";
-	checkoutUrlIssued?: boolean;
-	stripeCheckoutSessionId?: string;
-	error?: string;
-}
-
-export interface LiveSettlementProbeEvidence {
-	checkoutId: string;
-	stripeCheckoutSessionId?: string;
-	stripePaymentIntentId?: string;
-	creditGrantCount: number;
-	revenueEventCount: number;
-	settlementOutcome: SettlementOutcome;
-	stripeRefundId?: string;
-	refundedAt?: number;
-	refundAmountUsd?: number;
-	error?: string;
-}
-
-export type VerificationEvidence =
-	| AuthProbeEvidence
-	| GenerationProbeEvidence
-	| CheckoutProbeEvidence
-	| LiveSettlementProbeEvidence;
