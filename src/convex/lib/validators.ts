@@ -59,6 +59,34 @@ export const canaryPrincipalIdValidator = v.union(
   v.literal("CANARY_SETTLEMENT"),
 );
 
+export const verificationReleaseDecisionValidator = v.union(
+  v.literal("ALLOW"),
+  v.literal("DENY"),
+);
+
+export const canaryPrincipalBindingFields = {
+  principalId: canaryPrincipalIdValidator,
+  domain: featureDomainValidator,
+  destructive: v.boolean(),
+  email: v.string(),
+  name: v.string(),
+  betterAuthUserId: v.string(),
+  minimumCredits: v.number(),
+  appUserId: v.union(v.id("users"), v.null()),
+};
+
+export const canaryPrincipalBindingValidator = v.object(canaryPrincipalBindingFields);
+
+export const verificationEvidenceFields = {
+  evidenceRef: v.string(),
+  runKey: v.string(),
+  domain: featureDomainValidator,
+  trigger: verificationTriggerValidator,
+  payloadJson: v.string(),
+};
+
+export const verificationEvidenceValidator = v.object(verificationEvidenceFields);
+
 /** Matches `domainVerdictValidator` in schema (single source for verification APIs). */
 export const domainVerdictRecordValidator = v.object({
   domain: featureDomainValidator,
@@ -71,4 +99,27 @@ export const domainVerdictRecordValidator = v.object({
   note: v.optional(v.string()),
   // Populated for LIVE_SETTLEMENT probes; absent for other domains.
   settlementOutcome: v.optional(settlementOutcomeValidator),
+});
+
+export const verificationRunFields = {
+  runKey: v.string(),
+  trigger: verificationTriggerValidator,
+  deploymentId: v.optional(v.string()),
+  gitSha: v.optional(v.string()),
+  siteUrl: v.optional(v.string()),
+  workflowRunId: v.optional(v.string()),
+  startedAt: v.number(),
+  finishedAt: v.optional(v.number()),
+  releaseDecision: v.optional(verificationReleaseDecisionValidator),
+  requiredDomains: v.array(featureDomainValidator),
+  authVerdict: v.optional(domainVerdictRecordValidator),
+  generationVerdict: v.optional(domainVerdictRecordValidator),
+  checkoutSessionVerdict: v.optional(domainVerdictRecordValidator),
+  liveSettlementVerdict: v.optional(domainVerdictRecordValidator),
+};
+
+export const verificationRunValidator = v.object({
+  _id: v.id("verificationRuns"),
+  _creationTime: v.number(),
+  ...verificationRunFields,
 });

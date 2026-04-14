@@ -1,31 +1,7 @@
 import { v } from "convex/values";
 import { internalQuery } from "./_generated/server.js";
-import { domainVerdictRecordValidator, verificationTriggerValidator } from "./lib/validators.js";
+import { verificationRunValidator, verificationTriggerValidator } from "./lib/validators.js";
 import { assertVerificationRunnerSecret } from "./lib/verificationRunnerSecret.js";
-
-const verificationRunValidator = v.object({
-  _id: v.id("verificationRuns"),
-  _creationTime: v.number(),
-  runKey: v.string(),
-  trigger: verificationTriggerValidator,
-  deploymentId: v.optional(v.string()),
-  gitSha: v.optional(v.string()),
-  siteUrl: v.optional(v.string()),
-  workflowRunId: v.optional(v.string()),
-  startedAt: v.number(),
-  finishedAt: v.optional(v.number()),
-  releaseDecision: v.optional(v.union(v.literal("ALLOW"), v.literal("DENY"))),
-  requiredDomains: v.array(v.union(
-    v.literal("AUTH"),
-    v.literal("GENERATION"),
-    v.literal("CHECKOUT_SESSION"),
-    v.literal("LIVE_SETTLEMENT"),
-  )),
-  authVerdict: v.optional(domainVerdictRecordValidator),
-  generationVerdict: v.optional(domainVerdictRecordValidator),
-  checkoutSessionVerdict: v.optional(domainVerdictRecordValidator),
-  liveSettlementVerdict: v.optional(domainVerdictRecordValidator),
-});
 
 /** Fetch a verification run by its stable run key. */
 export const getRunByKey = internalQuery({

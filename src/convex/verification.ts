@@ -2,9 +2,12 @@ import { v } from "convex/values";
 import { components } from "./_generated/api.js";
 import { internalMutation, internalQuery } from "./_generated/server.js";
 import {
+  canaryPrincipalBindingValidator,
   canaryPrincipalIdValidator,
   domainVerdictRecordValidator,
   featureDomainValidator,
+  verificationEvidenceValidator,
+  verificationReleaseDecisionValidator,
   verificationTriggerValidator,
 } from "./lib/validators.js";
 import { assertVerificationRunnerSecret } from "./lib/verificationRunnerSecret.js";
@@ -16,17 +19,6 @@ import {
   type FeatureDomain,
   type GateConfig,
 } from "../lib/production-confidence.js";
-
-const canaryPrincipalBindingValidator = v.object({
-  principalId: canaryPrincipalIdValidator,
-  domain: featureDomainValidator,
-  destructive: v.boolean(),
-  email: v.string(),
-  name: v.string(),
-  betterAuthUserId: v.string(),
-  minimumCredits: v.number(),
-  appUserId: v.union(v.id("users"), v.null()),
-});
 
 type BetterAuthUserRecord = {
   email?: string;
@@ -156,14 +148,6 @@ export const upsertCanaryPrincipal = internalMutation({
   },
 });
 
-const evidenceRowValidator = v.object({
-  evidenceRef: v.string(),
-  runKey: v.string(),
-  domain: featureDomainValidator,
-  trigger: verificationTriggerValidator,
-  payloadJson: v.string(),
-});
-
 const gateConfigArgsValidator = v.object({
   requiredOnDeploy: v.array(featureDomainValidator),
   requiredOnSchedule: v.array(featureDomainValidator),
@@ -185,10 +169,10 @@ export const ingestVerificationRun = internalMutation({
     generationVerdict: v.optional(domainVerdictRecordValidator),
     checkoutSessionVerdict: v.optional(domainVerdictRecordValidator),
     liveSettlementVerdict: v.optional(domainVerdictRecordValidator),
-    evidenceRows: v.array(evidenceRowValidator),
+    evidenceRows: v.array(verificationEvidenceValidator),
   },
   returns: v.object({
-    releaseDecision: v.union(v.literal("ALLOW"), v.literal("DENY")),
+    releaseDecision: verificationReleaseDecisionValidator,
   }),
   handler: async (ctx, args) => {
     assertVerificationRunnerSecret(args.runnerSecret);

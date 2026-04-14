@@ -1,17 +1,12 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import {
-  canaryPrincipalIdValidator,
+  canaryPrincipalBindingFields,
   creditGrantReasonValidator,
-  domainVerdictRecordValidator,
-  featureDomainValidator,
   generationStageValidator,
-  verdictValidator,
-  requirementClassValidator,
-  verificationTriggerValidator,
+  verificationEvidenceFields,
+  verificationRunFields,
 } from "./lib/validators.js";
-
-const domainVerdictValidator = domainVerdictRecordValidator;
 
 export default defineSchema({
   users: defineTable({
@@ -152,14 +147,7 @@ export default defineSchema({
     .index("by_createdAt", ["createdAt"]),
 
   canaryPrincipals: defineTable({
-    principalId: canaryPrincipalIdValidator,
-    domain: featureDomainValidator,
-    destructive: v.boolean(),
-    email: v.string(),
-    name: v.string(),
-    betterAuthUserId: v.string(),
-    minimumCredits: v.number(),
-    appUserId: v.union(v.id("users"), v.null()),
+    ...canaryPrincipalBindingFields,
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -167,32 +155,13 @@ export default defineSchema({
     .index("by_email", ["email"]),
 
   verificationEvidence: defineTable({
-    evidenceRef: v.string(),
-    runKey: v.string(),
-    domain: featureDomainValidator,
-    trigger: verificationTriggerValidator,
-    payloadJson: v.string(),
+    ...verificationEvidenceFields,
     createdAt: v.number(),
   })
     .index("by_evidence_ref", ["evidenceRef"])
     .index("by_run_key_createdAt", ["runKey", "createdAt"]),
 
-  verificationRuns: defineTable({
-    runKey: v.string(),
-    trigger: verificationTriggerValidator,
-    deploymentId: v.optional(v.string()),
-    gitSha: v.optional(v.string()),
-    siteUrl: v.optional(v.string()),
-    workflowRunId: v.optional(v.string()),
-    startedAt: v.number(),
-    finishedAt: v.optional(v.number()),
-    releaseDecision: v.optional(v.union(v.literal("ALLOW"), v.literal("DENY"))),
-    requiredDomains: v.array(featureDomainValidator),
-    authVerdict: v.optional(domainVerdictValidator),
-    generationVerdict: v.optional(domainVerdictValidator),
-    checkoutSessionVerdict: v.optional(domainVerdictValidator),
-    liveSettlementVerdict: v.optional(domainVerdictValidator),
-  })
+  verificationRuns: defineTable(verificationRunFields)
     .index("by_run_key", ["runKey"])
     .index("by_trigger_startedAt", ["trigger", "startedAt"])
     .index("by_deployment_trigger_startedAt", ["deploymentId", "trigger", "startedAt"]),
