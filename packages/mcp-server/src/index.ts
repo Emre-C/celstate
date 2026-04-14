@@ -1,315 +1,118 @@
-import express, {
-  type NextFunction,
-  type Request,
-  type Response,
-} from "express";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import {
-  authenticateRequest,
-  AuthenticationError,
-  type CelstateRequestContext,
-} from "./auth.js";
-import {
-  DEFAULT_HOST,
-  DEFAULT_PORT,
-  HEALTH_ENDPOINT_PATH,
-  MCP_CORS_ALLOWED_HEADERS,
-  MCP_CORS_ALLOWED_METHODS,
-  MCP_CORS_EXPOSED_HEADERS,
-  MCP_ENDPOINT_PATH,
-  MCP_SERVER_INFO,
-} from "./constants.js";
-import { getConvexUrl } from "./convex-client.js";
-import {
-  buildRequestLogFields,
-  createRequestTelemetry,
-  logMcpError,
-  logMcpEvent,
-  type McpRequestTelemetry,
-} from "./logging.js";
-import { registerGenerateTools } from "./tools/generate.js";
-import { registerGetImageTools } from "./tools/getImage.js";
-import { registerListImageTools } from "./tools/listImages.js";
-import { registerCreditsTools } from "./tools/credits.js";
+import express, { type Request as ExpressRequest, type Response as ExpressResponse } from "express";
 
-type AuthenticatedRequest = Request & {
-  celstate?: CelstateRequestContext;
-  celstateTelemetry?: McpRequestTelemetry;
-};
+const DEFAULT_HOST = "127.0.0.1";
+const DEFAULT_PORT = 3100;
+const HEALTH_ENDPOINT_PATH = "/health";
+const MCP_ENDPOINT_PATH = "/mcp";
 
 const PORT = parsePort(process.env.PORT);
 const HOST = process.env.HOST ?? DEFAULT_HOST;
+const UPSTREAM_MCP_URL = getUpstreamMcpUrl();
 
 function parsePort(portValue: string | undefined): number {
   const parsedPort = parseInt(portValue ?? `${DEFAULT_PORT}`, 10);
   return Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : DEFAULT_PORT;
 }
 
-function getAllowedOrigins(): string[] {
-  const allowedOrigins = process.env.MCP_ALLOWED_ORIGINS;
-  if (!allowedOrigins) {
-    return [];
+function getUpstreamMcpUrl(): URL {
+  const value = process.env.MCP_UPSTREAM_URL;
+  if (!value) {
+    throw new Error(
+      "MCP_UPSTREAM_URL is required. Point it at the canonical hosted Celstate MCP endpoint, for example https://your-deployment.convex.site/mcp.",
+    );
   }
 
-  return allowedOrigins
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter((origin) => origin.length > 0);
+  return new URL(value);
 }
 
-function isAllowedOrigin(originHeader: string, hostHeader: string | undefined): boolean {
-  try {
-    const origin = new URL(originHeader);
+function copyRequestHeaders(req: ExpressRequest): Headers {
+  const headers = new Headers();
 
-    if (getAllowedOrigins().includes(origin.origin)) {
-      return true;
+  for (const [key, value] of Object.entries(req.headers)) {
+    if (value === undefined) {
+      continue;
     }
 
-    return Boolean(hostHeader) && origin.host === hostHeader;
-  } catch {
-    return false;
-  }
-}
+    const lowerKey = key.toLowerCase();
+    if (lowerKey === "host" || lowerKey === "connection" || lowerKey === "content-length") {
+      continue;
+    }
 
-function applyCorsHeaders(req: Request, res: Response): void {
-  const originHeader = req.header("origin");
-  if (!originHeader) {
-    return;
+    headers.set(key, Array.isArray(value) ? value.join(", ") : value);
   }
 
-  res.setHeader("Access-Control-Allow-Origin", originHeader);
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    MCP_CORS_ALLOWED_HEADERS.join(", "),
-  );
-  res.setHeader(
-    "Access-Control-Allow-Methods",
-    MCP_CORS_ALLOWED_METHODS.join(", "),
-  );
-  res.setHeader(
-    "Access-Control-Expose-Headers",
-    MCP_CORS_EXPOSED_HEADERS.join(", "),
-  );
-  res.setHeader("Access-Control-Max-Age", "86400");
-  res.append("Vary", "Origin");
-  res.append("Vary", "Access-Control-Request-Headers");
-  res.append("Vary", "Access-Control-Request-Method");
+  return headers;
 }
 
-function validateOriginHeader(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-): void {
-  const originHeader = req.header("origin");
-  if (!originHeader) {
-    next();
-    return;
+async function readRequestBody(req: ExpressRequest): Promise<string | undefined> {
+  if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") {
+    return undefined;
   }
 
-  if (isAllowedOrigin(originHeader, req.header("host") ?? undefined)) {
-    applyCorsHeaders(req, res);
-    next();
-    return;
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) {
+    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : Buffer.from(chunk));
   }
 
-  logMcpEvent("mcp_origin_rejected", {
-    ...buildRequestLogFields(req),
-    responseStatus: 403,
-  });
-  res.status(403).json({
-    error: "Forbidden origin. Reconnect from an allowed MCP client origin.",
-    requestId: req.celstateTelemetry?.requestId,
-  });
+  return chunks.length > 0 ? Buffer.concat(chunks).toString("utf8") : undefined;
 }
 
-function handleCorsPreflight(_req: Request, res: Response): void {
-  res.status(204).end();
+function buildUpstreamRequestUrl(req: ExpressRequest): URL {
+  return new URL(req.originalUrl, UPSTREAM_MCP_URL);
 }
 
-function handleUnsupportedMcpMethod(
-  req: AuthenticatedRequest,
-  res: Response,
-): void {
-  logMcpEvent("mcp_method_not_allowed", {
-    ...buildRequestLogFields(req),
-    responseStatus: 405,
-  });
-  res.setHeader("Allow", "OPTIONS, POST");
-  res.status(405).json({
-    error: "Method not allowed. This stateless MCP endpoint only accepts POST requests.",
-    requestId: req.celstateTelemetry?.requestId,
-  });
-}
-
-async function requireAuthenticatedRequest(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
+async function writeProxyResponse(
+  res: ExpressResponse,
+  upstreamResponse: globalThis.Response,
 ): Promise<void> {
-  try {
-    req.celstate = await authenticateRequest(
-      req.header("authorization") ?? undefined,
-      req.celstateTelemetry?.requestId ?? "unknown",
-    );
-    next();
-  } catch (error) {
-    if (error instanceof AuthenticationError) {
-      logMcpEvent("mcp_auth_rejected", {
-        ...buildRequestLogFields(req),
-        responseStatus: error.statusCode,
-      });
-      res.status(error.statusCode).json({
-        error: error.message,
-        requestId: req.celstateTelemetry?.requestId,
-      });
+  res.status(upstreamResponse.status);
+
+  upstreamResponse.headers.forEach((value, key) => {
+    if (key.toLowerCase() === "transfer-encoding") {
       return;
     }
 
-    next(error);
-  }
-}
+    res.setHeader(key, value);
+  });
 
-function createMcpServer(context: CelstateRequestContext): McpServer {
-  const server = new McpServer(MCP_SERVER_INFO);
-
-  registerCreditsTools(server, context);
-  registerGenerateTools(server, context);
-  registerGetImageTools(server, context);
-  registerListImageTools(server, context);
-
-  return server;
+  const body = Buffer.from(await upstreamResponse.arrayBuffer());
+  res.send(body);
 }
 
 const app = express();
 app.disable("x-powered-by");
-app.use((req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-  req.celstateTelemetry = createRequestTelemetry(req);
-  res.setHeader("x-request-id", req.celstateTelemetry.requestId);
-  next();
-});
-app.use(express.json({ limit: "1mb" }));
-app.use((req: AuthenticatedRequest, _res: Response, next: NextFunction) => {
-  if (req.celstateTelemetry) {
-    const refreshedTelemetry = createRequestTelemetry(req);
-    req.celstateTelemetry = {
-      ...refreshedTelemetry,
-      requestId: req.celstateTelemetry.requestId,
-      startedAt: req.celstateTelemetry.startedAt,
-    };
-  }
-  next();
-});
 
 app.get(HEALTH_ENDPOINT_PATH, (_req, res) => {
   res.json({
-    server: `${MCP_SERVER_INFO.name}-mcp`,
+    mode: "proxy",
     status: "ok",
-    version: MCP_SERVER_INFO.version,
+    upstream: UPSTREAM_MCP_URL.toString(),
   });
 });
 
-app.options(MCP_ENDPOINT_PATH, validateOriginHeader, handleCorsPreflight);
-
-app.get(MCP_ENDPOINT_PATH, validateOriginHeader, (req: AuthenticatedRequest, res: Response) => {
-  handleUnsupportedMcpMethod(req, res);
-});
-
-app.delete(MCP_ENDPOINT_PATH, validateOriginHeader, (req: AuthenticatedRequest, res: Response) => {
-  handleUnsupportedMcpMethod(req, res);
-});
-
-app.post(
-  MCP_ENDPOINT_PATH,
-  validateOriginHeader,
-  requireAuthenticatedRequest,
-  (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    void handleMcpRequest(req, res).catch(next);
-  },
-);
-
-app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
-  const req = _req as AuthenticatedRequest;
-  const message = error instanceof Error ? error.message : "Internal server error";
-  logMcpError("mcp_request_failed", error, {
-    ...buildRequestLogFields(req),
-    responseStatus: res.statusCode >= 400 ? res.statusCode : 500,
-  });
-
-  if (res.headersSent) {
-    return;
-  }
-
-  res.status(500).json({
-    error: message,
-    requestId: req.celstateTelemetry?.requestId,
-  });
-});
-
-async function handleMcpRequest(
-  req: AuthenticatedRequest,
-  res: Response,
-): Promise<void> {
-  const context = req.celstate;
-  if (!context) {
-    throw new Error("Authenticated MCP request context was not initialized.");
-  }
-
-  logMcpEvent("mcp_request_started", buildRequestLogFields(req));
-
-  const server = createMcpServer(context);
-  const transport = new StreamableHTTPServerTransport({
-    enableJsonResponse: true,
-    sessionIdGenerator: undefined,
-  });
-
-  let cleanedUp = false;
-  res.once("close", () => {
-    if (cleanedUp) {
-      return;
-    }
-    cleanedUp = true;
-
-    logMcpEvent("mcp_request_finished", {
-      ...buildRequestLogFields(req),
-      durationMs: Date.now() - (req.celstateTelemetry?.startedAt ?? Date.now()),
-      responseStatus: res.statusCode,
+app.all(MCP_ENDPOINT_PATH, async (req, res) => {
+  try {
+    const upstreamResponse = await fetch(buildUpstreamRequestUrl(req), {
+      method: req.method,
+      headers: copyRequestHeaders(req),
+      body: await readRequestBody(req),
+      redirect: "manual",
     });
 
-    void (async () => {
-      await transport.close().catch((closeError) => {
-        logMcpError(
-          "mcp_transport_close_failed",
-          closeError,
-          buildRequestLogFields(req),
-        );
-      });
-      await server.close().catch((closeError) => {
-        logMcpError("mcp_server_close_failed", closeError, buildRequestLogFields(req));
-      });
-    })();
-  });
-
-  await server.connect(transport);
-  await transport.handleRequest(req, res, req.body);
-}
-
-// Fail fast on startup if required configuration is missing.
-getConvexUrl();
-
-logMcpEvent("mcp_server_starting", {
-  allowedOriginCount: getAllowedOrigins().length,
-  healthEndpointPath: HEALTH_ENDPOINT_PATH,
-  host: HOST,
-  mcpEndpointPath: MCP_ENDPOINT_PATH,
-  port: PORT,
-  transport: "streamable_http",
+    await writeProxyResponse(res, upstreamResponse);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Proxy request failed";
+    res.status(502).json({ error: message });
+  }
 });
 
 app.listen(PORT, HOST, () => {
-  logMcpEvent("mcp_server_listening", {
-    healthUrl: `http://${HOST}:${PORT}${HEALTH_ENDPOINT_PATH}`,
-    mcpUrl: `http://${HOST}:${PORT}${MCP_ENDPOINT_PATH}`,
-  });
+  console.info(
+    JSON.stringify({
+      event: "mcp_proxy_listening",
+      healthUrl: `http://${HOST}:${PORT}${HEALTH_ENDPOINT_PATH}`,
+      mcpUrl: `http://${HOST}:${PORT}${MCP_ENDPOINT_PATH}`,
+      upstream: UPSTREAM_MCP_URL.toString(),
+    }),
+  );
 });

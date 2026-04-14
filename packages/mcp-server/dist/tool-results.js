@@ -5,7 +5,7 @@ export const READ_ONLY_TOOL_ANNOTATIONS = {
     readOnlyHint: true,
 };
 export const GENERATE_TOOL_ANNOTATIONS = {
-    destructiveHint: true,
+    destructiveHint: false,
     idempotentHint: false,
     openWorldHint: true,
     readOnlyHint: false,

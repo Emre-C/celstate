@@ -1,6 +1,8 @@
-# CI and Auth Canary
+# CI, auth canary, and production verification
 
 Short reference for what runs on GitHub Actions, common failure modes, and how to avoid regressions.
+
+**Scope:** `ci.yml` is **preview-local** (build + marketing E2E). `auth-canary.yml` is a **lightweight production smoke** on `/auth` and get-session. **`production-verification.yml`** runs **deploy-scoped** probes against live production (auth with protected-route proof, generation, checkout session, and scheduled live settlement). Contract and evidence model: [`docs/implementation/PRODUCTION-CONFIDENCE-FORMAL-SPEC.md`](../implementation/PRODUCTION-CONFIDENCE-FORMAL-SPEC.md).
 
 ## CI (`/.github/workflows/ci.yml`)
 
@@ -42,6 +44,26 @@ If the bare domain (`https://example.com`) **308-redirects** to `https://www.exa
 - **`request timed out after …ms`** means the probe’s `fetch` hit the per-request abort budget (cold starts, edge/network blips, or GitHub runner egress). A single timeout with surrounding runs **green** usually points to **transience**, not a bad HTTP status from the app.
 - For sustained outages, expect explicit status / content-type / marker errors rather than only timeouts.
 
+## Production verification (`/.github/workflows/production-verification.yml`)
+
+Machine-evaluable **release evidence** for production: runner `scripts/production-verification.ts` exercises domains **AUTH**, **GENERATION**, **CHECKOUT_SESSION**, and (on the **weekly** schedule only) **LIVE_SETTLEMENT**, persists results to Convex (`verificationRuns`, `verificationEvidence`), and **exits non-zero** when the gate returns **DENY**.
+
+- **When it runs**
+  - **`deployment_status`** — After a **successful** GitHub deployment to the **Production** environment (e.g. Vercel production deploys). Other deployment states/environments are skipped by workflow `if`.
+  - **`schedule`** — Weekly (Monday 06:00 UTC cron in the workflow); includes live-settlement when secrets support it.
+  - **`workflow_dispatch` / `workflow_call`** — Manual or reusable invocations; optional inputs can pass `deployment_id`, `site_url`, `git_sha`.
+
+- **Secrets (repo → Settings → Actions → Secrets and variables)**
+  - **`VERIFICATION_RUNNER_SECRET`** — Shared secret for Convex HTTP verification routes.
+  - **`CONVEX_URL`** — Production Convex deployment URL for the runner.
+  - **`AUTH_CANARY_BASE_URL`** — Canonical HTTPS origin (same role as the auth canary; overridable per run via `site_url` input).
+  - **`AUTH_CANARY_STORAGE_JSON`** — Playwright storage state JSON for an authenticated session (protected-route auth proof). Required for **POST_DEPLOY** / **SCHEDULED** unless you explicitly disable protected-route requirement (see runner env `AUTH_CANARY_REQUIRE_PROTECTED_ROUTE`).
+
+- **Variables (optional)**
+  - **`AUTH_CANARY_REQUIRE_PROTECTED_ROUTE`** — Repository variable; aligns with the runner’s default (protected-route proof expected for deploy/scheduled triggers).
+
+- **External setup** — Vercel (or similar) **deployment protection** can gate promotion on this workflow’s check status; canary Better Auth users and one-time principal bootstrap are described in the [formal spec §10.3](../implementation/PRODUCTION-CONFIDENCE-FORMAL-SPEC.md#103-remaining-external-configuration).
+
 ## Optional hardening (not in repo by default)
 
 - **actionlint:** Validate workflow YAML in CI (`rhysd/actionlint` or install locally). Catches some workflow mistakes early.
@@ -49,6 +71,7 @@ If the bare domain (`https://example.com`) **308-redirects** to `https://www.exa
 
 ## Related docs
 
-- `docs/product/authentication.md` — Regression coverage and scheduled auth canary  
-- `docs/runbooks/PUBLIC-ENV-CHECKLIST.md` — CI `PUBLIC_SITE_URL` vs production  
-- `docs/product/observability.md` — Canary file references  
+- `docs/product/authentication.md` — Regression coverage, scheduled auth smoke, and production verification (auth domain)
+- `docs/implementation/PRODUCTION-CONFIDENCE-FORMAL-SPEC.md` — Full contract, gates, and evidence map
+- `docs/runbooks/PUBLIC-ENV-CHECKLIST.md` — CI `PUBLIC_SITE_URL` vs production
+- `docs/product/observability.md` — Canary and verification file references

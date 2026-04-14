@@ -55,7 +55,7 @@ This memo defines an **AI-native layer** that sits **on top of** the existing st
 
 ### Layer 2 — Agent-Invocable Product (MCP And Beyond)
 
-Celstate already ships **[packages/mcp-server](../../../packages/mcp-server/)** — this is **AI-first product strategy**, not only marketing.
+Celstate already ships a hosted MCP surface documented in **[docs/implementation/MCP-SERVER.md](../../implementation/MCP-SERVER.md)** — this is **AI-first product strategy**, not only marketing.
 
 **Strategic meaning:**
 

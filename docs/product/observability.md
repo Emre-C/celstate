@@ -704,7 +704,10 @@ canary:
   - "scripts/auth-canary-probe.mjs"
   - "scripts/auth-canary-probe.test.ts"
   - ".github/workflows/auth-canary.yml"
+  - "scripts/production-verification.ts"
+  - ".github/workflows/production-verification.yml"
   - "docs/runbooks/CI-AND-CANARIES.md"
+  - "docs/implementation/PRODUCTION-CONFIDENCE-FORMAL-SPEC.md"
 ```
 
 ---

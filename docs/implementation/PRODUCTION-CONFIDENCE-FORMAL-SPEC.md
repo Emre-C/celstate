@@ -12,7 +12,7 @@ DOCUMENT_ROLE
            screenshot_diffs, payment_processor_internal_implementation_not_observable_by_repo
 ```
 
-**Status (2026-04):** The contract library, gate evaluation, JSON Schema, unit tests, webhook settlement ledger, and Convex tables for verification are in-repo. **Remaining work** is almost entirely operational: production canaries (auth with protected route, generation, checkout, live settlement), persisting `verificationRuns` / `verificationEvidence` from runners, wiring the deploy gate into CI or deploy pipelines, and destructive-settlement refund automation. See §10–§12.
+**Status (2026-04):** The system is end-to-end operational. The contract library, gate evaluation, JSON Schema, unit tests, webhook settlement ledger, Convex persistence (`verificationRuns`, `verificationEvidence`, `canaryPrincipals`), production runner (`scripts/production-verification.ts`), auth/generation/checkout/settlement canaries, deploy-triggered verification via `deployment_status`, automated canary principal provisioning, and Stripe refund automation (`src/convex/stripeRefundVerification.ts`) are all in-repo. The deploy gate fires automatically on Vercel production deployments (via GitHub `deployment_status` events), with the runner exiting non-zero on DENY. Protected-route auth proof is required by default for `POST_DEPLOY` and `SCHEDULED` triggers. **Remaining external configuration:** Vercel deployment protection rules referencing the verification check status (not in-repo).
 
 ---
 
@@ -68,8 +68,8 @@ CF4  .github/workflows/auth-canary.yml executes scripts/check-auth-health.mjs on
 CF5  scripts/check-auth-health.mjs probes /auth and /api/auth/get-session only.
 CF6  scripts/auth-canary-probe.mjs and scripts/auth-canary-probe.test.ts define final acceptable get-session statuses {200, 401};
      final 308 is rejected.
-CF7  docs/product/authentication.md and docs/runbooks/CI-AND-CANARIES.md both characterize the current auth canary as a smoke check,
-     not a proof of full OAuth redirect/callback success or authenticated protected-route reachability.
+CF7  docs/product/authentication.md and docs/runbooks/CI-AND-CANARIES.md characterize auth-canary.yml as a smoke check (not full OAuth).
+     They also point to production verification for protected-route reachability and deploy-scoped AUTH evidence; full OAuth E2E remains out of scope for that smoke workflow.
 ```
 
 ### 3.3 Existing checkout and settlement mechanisms
@@ -102,12 +102,32 @@ CF20  src/convex/generations.ts distinguishes stalled-generation warning from ti
 CF21  cleanupStaleGenerations emits a warning path before timeout and a failure-plus-refund path after timeout.
 ```
 
-### 3.5 Evidence-class partition
+### 3.5 Production verification runner and persistence
 
 ```text
-CF22  docs/product/observability.md defines credits_purchase_completed as a server-side authoritative revenue signal.
-CF23  docs/product/observability.md defines generation_completed and generation_failed as client-captured analytics signals.
-CF24  Browser-captured analytics are explicitly non-authoritative for revenue correctness.
+CF25  scripts/production-verification.ts exercises AUTH, GENERATION, CHECKOUT_SESSION, and LIVE_SETTLEMENT (scheduled only)
+      canaries against a live production deployment, collecting typed evidence and ingesting results to Convex.
+CF26  .github/workflows/production-verification.yml triggers on deployment_status (production success), workflow_call,
+      workflow_dispatch, and weekly schedule; the runner exits non-zero on DENY.
+CF27  src/convex/verification.ts implements ingestVerificationRun (writing to verificationRuns and verificationEvidence)
+      and upsertCanaryPrincipal (provisioning canary principal bindings from canonical Better Auth users).
+CF28  src/convex/http.ts exposes HTTP routes for all canary operations: /verification/ingest,
+      /verification/canary/{start-generation, generation-status, start-checkout, checkout-status,
+      settlement-by-checkout, refund-settlement, upsert-principal, start-settlement-checkout, settlement-checkout-status}.
+CF29  scripts/production-verification.ts auto-provisions required canary principals (CANARY_GENERATION, CANARY_CHECKOUT,
+      and CANARY_SETTLEMENT for scheduled triggers) before running probes via /verification/canary/upsert-principal.
+CF30  Protected-route auth proof (AuthCanaryEvidence.protectedRouteReachable) is required by default for POST_DEPLOY
+      and SCHEDULED triggers; opt-out requires explicit AUTH_CANARY_REQUIRE_PROTECTED_ROUTE=false.
+CF31  src/convex/stripeRefundVerification.ts provides automated Stripe refund for destructive settlement canaries,
+      invoked by the runner via /verification/canary/refund-settlement.
+```
+
+### 3.6 Evidence-class partition
+
+```text
+CF32  docs/product/observability.md defines credits_purchase_completed as a server-side authoritative revenue signal.
+CF33  docs/product/observability.md defines generation_completed and generation_failed as client-captured analytics signals.
+CF34  Browser-captured analytics are explicitly non-authoritative for revenue correctness.
 ```
 
 ---
@@ -775,48 +795,51 @@ LG4  FA3 ⊨ □((failed ∨ timed_out) ⇒ ◇refunded)
 
 ## 10. Gap registry
 
-### 10.1 Implemented in repository (partial vs complete)
+### 10.1 Implemented in repository
 
 ```text
-I1  COMPLETE — Library contract: src/lib/production-confidence.ts implements §5 vocabulary, GateConfig + DEFAULT_GATE_CONFIG,
-    predicates (§14), evaluateReleaseDecision / buildDeploymentVerificationRun, coordinator and domain lifecycle transitions (§6),
-    classifySettlementOutcome / classifyGenerationOutcome, and CANARY_PRINCIPAL_CONFIG (canonical emails and roles per BO2 shape).
-I2  COMPLETE — Unit tests: src/lib/production-confidence.test.ts runs under pnpm test (vite.config.ts include pattern).
-I3  COMPLETE — JSON Schema: src/lib/production-confidence-gate-config.schema.json matches GateConfig (requiredOnDeploy max 3 domains).
-I4  COMPLETE — Settlement ledger on authoritative webhook: src/convex/http.ts calls internal.creditGrants.recordPurchaseSettlement;
-    purchaseSettlements + creditGrants rows; addresses former G9 / BO9 ledger gap for the production webhook path.
-I5  PARTIAL — Persistence schema: src/convex/schema.ts defines verificationRuns (per-domain verdict slots + releaseDecision),
-    verificationEvidence, and canaryPrincipals; no Convex queries/mutations/crons yet write or read these tables.
-I6  OPEN — No GitHub Actions workflow runs deploy-scoped probes that fill verificationRuns or call evaluateReleaseDecision.
-I7  OPEN — scripts/check-auth-health.mjs remains an unauthenticated smoke check; no Playwright/production probe proves
-    AuthCanaryEvidence.protectedRouteReachable on the canonical origin.
-I8  OPEN — No scheduled or manual workflow runs generation, checkout-session, or live-settlement production canaries.
-I9  OPEN — No automation issues Stripe refunds for a destructive settlement canary (G10-class).
+I1   COMPLETE — Library contract: src/lib/production-confidence.ts implements §5 vocabulary, GateConfig + DEFAULT_GATE_CONFIG,
+     predicates (§14), evaluateReleaseDecision / buildDeploymentVerificationRun, coordinator and domain lifecycle transitions (§6),
+     classifySettlementOutcome / classifyGenerationOutcome, and CANARY_PRINCIPAL_CONFIG (canonical emails and roles per BO2 shape).
+I2   COMPLETE — Unit tests: src/lib/production-confidence.test.ts runs under pnpm test (vite.config.ts include pattern).
+I3   COMPLETE — JSON Schema: src/lib/production-confidence-gate-config.schema.json matches GateConfig (requiredOnDeploy max 3 domains).
+I4   COMPLETE — Settlement ledger on authoritative webhook: src/convex/http.ts calls internal.creditGrants.recordPurchaseSettlement;
+     purchaseSettlements + creditGrants rows; addresses former G9 / BO9 ledger gap for the production webhook path.
+I5   COMPLETE — Persistence: src/convex/verification.ts implements ingestVerificationRun (writes verificationRuns + verificationEvidence)
+     and upsertCanaryPrincipal (writes canaryPrincipals); production runner ingests results on every run.
+I6   COMPLETE — Deploy-scoped verification: .github/workflows/production-verification.yml triggers on deployment_status
+     (production success), workflow_call, workflow_dispatch, and weekly schedule; runner evaluates releaseDecision and exits non-zero on DENY.
+I7   COMPLETE — Authenticated auth canary: scripts/production-verification.ts probes protectedRouteReachable via Playwright
+     with pre-loaded storage state; required by default for POST_DEPLOY and SCHEDULED triggers.
+I8   COMPLETE — Production canaries: scripts/production-verification.ts exercises AUTH, GENERATION, CHECKOUT_SESSION,
+     and LIVE_SETTLEMENT (scheduled) canaries end-to-end against live infrastructure.
+I9   COMPLETE — Refund automation: src/convex/stripeRefundVerification.ts issues Stripe refunds for destructive settlement canaries;
+     runner calls /verification/canary/refund-settlement after settlement observation.
+I10  COMPLETE — Canary principal provisioning: runner auto-provisions required canary principals via
+     /verification/canary/upsert-principal before running probes (CF29).
 ```
 
-### 10.2 Verified gaps (remaining)
+### 10.2 Closed gaps
 
 ```text
-G1  No deploy-scoped production verification workflow computes and persists one verdict vector over
-    {AUTH, GENERATION, CHECKOUT_SESSION, LIVE_SETTLEMENT} end-to-end.
-G2  Existing auth canary does not prove authenticated protected-route reachability.
-G3  No production generation canary currently exists.
-G4  No production checkout-session creation canary currently exists.
-G5  No scheduled live-settlement canary currently exists.
-G6  Convex tables for verificationRuns / verificationEvidence exist but are not yet wired to runners or dashboards.
-G7  Release admission is not enforced in CI or deploy pipelines from production-domain verdicts (library-only today).
-G8  Canary principal inventory exists as TypeScript config + empty-by-default DB table; not provisioned or enforced in runtime probes.
-G9  No automated refund controller currently exists for destructive live-settlement canaries (formerly listed as G10).
+G1   CLOSED — production-verification.yml fires on deployment_status for production deployments; runner computes
+     and persists a full verdict vector over {AUTH, GENERATION, CHECKOUT_SESSION, LIVE_SETTLEMENT}.
+G2   CLOSED — Auth canary proves protectedRouteReachable; required by default for POST_DEPLOY/SCHEDULED (CF30).
+G3   CLOSED — Production generation canary exercises start-generation → poll → terminal status (CF25).
+G4   CLOSED — Production checkout-session canary exercises start-checkout → poll → ready with hosted URL (CF25).
+G5   CLOSED — Scheduled live-settlement canary exercises full pay → settle → refund lifecycle (CF25).
+G6   CLOSED — ingestVerificationRun persists verificationRuns and verificationEvidence on every runner invocation (CF27).
+G7   CLOSED — Runner exits non-zero on DENY; deployment_status trigger makes this a GitHub check on the deployment (CF26).
+G8   CLOSED — Runner auto-provisions canary principals before probes via upsert-principal endpoint (CF29).
+G9   CLOSED — stripeRefundVerification.ts provides automated Stripe refunds for settlement canaries (CF31).
 ```
 
-### 10.3 Gap consequences
+### 10.3 Remaining external configuration
 
 ```text
-GC1  G1 ∧ G7 ⇒ deploy admissibility is not enforced from production evidence in automation.
-GC2  G2 ⇒ auth regressions can evade the current scheduled smoke check.
-GC3  G3 ∨ G4 ⇒ generation and checkout integration regressions can remain latent until customer execution.
-GC4  G5 ⇒ live settlement lacks a scheduled authoritative proof suitable for machine gating (ledger exists; probe does not).
-GC5  G6 ⇒ evidenceRef and verdict history are not yet operational as a unified store across triggers.
+EC1  Vercel deployment protection rules referencing the production-verification check status (external to repo).
+EC2  Canary Better Auth user accounts + app user rows must exist before first provisioning succeeds (one-time manual bootstrap).
+EC3  GitHub secrets (VERIFICATION_RUNNER_SECRET, CONVEX_URL, AUTH_CANARY_BASE_URL, AUTH_CANARY_STORAGE_JSON) must be configured.
 ```
 
 ---
@@ -826,20 +849,21 @@ GC5  G6 ⇒ evidenceRef and verdict history are not yet operational as a unified
 ### 11.1 Required artifacts
 
 ```text
-BO1  PARTIAL — Schema: verificationRuns holds optional per-domain verdict records; library: buildDeploymentVerificationRun.
-     REMAINING: insert/update verificationRuns from post-deploy and scheduled runners; one run row per deployment trigger.
-BO2  PARTIAL — CANARY_PRINCIPAL_CONFIG in src/lib/production-confidence.ts + canaryPrincipals table.
-     REMAINING: provision Better Auth users, persist rows, use in probes.
-BO3  REMAINING — Authenticated browser auth canary for protectedRouteReachable on canonical production origin.
-BO4  REMAINING — Production generation canary with pre-funded principal.
-BO5  REMAINING — Production checkout-session canary (pending → ready, hosted URL) without live settlement.
-BO6  REMAINING — Scheduled live-settlement canary with refund policy and observability of grant + revenue counts.
-BO7  PARTIAL — Machine-readable gate implemented in TypeScript (evaluateReleaseDecision, DEFAULT_GATE_CONFIG).
-     REMAINING: invoke from CI/deploy and block promotion on DENY.
-BO8  PARTIAL — createEvidenceRef helper exists; verificationEvidence table exists.
-     REMAINING: persist payloads and wire evidenceRef on every terminal verdict from runners.
+BO1  DONE — Schema + persistence: verificationRuns written by ingestVerificationRun on every runner invocation;
+     one run row per deployment/trigger with per-domain verdict records and releaseDecision.
+BO2  DONE — Canary principals: CANARY_PRINCIPAL_CONFIG + canaryPrincipals table + upsertCanaryPrincipal mutation;
+     runner auto-provisions required principals before probes via /verification/canary/upsert-principal.
+BO3  DONE — Authenticated auth canary: Playwright probes protectedRouteReachable with pre-loaded storage state;
+     required by default for POST_DEPLOY/SCHEDULED triggers.
+BO4  DONE — Production generation canary: runner exercises start-generation → poll → terminal status with pre-funded principal.
+BO5  DONE — Production checkout-session canary: runner exercises start-checkout → poll → ready with hosted URL.
+BO6  DONE — Scheduled live-settlement canary: runner exercises full pay → settle → grant observation → refund lifecycle.
+BO7  DONE — Deploy gate: evaluateReleaseDecision invoked by runner; runner exits non-zero on DENY;
+     deployment_status trigger on production-verification.yml creates a GitHub check on the deployment.
+BO8  DONE — Evidence persistence: createEvidenceRef + verificationEvidence table; runner persists evidence payloads
+     with evidenceRef on every terminal verdict via ingestVerificationRun.
 BO9  DONE — recordPurchaseSettlement on webhook path (see CF16); purchaseSettlements is first-class on settlement.
-BO10 PARTIAL — Predicate implemented in library; REMAINING: enforce in release pipeline.
+BO10 DONE — Release predicate enforced: evaluateReleaseDecision returns DENY → runner exits non-zero → workflow fails.
 ```
 
 ### 11.2 Recommended requirement partition
@@ -868,13 +892,14 @@ VO5  Not covered by automated proof; recordPurchaseSettlement dedups by payment 
 ### 12.2 Runtime obligations
 
 ```text
-VO6   REMAINING — No runner persists a full DeploymentVerificationRun per deployment to Convex.
-VO7   REMAINING — Terminal verdicts per domain are not yet emitted by production automation.
-VO8   REMAINING — Auth canary does not collect authenticated protected-route success.
-VO9   REMAINING — No generation canary.
-VO10  REMAINING — No checkout-session canary.
-VO11  REMAINING — No live-settlement canary; getSettlementByPaymentIntentId exists for post-hoc reads once keyed.
-VO12  REMAINING — Duplicate-delivery behavior is enforced in settlement mutation; no canary asserts VO12 end-to-end.
+VO6   DONE — Runner ingests a full verification run (all domain verdicts + releaseDecision) to Convex via ingestVerificationRun.
+VO7   DONE — Terminal verdicts per domain are emitted by the production runner and persisted as verificationRuns rows.
+VO8   DONE — Auth canary collects protectedRouteReachable via Playwright; required by default for POST_DEPLOY/SCHEDULED.
+VO9   DONE — Generation canary exercises start → poll → terminal status against live Convex + provider.
+VO10  DONE — Checkout-session canary exercises start → poll → ready with hosted URL against live Stripe.
+VO11  DONE — Live-settlement canary exercises pay → settle → grant → refund against live Stripe (scheduled trigger).
+VO12  PARTIAL — Duplicate-delivery behavior enforced in settlement mutation (recordPurchaseSettlement dedup by payment intent);
+      no canary specifically asserts idempotency under synthetic duplicate webhook delivery end-to-end.
 ```
 
 ---
@@ -882,25 +907,29 @@ VO12  REMAINING — Duplicate-delivery behavior is enforced in settlement mutati
 ## 13. Evidence map
 
 ```text
-EVIDENCE.CI_WORKFLOW                 = .github/workflows/ci.yml
-EVIDENCE.AUTH_CANARY_WORKFLOW        = .github/workflows/auth-canary.yml
-EVIDENCE.AUTH_CANARY_SCRIPT          = scripts/check-auth-health.mjs
-EVIDENCE.AUTH_CANARY_CONTRACT        = scripts/auth-canary-probe.mjs
-EVIDENCE.AUTH_CANARY_CONTRACT_TEST   = scripts/auth-canary-probe.test.ts
-EVIDENCE.AUTH_PRODUCT_DOC            = docs/product/authentication.md
-EVIDENCE.CI_AND_CANARIES_RUNBOOK     = docs/runbooks/CI-AND-CANARIES.md
-EVIDENCE.PENDING_CHECKOUT_MODEL      = src/convex/pendingCheckouts.ts
-EVIDENCE.CHECKOUT_SESSION_CREATION   = src/convex/stripe.ts
-EVIDENCE.CHECKOUT_SETTLEMENT_GUARD   = src/convex/lib/stripeCheckout.ts
-EVIDENCE.WEBHOOK_SETTLEMENT_PATH     = src/convex/http.ts
-EVIDENCE.CREDIT_GRANT_IDEMPOTENCY    = src/convex/creditGrants.ts
-EVIDENCE.PURCHASE_SETTLEMENT_LEDGER  = src/convex/creditGrants.ts (recordPurchaseSettlement, getSettlementBy*)
-EVIDENCE.GENERATION_WORKFLOW         = src/convex/generations.ts
-EVIDENCE.OBSERVABILITY_PRODUCT_DOC   = docs/product/observability.md
-EVIDENCE.PRODUCTION_CONFIDENCE_LIB   = src/lib/production-confidence.ts
-EVIDENCE.PRODUCTION_CONFIDENCE_TESTS = src/lib/production-confidence.test.ts
-EVIDENCE.GATE_CONFIG_SCHEMA          = src/lib/production-confidence-gate-config.schema.json
-EVIDENCE.VERIFICATION_SCHEMA         = src/convex/schema.ts (verificationRuns, verificationEvidence, canaryPrincipals)
+EVIDENCE.CI_WORKFLOW                    = .github/workflows/ci.yml
+EVIDENCE.PRODUCTION_VERIFICATION_WF     = .github/workflows/production-verification.yml
+EVIDENCE.AUTH_CANARY_WORKFLOW           = .github/workflows/auth-canary.yml
+EVIDENCE.PRODUCTION_VERIFICATION_RUNNER = scripts/production-verification.ts
+EVIDENCE.AUTH_CANARY_SCRIPT             = scripts/check-auth-health.mjs
+EVIDENCE.AUTH_CANARY_CONTRACT           = scripts/auth-canary-probe.mjs
+EVIDENCE.AUTH_CANARY_CONTRACT_TEST      = scripts/auth-canary-probe.test.ts
+EVIDENCE.AUTH_PRODUCT_DOC               = docs/product/authentication.md
+EVIDENCE.CI_AND_CANARIES_RUNBOOK        = docs/runbooks/CI-AND-CANARIES.md
+EVIDENCE.PENDING_CHECKOUT_MODEL         = src/convex/pendingCheckouts.ts
+EVIDENCE.CHECKOUT_SESSION_CREATION      = src/convex/stripe.ts
+EVIDENCE.CHECKOUT_SETTLEMENT_GUARD      = src/convex/lib/stripeCheckout.ts
+EVIDENCE.WEBHOOK_SETTLEMENT_PATH        = src/convex/http.ts (Stripe webhooks + verification canary HTTP routes)
+EVIDENCE.CREDIT_GRANT_IDEMPOTENCY       = src/convex/creditGrants.ts
+EVIDENCE.PURCHASE_SETTLEMENT_LEDGER     = src/convex/creditGrants.ts (recordPurchaseSettlement, getSettlementBy*)
+EVIDENCE.GENERATION_WORKFLOW            = src/convex/generations.ts
+EVIDENCE.OBSERVABILITY_PRODUCT_DOC      = docs/product/observability.md
+EVIDENCE.PRODUCTION_CONFIDENCE_LIB      = src/lib/production-confidence.ts
+EVIDENCE.PRODUCTION_CONFIDENCE_TESTS    = src/lib/production-confidence.test.ts
+EVIDENCE.GATE_CONFIG_SCHEMA             = src/lib/production-confidence-gate-config.schema.json
+EVIDENCE.VERIFICATION_PERSISTENCE       = src/convex/verification.ts (ingestVerificationRun, upsertCanaryPrincipal)
+EVIDENCE.VERIFICATION_SCHEMA            = src/convex/schema.ts (verificationRuns, verificationEvidence, canaryPrincipals)
+EVIDENCE.STRIPE_REFUND_VERIFICATION     = src/convex/stripeRefundVerification.ts
 ```
 
 ---

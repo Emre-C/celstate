@@ -13,6 +13,7 @@ import {
   readOpsAlertRuntimeConfig,
 } from "./lib/ops.js";
 import { canGrantCreditsForCheckoutSession } from "./lib/stripeCheckout.js";
+import { handleMcpRequest } from "./mcp/handler.js";
 
 type CreditPackCheckoutEvent =
   | Stripe.CheckoutSessionAsyncPaymentSucceededEvent
@@ -42,6 +43,38 @@ const parseBearer = (request: Request): string => {
 };
 
 authComponent.registerRoutes(http, createAuth);
+
+http.route({
+  path: "/mcp",
+  method: "OPTIONS",
+  handler: httpAction(async (ctx, request) => {
+    return handleMcpRequest(ctx, request);
+  }),
+});
+
+http.route({
+  path: "/mcp",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    return handleMcpRequest(ctx, request);
+  }),
+});
+
+http.route({
+  path: "/mcp",
+  method: "DELETE",
+  handler: httpAction(async (ctx, request) => {
+    return handleMcpRequest(ctx, request);
+  }),
+});
+
+http.route({
+  path: "/mcp",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    return handleMcpRequest(ctx, request);
+  }),
+});
 
 http.route({
   path: "/verification/ingest",

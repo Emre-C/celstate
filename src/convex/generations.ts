@@ -1119,3 +1119,92 @@ export const cleanupStaleGenerations = internalMutation({
     return null;
   },
 });
+
+// --- Internal functions for MCP tool handlers ---
+// These accept userId directly (resolved from API key, not ctx.auth).
+
+export const requestGenerationForMcp = internalMutation({
+  args: {
+    userId: v.id("users"),
+    prompt: v.string(),
+    aspectRatio: v.string(),
+  },
+  returns: v.id("generations"),
+  handler: async (ctx, args) => {
+    const prompt = args.prompt.trim();
+    if (!prompt) {
+      throw new ConvexError("Prompt is required");
+    }
+    if (prompt.length > GENERATION_CONFIG.maxPromptLength) {
+      throw new ConvexError(
+        `Prompt too long (max ${GENERATION_CONFIG.maxPromptLength} characters)`,
+      );
+    }
+    if (!isValidAspectRatio(args.aspectRatio)) {
+      throw new ConvexError(`Unsupported aspect ratio: ${args.aspectRatio}`);
+    }
+
+    return requestGenerationCore(ctx, {
+      userId: args.userId,
+      prompt,
+      referenceStorageIds: [],
+      aspectRatio: args.aspectRatio,
+    });
+  },
+});
+
+export const getGenerationForMcp = internalQuery({
+  args: {
+    userId: v.id("users"),
+    generationId: v.string(),
+  },
+  returns: v.union(generationWithUrlsValidator, v.null()),
+  handler: async (ctx, args) => {
+    const generationId = ctx.db.normalizeId("generations", args.generationId);
+    if (!generationId) {
+      return null;
+    }
+    const generation = await ctx.db.get(generationId);
+    if (!generation || generation.userId !== args.userId) {
+      return null;
+    }
+    return resolveGenerationWithUrls(ctx, generation);
+  },
+});
+
+export const listGenerationsForMcp = internalQuery({
+  args: {
+    userId: v.id("users"),
+    limit: v.number(),
+    status: v.optional(generationStatusFilterValidator),
+  },
+  returns: v.array(generationWithUrlsValidator),
+  handler: async (ctx, args) => {
+    const limit = Math.min(Math.max(args.limit, 1), 10);
+    const status = args.status;
+    const generations = status
+      ? await ctx.db
+        .query("generations")
+        .withIndex("by_user_status", (q) => q.eq("userId", args.userId).eq("status", status))
+        .order("desc")
+        .take(limit)
+      : await ctx.db
+        .query("generations")
+        .withIndex("by_user", (q) => q.eq("userId", args.userId))
+        .order("desc")
+        .take(limit);
+
+    return Promise.all(generations.map((g) => resolveGenerationWithUrls(ctx, g)));
+  },
+});
+
+export const getCreditsForMcp = internalQuery({
+  args: {
+    userId: v.id("users"),
+  },
+  returns: v.number(),
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    return user?.credits ?? 0;
+  },
+});

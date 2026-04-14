@@ -6,7 +6,7 @@ export declare const READ_ONLY_TOOL_ANNOTATIONS: {
     readOnlyHint: true;
 };
 export declare const GENERATE_TOOL_ANNOTATIONS: {
-    destructiveHint: true;
+    destructiveHint: false;
     idempotentHint: false;
     openWorldHint: true;
     readOnlyHint: false;

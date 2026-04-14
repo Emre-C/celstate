@@ -1,13 +1,19 @@
 {
 	"$schema": "https://unpkg.com/knip@6/schema.json",
-	"entry": [
-		"src/routes/**/+{page,layout,server,error}.{ts,svelte}",
-		"src/convex/**/*.ts",
-		"!src/convex/_generated/**",
-		"e2e/**/*.ts"
-	],
-	"project": ["src/**/*.{ts,svelte}", "e2e/**/*.ts"],
-	"ignore": ["packages/**"],
+	"workspaces": {
+		".": {
+			"entry": [
+				"src/routes/**/+{page,layout,server,error}.{ts,svelte}",
+				"src/convex/**/*.ts",
+				"!src/convex/_generated/**",
+				"e2e/**/*.ts"
+			],
+			"project": ["src/**/*.{ts,svelte}", "e2e/**/*.ts"]
+		},
+		"packages/mcp-server": {
+			"project": ["src/**/*.ts"]
+		}
+	},
 	"ignoreExportsUsedInFile": true,
 	"ignoreDependencies": ["tailwindcss"],
 	"svelte": true,

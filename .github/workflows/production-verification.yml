@@ -2,6 +2,21 @@ name: Production verification
 
 on:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      deployment_id:
+        type: string
+        required: false
+        description: "Deployment identifier (Vercel deployment ID or similar)"
+      site_url:
+        type: string
+        required: false
+        description: "Production site URL to verify against (overrides AUTH_CANARY_BASE_URL secret)"
+      git_sha:
+        type: string
+        required: false
+        description: "Git SHA of the deployed commit"
+  deployment_status:
   schedule:
     # Weekly scheduled health (includes LIVE_SETTLEMENT when secrets are configured).
     - cron: "0 6 * * 1"
@@ -14,14 +29,30 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Only run for successful production deployments; all other triggers run unconditionally.
+    if: >-
+      github.event_name != 'deployment_status' ||
+      (github.event.deployment_status.state == 'success' &&
+       github.event.deployment.environment == 'Production')
     env:
       VERIFICATION_RUNNER_SECRET: ${{ secrets.VERIFICATION_RUNNER_SECRET }}
       CONVEX_URL: ${{ secrets.CONVEX_URL }}
-      AUTH_CANARY_BASE_URL: ${{ secrets.AUTH_CANARY_BASE_URL }}
-      PUBLIC_SITE_URL: ${{ secrets.AUTH_CANARY_BASE_URL }}
+      AUTH_CANARY_BASE_URL: ${{ inputs.site_url || secrets.AUTH_CANARY_BASE_URL }}
+      PUBLIC_SITE_URL: ${{ inputs.site_url || secrets.AUTH_CANARY_BASE_URL }}
       VERIFICATION_TRIGGER: ${{ github.event_name == 'schedule' && 'SCHEDULED' || 'POST_DEPLOY' }}
+      # Protected-route auth proof is required by default for POST_DEPLOY/SCHEDULED.
+      # The runner defaults to required; this variable is an explicit override only.
       AUTH_CANARY_REQUIRE_PROTECTED_ROUTE: ${{ vars.AUTH_CANARY_REQUIRE_PROTECTED_ROUTE }}
-      GITHUB_SHA: ${{ github.sha }}
+      VERCEL_DEPLOYMENT_ID: >-
+        ${{ github.event_name == 'deployment_status'
+            && github.event.deployment.id
+            || inputs.deployment_id
+            || '' }}
+      GITHUB_SHA: >-
+        ${{ github.event_name == 'deployment_status'
+            && github.event.deployment.sha
+            || inputs.git_sha
+            || github.sha }}
       GITHUB_RUN_ID: ${{ github.run_id }}
     steps:
       - uses: actions/checkout@v4
@@ -39,13 +70,15 @@ jobs:
       - name: Install Playwright (Chromium)
         run: pnpm exec playwright install chromium --with-deps
 
-      - name: Write canary auth storage (optional)
+      - name: Write canary auth storage
         env:
           AUTH_JSON: ${{ secrets.AUTH_CANARY_STORAGE_JSON }}
         run: |
           if [ -n "$AUTH_JSON" ]; then
             printf '%s\n' "$AUTH_JSON" > /tmp/canary-auth-storage.json
             echo "AUTH_CANARY_PROTECTED_STORAGE_STATE=/tmp/canary-auth-storage.json" >> "$GITHUB_ENV"
+          elif [ "$VERIFICATION_TRIGGER" != "PRE_MERGE_CI" ]; then
+            echo "::warning::AUTH_CANARY_STORAGE_JSON secret is not set — protected-route auth proof will use runner default (required for POST_DEPLOY/SCHEDULED unless AUTH_CANARY_REQUIRE_PROTECTED_ROUTE=false)"
           fi
 
       - name: Run production verification

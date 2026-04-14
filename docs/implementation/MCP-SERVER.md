@@ -2,33 +2,56 @@
 
 ## Overview
 
-A remote MCP server that lets AI assistants (Claude, ChatGPT, Cursor, etc.)
-generate transparent-background images on behalf of authenticated users.
+Celstate ships a remote, Convex-hosted MCP endpoint for agentic clients such as Claude Code and Cursor.
+It lets authenticated agents generate transparent-background images, inspect progress, and check recent work on behalf of a signed-in Celstate user.
 
 ## Architecture
 
 ```
-┌──────────────┐    Streamable HTTP     ┌─────────────────┐    Convex Client     ┌──────────┐
-│  MCP Client  │ ──────────────────────▶│  MCP Server     │ ──────────────────▶  │  Convex  │
-│  (Claude,    │    JSON-RPC 2.0        │  (Express +     │    queries/mutations │  Backend │
-│   ChatGPT…)  │◀──────────────────────│   @mcp/sdk)     │◀──────────────────  │          │
-└──────────────┘                        └─────────────────┘                      └──────────┘
+┌──────────────┐    Streamable HTTP    ┌──────────────────────┐    internal     ┌──────────┐
+│ MCP Client   │ ─────────────────────▶│ Convex HTTP action   │ ───────────────▶ │ Convex   │
+│ (Claude,     │    JSON-RPC 2.0       │ `/mcp` + MCP SDK     │    queries &     │ database │
+│ Cursor, etc) │◀───────────────────── │ stateless transport   │    mutations     │ storage  │
+└──────────────┘                       └──────────────────────┘                  └──────────┘
 ```
 
 ### Transport
 
-**Streamable HTTP (stateless, JSON response mode)** — the MCP server is deployed as a remote HTTP service.
-Any MCP-compatible host connects via URL (e.g. `https://mcp.celstate.com/mcp`).
-The implementation stays stateless on purpose: each request builds a fresh MCP server
-and a fresh request-scoped Convex client, so auth and tool execution cannot leak across
-concurrent users.
+**Streamable HTTP (stateless, JSON response mode)** — the canonical endpoint is the hosted Convex route at:
+
+```text
+https://<deployment>.convex.site/mcp
+```
+
+The server stays stateless on purpose: every POST creates a fresh MCP server instance and a fresh transport so request IDs, auth context, and tool execution cannot bleed across users or clients.
+
+Celstate intentionally does **not** expose standalone SSE or session termination today:
+
+- `POST /mcp` handles JSON-RPC traffic.
+- `GET /mcp` returns `405 Method Not Allowed` with guidance to use POST.
+- `DELETE /mcp` returns `405 Method Not Allowed` because there are no MCP sessions to terminate.
+- `OPTIONS /mcp` returns `204 No Content` for polite preflight/probing support.
+
+That shape is deliberate for AI harnesses. It matches the MCP spec's expectations for a stateless HTTP server without taking on unused session or SSE complexity.
+
+### Origin and auth policy
+
+- The endpoint accepts requests with **no** `Origin` header, which is the normal case for agent clients.
+- If an `Origin` header is present, Celstate accepts only the request origin itself or explicit values from `MCP_ALLOWED_ORIGINS` and rejects everything else with `403`.
+- Every non-OPTIONS request must include `Authorization: Bearer <celstate_api_key>`.
 
 ### Auth
 
-Bearer token auth. Users generate an API key from Celstate settings.
-The MCP server validates the token against Convex on each request before the SDK handles MCP traffic.
+Bearer token auth backed by user-generated Celstate API keys stored in Convex.
 
-Future: OAuth 2.1 per the MCP spec for full third-party integration.
+The hosted handler authenticates each request by hashing the presented key and calling one internal Convex mutation that:
+
+1. finds the key by hash,
+2. rejects revoked or unknown keys,
+3. loads the owning user,
+4. updates `lastUsedAt` in the same mutation.
+
+This keeps the UI's "last used" timestamp trustworthy instead of best-effort.
 
 ## Tool Design (Context Rot Prevention)
 
@@ -63,58 +86,80 @@ Following Anthropic's 2026 guidance on avoiding context bloat:
 ## Tech Stack
 
 - `@modelcontextprotocol/sdk` v1.x (TypeScript SDK)
-- `express` (HTTP server for Streamable HTTP transport)
 - `zod` (parameter validation — required by MCP SDK)
-- `convex` (request-scoped HTTP client + explicit typed function references via `makeFunctionReference`)
+- `convex` HTTP actions, internal queries, and internal mutations
 
-## Directory Structure
+## Source Of Truth
+
+The hosted Convex implementation is the only real MCP server implementation.
+
+Relevant files:
+
+```text
+src/convex/http.ts
+src/convex/mcp/handler.ts
+src/convex/mcp/keys.ts
+src/convex/mcp/tools/*.ts
+src/convex/generations.ts
+```
+
+`packages/mcp-server` is now only an optional reverse proxy for environments that want a local URL in front of the hosted endpoint. It no longer defines its own tools, auth, or transport contract.
+
+## Optional Proxy Package
 
 ```
 packages/mcp-server/
 ├── src/
-│   ├── index.ts           # Server entry point
-│   ├── constants.ts       # Shared MCP config/constants
-│   ├── tools/
-│   │   ├── generate.ts    # celstate_generate
-│   │   ├── getImage.ts    # celstate_get_image
-│   │   ├── listImages.ts  # celstate_list_images
-│   │   └── credits.ts     # celstate_check_credits
-│   ├── convex-api.ts      # Typed Convex function-reference contracts for MCP tools
-│   ├── convex-client.ts   # Typed Convex wrappers (request-scoped)
-│   ├── auth.ts            # Bearer auth + request context
-│   └── tool-results.ts    # Shared tool response helpers
+│   └── index.ts           # Thin reverse proxy to the hosted `/mcp` endpoint
 ├── tsconfig.json
 └── package.json
 ```
 
+Set `MCP_UPSTREAM_URL` to your hosted Celstate MCP URL before starting the proxy.
+
 ## Backend Query Shape
 
-The MCP server depends on three public Convex reads/writes, all accessed through explicit typed function references:
+The hosted MCP handler uses internal Convex functions tailored for agent auth and tool calls:
 
-- `generations:requestGeneration` — mutation used by `celstate_generate`
-- `generations:getByUserAndIdWithUrls` — point lookup used by `celstate_get_image`
-- `generations:listByUserWithUrls` — capped history query used by `celstate_list_images`
-- `users:getMe` — auth + credit lookup
+- `mcp.keys:authenticateKeyByHash` — auth + durable `lastUsedAt`
+- `generations:requestGenerationForMcp` — mutation used by `celstate_generate`
+- `generations:getGenerationForMcp` — point lookup used by `celstate_get_image`
+- `generations:listGenerationsForMcp` — capped history query used by `celstate_list_images`
+- `generations:getCreditsForMcp` — credit lookup used by `celstate_check_credits`
 
-The dedicated point lookup and capped list query avoid the earlier anti-pattern of loading the user's
-entire history just to poll one generation.
+The dedicated point lookup and capped list query avoid the earlier anti-pattern of loading a user's entire history just to poll one generation.
 
-We intentionally avoid importing `src/convex/_generated/api.d.ts` inside `packages/mcp-server` because
-its declaration graph pulls the entire Convex app into the package build, which is brittle in a monorepo.
-The MCP package instead keeps a tiny, explicit contract for the four functions it calls while still using
-first-class `FunctionReference` values at runtime.
+## Client Setup
 
-## Deployment
+### Claude Code
 
-Deployed as a standalone Node.js service (Vercel serverless or Railway).
-Connected via `url` in MCP client configs:
+```bash
+claude mcp add --transport http celstate https://<deployment>.convex.site/mcp \
+  --header "Authorization: Bearer <your_api_key>"
+```
+
+### Manual JSON config
 
 ```json
 {
   "mcpServers": {
     "celstate": {
-      "url": "https://mcp.celstate.com/mcp"
+      "type": "http",
+      "url": "https://<deployment>.convex.site/mcp",
+      "headers": {
+        "Authorization": "Bearer <your_api_key>"
+      }
     }
   }
 }
+```
+
+## Deployment
+
+The production path is the hosted Convex endpoint.
+
+If you need a local hop for enterprise networking, start the optional proxy package with:
+
+```bash
+MCP_UPSTREAM_URL=https://<deployment>.convex.site/mcp pnpm --dir packages/mcp-server dev
 ```

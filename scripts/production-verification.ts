@@ -38,6 +38,7 @@ import {
   type FeatureDomain,
   type GenerationCanaryEvidence,
   type LiveSettlementCanaryEvidence,
+  type CanaryPrincipalId,
   type VerificationTrigger,
 } from "../src/lib/production-confidence.js";
 
@@ -200,9 +201,39 @@ async function automateStripeCheckout(checkoutUrl: string): Promise<boolean> {
   }
 }
 
+async function provisionCanaryPrincipals(trigger: VerificationTrigger): Promise<void> {
+  const principalIds: CanaryPrincipalId[] = ["CANARY_GENERATION", "CANARY_CHECKOUT"];
+  if (trigger === "SCHEDULED") {
+    principalIds.push("CANARY_SETTLEMENT");
+  }
+
+  for (const principalId of principalIds) {
+    try {
+      const res = await convexHttp("/verification/canary/upsert-principal", {
+        method: "POST",
+        body: JSON.stringify({ principalId }),
+      });
+      if (!res.ok) {
+        const errText = await res.text();
+        console.warn(`Principal provisioning ${principalId}: ${res.status} ${errText}`);
+      } else {
+        console.log(`Principal ${principalId} provisioned`);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(`Principal provisioning ${principalId} failed: ${msg}`);
+    }
+  }
+}
+
 async function main(): Promise<void> {
   const trigger = getTrigger();
   const startedAt = Date.now();
+
+  // Provision canary principals before running probes.
+  // Non-fatal: if provisioning fails, the probe itself will produce a FAILED verdict.
+  await provisionCanaryPrincipals(trigger);
+
   const deploymentId =
     process.env.VERCEL_DEPLOYMENT_ID?.trim() ||
     process.env.GITHUB_RUN_ID?.trim() ||
@@ -242,7 +273,11 @@ async function main(): Promise<void> {
   let authVerdict: DomainVerdictRecord;
   try {
     await probeAuthSmoke(siteUrl);
-    const requireProtected = process.env.AUTH_CANARY_REQUIRE_PROTECTED_ROUTE === "true";
+    // Protected-route proof is required by default for POST_DEPLOY and SCHEDULED triggers.
+    // PRE_MERGE_CI never requires it (no production environment to test against).
+    // Set AUTH_CANARY_REQUIRE_PROTECTED_ROUTE=false to explicitly opt out (e.g., emergency deploys).
+    const requireProtected = trigger !== "PRE_MERGE_CI" &&
+      process.env.AUTH_CANARY_REQUIRE_PROTECTED_ROUTE !== "false";
     const storagePath = process.env.AUTH_CANARY_PROTECTED_STORAGE_STATE?.trim();
     let protectedOk = false;
     if (storagePath && existsSync(storagePath)) {

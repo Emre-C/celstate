@@ -6,7 +6,7 @@ import { logToolFailure, logToolResult } from "../logging.js";
 export function registerListImageTools(server, context) {
     server.registerTool("celstate_list_images", {
         annotations: READ_ONLY_TOOL_ANNOTATIONS,
-        description: "List the user's recent image generations. Returns up to 10 results, newest first. Each entry includes the generation ID, prompt snippet, status, and download URL if complete.",
+        description: "List the user's recent image generations, newest first. Returns up to 10 results. Each entry includes the generation ID, prompt, status, and download URL if complete. Use this to find a previous generation or check on recent work.",
         inputSchema: {
             limit: z.number()
                 .int()

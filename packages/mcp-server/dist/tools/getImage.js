@@ -5,7 +5,7 @@ import { logToolFailure, logToolResult } from "../logging.js";
 export function registerGetImageTools(server, context) {
     server.registerTool("celstate_get_image", {
         annotations: READ_ONLY_TOOL_ANNOTATIONS,
-        description: "Get the status and download URL of a generation by its ID. Returns status (generating/complete/failed), progress stage, and download URL when complete.",
+        description: "Get the status and download URL of a generation by its ID. Poll every 5–10 seconds after calling celstate_generate. Returns status (generating/complete/failed), progress details, and the download URL when complete.",
         inputSchema: {
             generation_id: z.string()
                 .trim()
@@ -32,7 +32,7 @@ export function registerGetImageTools(server, context) {
                     "Status: generating",
                     generation.statusMessage ? `Progress: ${generation.statusMessage}` : "",
                     "",
-                    "The image is still being created. Call celstate_get_image again in 5–10 seconds.",
+                    "The image is still being created. Poll again in 5–10 seconds. Typical total time: 15–45 seconds. If still generating after 2 minutes, it may have stalled — inform the user.",
                 ].filter(Boolean).join("\n"));
             }
             if (generation.status === "failed") {

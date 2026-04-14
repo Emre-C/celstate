@@ -6,7 +6,7 @@ import { logToolFailure, logToolResult } from "../logging.js";
 export function registerGenerateTools(server, context) {
     server.registerTool("celstate_generate", {
         annotations: GENERATE_TOOL_ANNOTATIONS,
-        description: "Generate a transparent-background image (PNG) from a text prompt. Costs 1 credit. Returns a generation ID to poll with celstate_get_image. Generation typically takes 15–45 seconds.",
+        description: "Generate a transparent-background PNG image from a text prompt. Best for logos, icons, mascots, stickers, UI elements, and game assets. Costs 1 credit per generation. Check credits first with celstate_check_credits. Returns a generation ID — poll with celstate_get_image until complete (typically 15–45 seconds).",
         inputSchema: {
             aspect_ratio: z.enum(VALID_ASPECT_RATIOS)
                 .default("1:1")
@@ -14,7 +14,7 @@ export function registerGenerateTools(server, context) {
             prompt: z.string()
                 .min(1)
                 .max(MAX_GENERATION_PROMPT_LENGTH)
-                .describe("Description of the image to generate. Be specific about the subject, style, and composition."),
+                .describe("Describe the subject to generate. Be specific about the subject, style, colors, and composition. Optimized for: logos, icons, mascots, stickers, UI elements, game assets. The background is automatically removed — do not include background descriptions in the prompt."),
         },
         title: "Generate transparent image",
     }, async ({ prompt, aspect_ratio }) => {

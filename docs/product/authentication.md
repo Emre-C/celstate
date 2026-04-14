@@ -138,7 +138,7 @@ Relevant tests:
 - `src/lib/server/canonical-site.test.ts`
 - `src/lib/server/response.test.ts`
 
-CI runs these as a dedicated **auth regression suite** (`pnpm test:auth`) first, then the full **`pnpm verify`** pipeline (typecheck, Knip, duplication check, ESLint, all Vitest tests, production build, **`pnpm test:e2e`** Playwright smoke on the marketing landing page—including a console guard for Svelte **`hydration_mismatch`**). The test list is maintained in `package.json` under the `test:auth` script (includes `scripts/auth-canary-probe.test.ts` for the production canary contract). See `docs/runbooks/CI-AND-CANARIES.md`.
+CI runs these as a dedicated **auth regression suite** (`pnpm test:auth`) first, then the full **`pnpm verify`** pipeline (typecheck, Knip, duplication check, ESLint, all Vitest tests, production build, **`pnpm test:e2e`** Playwright smoke on the marketing landing page—including a console guard for Svelte **`hydration_mismatch`**). The test list is maintained in `package.json` under the `test:auth` script (includes `scripts/auth-canary-probe.test.ts` for the scheduled auth canary get-session contract). See `docs/runbooks/CI-AND-CANARIES.md`.
 
 ### Scheduled auth canary
 
@@ -154,7 +154,13 @@ This is a **smoke check** — it validates page availability and session endpoin
 
 The get-session status contract is shared with tests in `scripts/auth-canary-probe.mjs` / `scripts/auth-canary-probe.test.ts`.
 
-Additional areas worth covering over time: protected-route hydration after social login, first authenticated render when the Convex user row does not exist yet, and env selection when switching between cloud dev and local Convex.
+### Production verification (deploy gate)
+
+Separately from the smoke workflow above, **`scripts/production-verification.ts`** (GitHub Actions: `.github/workflows/production-verification.yml`) proves **authenticated protected-route reachability** for production using Playwright and a pre-generated storage state (`AUTH_CANARY_STORAGE_JSON`). That satisfies the **AUTH** domain’s `protectedRouteReachable` evidence for **POST_DEPLOY** and **SCHEDULED** triggers by default (opt-out via `AUTH_CANARY_REQUIRE_PROTECTED_ROUTE=false`). It does **not** replace a full end-to-end OAuth redirect/callback test in CI.
+
+Formal contract, other domains (generation, checkout, live settlement), and persistence: [`docs/implementation/PRODUCTION-CONFIDENCE-FORMAL-SPEC.md`](../implementation/PRODUCTION-CONFIDENCE-FORMAL-SPEC.md).
+
+Additional areas still worth covering over time: full OAuth redirect/callback automation, protected-route **hydration** edge cases after social login, first authenticated render when the Convex user row does not exist yet, and env selection when switching between cloud dev and local Convex.
 
 ## Environment variables
 
@@ -231,7 +237,7 @@ Convex env: `pnpm exec convex env set KEY VALUE` (add `--prod` for production). 
 
 ## Future hardening (non-blocking)
 
-1. E2E auth smoke: sign-in, callback, protected entry, sign-out, tab-return.
+1. E2E auth automation: full sign-in, callback, sign-out, tab-return in CI (production verification already proves **protected-route entry** with a stored session; it does not drive OAuth end-to-end).
 2. Optional structured client metrics for protected-app churn and `users.storeUser` latency when debugging.
 3. Explicit tests for non-blocking user bootstrap (render before `users.storeUser` completes; graceful degradation until user row exists).
 4. Revisit local Convex on Windows after upstream fixes.

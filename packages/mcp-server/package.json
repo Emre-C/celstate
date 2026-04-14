@@ -9,10 +9,7 @@
     "dev": "tsx --watch src/index.ts"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.28.0",
-    "convex": "^1.33.1",
-    "express": "^5.1.0",
-    "zod": "^3.25.0"
+    "express": "^5.1.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",

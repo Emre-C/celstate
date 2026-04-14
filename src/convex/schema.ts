@@ -9,6 +9,19 @@ import {
 } from "./lib/validators.js";
 
 export default defineSchema({
+  mcpApiKeys: defineTable({
+    userId: v.id("users"),
+    keyHash: v.string(),
+    keyPrefix: v.string(),
+    name: v.string(),
+    createdAt: v.number(),
+    lastUsedAt: v.optional(v.number()),
+    revokedAt: v.optional(v.number()),
+  })
+    .index("by_key_hash", ["keyHash"])
+    .index("by_user", ["userId"])
+    .index("by_user_createdAt", ["userId", "createdAt"]),
+
   users: defineTable({
     tokenIdentifier: v.optional(v.string()),
     name: v.optional(v.string()),

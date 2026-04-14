@@ -7,6 +7,7 @@
 	import { useQuery } from '@mmailaender/convex-svelte';
 	import { api } from '../../../convex/_generated/api.js';
 	import NavBar from '$lib/components/ui/NavBar.svelte';
+	import ApiKeyDialog from '$lib/components/ApiKeyDialog.svelte';
 
 	let { children } = $props();
 	const user = useQuery(api.users.getMe, {});
@@ -15,6 +16,7 @@
 		credits === 0 ? 'text-red-700' : credits <= 2 ? 'text-accent' : 'text-dim'
 	);
 	let signingOut = $state(false);
+	let apiKeyDialogOpen = $state(false);
 
 	$effect(() => {
 		if (!browser) {
@@ -47,6 +49,13 @@
 <div class="min-h-dvh">
 	<NavBar compact max="4xl">
 		<div class="flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1 sm:gap-x-4">
+			<button
+				type="button"
+				onclick={() => (apiKeyDialogOpen = true)}
+				class="rounded-full border border-border px-3 py-1.5 text-[10px] font-medium tracking-[0.06em] text-dim uppercase transition-colors hover:border-accent hover:text-text"
+			>
+				API Access
+			</button>
 			<a
 				href="/app/credits"
 				class="flex min-w-0 items-center gap-1.5 transition-colors hover:text-accent"
@@ -78,3 +87,5 @@
 		{@render children()}
 	</main>
 </div>
+
+<ApiKeyDialog bind:open={apiKeyDialogOpen} />
