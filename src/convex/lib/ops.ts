@@ -1,3 +1,4 @@
+import type { ResolvedAuthProvider } from '../../lib/auth/providers.js';
 import type { GenerationStage } from './generationWorkflow.js';
 
 export const GENERATION_OPS_EVENT_TYPES = [
@@ -49,7 +50,7 @@ export interface SignupAlertContext {
 	userId: string;
 	userEmail?: string;
 	name?: string;
-	authProvider: 'google' | 'apple' | 'unknown';
+	authProvider: ResolvedAuthProvider;
 	initialCredits: number;
 }
 

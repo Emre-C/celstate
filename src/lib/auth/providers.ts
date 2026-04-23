@@ -1,5 +1,12 @@
 export type AuthProviderId = 'google' | 'apple';
 
+/**
+ * The auth provider actually attached to a given user, including `'unknown'`
+ * for the fallback case where the Better Auth account lookup does not resolve
+ * to a recognised provider (e.g. legacy accounts, upstream errors).
+ */
+export type ResolvedAuthProvider = AuthProviderId | 'unknown';
+
 export type AuthProviderDescriptor = {
 	id: AuthProviderId;
 	label: string;
