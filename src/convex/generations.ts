@@ -71,7 +71,6 @@ const generationWithUrlsValidator = v.object({
   dimensionMismatch: v.optional(v.boolean()),
   stalledAlertedAt: v.optional(v.number()),
   creditRefundedAt: v.optional(v.number()),
-  // Storage URL fields resolved at query time
   optimizedUrl: v.union(v.string(), v.null()),
   referenceUrls: v.array(v.string()),
   resultUrl: v.union(v.string(), v.null()),
@@ -282,11 +281,6 @@ async function requestGenerationCore(
   return generationId;
 }
 
-/**
- * Public mutation: atomically deducts credits, inserts a "generating" row,
- * and schedules the internal Node action worker. Returns the generation ID
- * so the reactive query picks up the row immediately.
- */
 export const requestGeneration = mutation({
   args: {
     prompt: v.string(),
@@ -929,10 +923,7 @@ export const cleanupExpiredUploadUrlIssues = internalMutation({
   },
 });
 
-/**
- * Returns old image file IDs that are candidates for orphan deletion.
- * Bounded by scanLimit to avoid reading unbounded storage metadata.
- */
+// Bounded by scanLimit to avoid reading unbounded storage metadata.
 export const getOrphanCleanupCandidates = internalQuery({
   args: { cutoff: v.number(), scanLimit: v.number() },
   returns: v.array(v.id("_storage")),
@@ -954,11 +945,6 @@ export const getOrphanCleanupCandidates = internalQuery({
   },
 });
 
-/**
- * Returns one page of storage IDs referenced by generations for orphan
- * cross-referencing. Used by cleanupOrphanedReferenceUploads to paginate
- * the full generations table without holding it all in memory at once.
- */
 export const getGenerationStorageIdPage = internalQuery({
   args: { paginationOpts: paginationOptsValidator },
   returns: v.object({
@@ -985,10 +971,7 @@ export const getGenerationStorageIdPage = internalQuery({
   },
 });
 
-/**
- * Deletes a batch of storage files; separated from the action so it runs
- * inside a mutation where ctx.storage.delete is available.
- */
+// Separated from the action so ctx.storage.delete is available.
 export const deleteStorageFiles = internalMutation({
   args: { storageIds: v.array(v.id("_storage")) },
   returns: v.null(),
@@ -1001,10 +984,9 @@ export const deleteStorageFiles = internalMutation({
 });
 
 /**
- * Replaces the old unbounded-collect approach. This action paginates through
- * all generations (200 at a time) to build a referenced-IDs set, then deletes
- * orphaned storage files up to batchSize per invocation. Safe to run on large
- * tables because it never issues an unbound .collect() query.
+ * Paginates the generations table (200 at a time) to build a referenced-IDs
+ * set without issuing an unbounded .collect(); deletes up to batchSize orphans
+ * per invocation.
  */
 export const cleanupOrphanedReferenceUploads = internalAction({
   args: {},
@@ -1013,7 +995,7 @@ export const cleanupOrphanedReferenceUploads = internalAction({
     const cutoff = Date.now() - GENERATION_CONFIG.orphanedUploadMaxAgeMs;
     const batchSize = GENERATION_CONFIG.orphanedUploadCleanupBatchSize;
 
-    // Type annotations required: calling functions defined in the same file.
+    // Explicit types required when calling functions from the same file (Convex type cycle).
     const candidates: Id<"_storage">[] = await ctx.runQuery(
       internal.generations.getOrphanCleanupCandidates,
       { cutoff, scanLimit: batchSize * 5 },
@@ -1021,7 +1003,6 @@ export const cleanupOrphanedReferenceUploads = internalAction({
 
     if (candidates.length === 0) return null;
 
-    // Paginate the full generations table to collect every referenced storage ID.
     const referencedIds = new Set<string>();
     let paginationOpts: { numItems: number; cursor: string | null } = {
       numItems: 200,
@@ -1120,8 +1101,7 @@ export const cleanupStaleGenerations = internalMutation({
   },
 });
 
-// --- Internal functions for MCP tool handlers ---
-// These accept userId directly (resolved from API key, not ctx.auth).
+// MCP tool handlers accept userId resolved from an API key (no ctx.auth).
 
 export const requestGenerationForMcp = internalMutation({
   args: {

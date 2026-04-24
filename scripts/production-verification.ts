@@ -157,8 +157,7 @@ async function probeProtectedRoute(baseUrl: string, storageStatePath: string): P
     if (!response || !response.ok()) {
       return false;
     }
-    // Verify we actually landed on /app and weren't silently redirected to /auth.
-    // A redirect to /auth returns 200 and passes response.ok(), so we must check the final URL.
+    // A silent redirect to /auth still returns 200; assert final path.
     const finalPath = new URL(page.url()).pathname;
     if (!finalPath.startsWith("/app")) {
       return false;
@@ -177,8 +176,7 @@ async function automateStripeCheckout(checkoutUrl: string): Promise<boolean> {
     const page = await context.newPage();
     await page.goto(checkoutUrl, { waitUntil: "networkidle", timeout: 30_000 });
 
-    // Stripe hosted checkout: find the submit/pay button.
-    // Multiple selectors for resilience across Stripe UI revisions.
+    // Selectors layered for resilience across Stripe hosted-checkout UI revisions.
     const payButton = page.locator('[data-testid="hosted-payment-submit-button"]')
       .or(page.locator(".SubmitButton"))
       .or(page.getByRole("button", { name: /pay/i }));
@@ -186,7 +184,6 @@ async function automateStripeCheckout(checkoutUrl: string): Promise<boolean> {
     await payButton.first().waitFor({ state: "visible", timeout: 15_000 });
     await payButton.first().click();
 
-    // Wait for redirect away from checkout.stripe.com (payment completed).
     await page.waitForURL(
       (url) => !url.href.includes("checkout.stripe.com"),
       { timeout: 60_000 },
@@ -230,8 +227,7 @@ async function main(): Promise<void> {
   const trigger = getTrigger();
   const startedAt = Date.now();
 
-  // Provision canary principals before running probes.
-  // Non-fatal: if provisioning fails, the probe itself will produce a FAILED verdict.
+  // Non-fatal: probe itself will produce FAILED if provisioning fails.
   await provisionCanaryPrincipals(trigger);
 
   const deploymentId =
@@ -273,9 +269,7 @@ async function main(): Promise<void> {
   let authVerdict: DomainVerdictRecord;
   try {
     await probeAuthSmoke(siteUrl);
-    // Protected-route proof is required by default for POST_DEPLOY and SCHEDULED triggers.
-    // PRE_MERGE_CI never requires it (no production environment to test against).
-    // Set AUTH_CANARY_REQUIRE_PROTECTED_ROUTE=false to explicitly opt out (e.g., emergency deploys).
+    // PRE_MERGE_CI has no production env to test against; AUTH_CANARY_REQUIRE_PROTECTED_ROUTE=false is the emergency-deploy opt-out.
     const requireProtected = trigger !== "PRE_MERGE_CI" &&
       process.env.AUTH_CANARY_REQUIRE_PROTECTED_ROUTE !== "false";
     const storagePath = process.env.AUTH_CANARY_PROTECTED_STORAGE_STATE?.trim();
@@ -376,8 +370,7 @@ async function main(): Promise<void> {
       artifactPresent: Boolean(probeResultStorageId),
       refundObserved: Boolean(probeRefundedAt),
     };
-    // Delegate to library classifier — timeout is a runner concern (polling exhausted),
-    // terminal states are classified by the library function.
+    // Timeout is a runner concern (polling exhausted); terminal states go through the library classifier.
     const terminal: DomainVerdictRecord["verdict"] = terminalStatus
       ? classifyGenerationOutcome({ status: terminalStatus, resultStorageId: probeResultStorageId })
       : "TIMEOUT";
@@ -500,10 +493,8 @@ async function main(): Promise<void> {
     });
     liveSettlementVerdict = record("LIVE_SETTLEMENT", trigger, "SKIPPED", evidenceRef, lsStart);
   } else {
-    // Fresh settlement: create checkout → pay via Playwright → observe settlement → refund.
     // Fails loudly if CANARY_SETTLEMENT is not provisioned or has no saved payment method.
     try {
-      // 1. Start a fresh settlement checkout
       const startRes = await convexHttp("/verification/canary/start-settlement-checkout", {
         method: "POST",
         body: JSON.stringify({}),
@@ -514,7 +505,6 @@ async function main(): Promise<void> {
       }
       const { checkoutId } = (await startRes.json()) as { checkoutId: string };
 
-      // 2. Wait for Stripe checkout URL
       let checkoutUrl = "";
       const checkoutDeadline = Date.now() + 90_000;
       while (Date.now() < checkoutDeadline) {
@@ -549,13 +539,13 @@ async function main(): Promise<void> {
         throw new Error("settlement checkout timed out waiting for hosted checkout URL");
       }
 
-      // 3. Complete payment via Playwright (canary customer has a saved payment method)
+      // Canary customer has a saved payment method; Playwright just clicks Pay.
       const paymentOk = await automateStripeCheckout(checkoutUrl);
       if (!paymentOk) {
         throw new Error("Stripe checkout automation failed — could not complete payment on hosted checkout");
       }
 
-      // 4. Wait for settlement observation (webhook → credit grant → settlement row)
+      // Settlement chain: Stripe webhook → credit grant → settlement row.
       const settlementDeadline = Date.now() + 3 * 60_000;
       let creditGrantCount: 0 | 1 = 0;
       let authoritativeRevenueCount: 0 | 1 = 0;
@@ -594,7 +584,7 @@ async function main(): Promise<void> {
         await sleep(5000);
       }
 
-      // 5. Refund (idempotent, scoped to this canary checkout)
+      // Idempotent refund, scoped to this canary checkout.
       let refundObserved = false;
       const rfRes = await convexHttp("/verification/canary/refund-settlement", {
         method: "POST",
@@ -609,7 +599,6 @@ async function main(): Promise<void> {
         alreadyRefunded: boolean;
       };
 
-      // 6. Confirm refund is reflected in settlement record
       const refundDeadline = Date.now() + 30_000;
       refundObserved = refundResult.alreadyRefunded;
       while (Date.now() < refundDeadline && !refundObserved) {
