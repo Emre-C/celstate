@@ -126,7 +126,6 @@ export const recordGrant = internalMutation({
       return false;
     }
 
-    // Insert audit record
     await ctx.db.insert("creditGrants", {
       userId: args.userId,
       amount: args.amount,

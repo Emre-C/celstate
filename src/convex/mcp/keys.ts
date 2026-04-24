@@ -9,8 +9,6 @@ import { internal } from "../_generated/api.js";
 import { getCurrentAppUser } from "../users.js";
 import { MAX_ACTIVE_KEYS_PER_USER } from "./constants.js";
 
-// --- Crypto helpers (available in actions and HTTP actions) ---
-
 const BASE62_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
 function base62Encode(bytes: Uint8Array): string {
@@ -33,8 +31,6 @@ export async function sha256Hex(input: string): Promise<string> {
   const bytes = new Uint8Array(digest);
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
-
-// --- Public action: create key (needs crypto) ---
 
 export const createKey = action({
   args: {
@@ -67,8 +63,6 @@ export const createKey = action({
     return { rawKey, keyPrefix, name, createdAt };
   },
 });
-
-// --- Internal mutation: insert key (called from createKey action) ---
 
 export const insertKey = internalMutation({
   args: {
@@ -106,8 +100,6 @@ export const insertKey = internalMutation({
   },
 });
 
-// --- Public query: list keys ---
-
 export const listKeys = query({
   args: {},
   returns: v.array(v.object({
@@ -140,8 +132,6 @@ export const listKeys = query({
     }));
   },
 });
-
-// --- Public mutation: revoke key ---
 
 export const revokeKey = mutation({
   args: {
