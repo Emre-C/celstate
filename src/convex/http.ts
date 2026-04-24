@@ -1,4 +1,8 @@
-import { httpRouter } from "convex/server";
+import {
+  httpRouter,
+  type GenericActionCtx,
+  type GenericDataModel,
+} from "convex/server";
 import { httpAction } from "./_generated/server.js";
 import { components, internal } from "./_generated/api.js";
 import type { Id } from "./_generated/dataModel.js";
@@ -19,15 +23,10 @@ type CreditPackCheckoutEvent =
   | Stripe.CheckoutSessionAsyncPaymentSucceededEvent
   | Stripe.CheckoutSessionCompletedEvent;
 
-type CreditPackCheckoutEventContext = {
-  scheduler: {
-    cancel: (...args: any[]) => Promise<any>;
-    runAfter: (...args: any[]) => Promise<any>;
-    runAt: (...args: any[]) => Promise<any>;
-  };
-  runMutation: (...args: any[]) => Promise<any>;
-  runQuery: (...args: any[]) => Promise<any>;
-};
+// The Stripe webhook registerRoutes invokes event handlers with
+// `GenericActionCtx<GenericDataModel>` (see @convex-dev/stripe types), so we
+// reuse that exact shape rather than narrowing to the generated ActionCtx.
+type CreditPackCheckoutEventContext = GenericActionCtx<GenericDataModel>;
 
 const http = httpRouter();
 
