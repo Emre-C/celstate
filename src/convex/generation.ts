@@ -15,6 +15,7 @@ import {
 import {
   getGenerationRetryStatusMessage,
   hasRemainingStageRetries,
+  type GenerationStage,
 } from "./lib/generationWorkflow.js";
 import {
   buildWhiteBgPrompt,
@@ -192,7 +193,7 @@ function createUserFacingFailureMessage(): string {
 async function handleStageFailure(
   ctx: StageActionContext,
   generationId: Id<"generations">,
-  stage: "white_background" | "black_background" | "finalizing",
+  stage: GenerationStage,
   retryCount: number,
   error: unknown,
   retryInstruction?: string,

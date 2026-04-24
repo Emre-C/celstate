@@ -11,6 +11,7 @@ import {
   type QueryCtx,
 } from "./_generated/server.js";
 import type { Id } from "./_generated/dataModel.js";
+import type { ResolvedAuthProvider } from "../lib/auth/providers.js";
 import { GENERATION_CONFIG } from "./lib/config.js";
 import { assertStripeEnv } from "./lib/stripeEnv.js";
 import { posthog } from "./posthog.js";
@@ -34,7 +35,7 @@ const getCurrentTokenIdentifier = async (ctx: QueryCtx | MutationCtx) => {
 const getAuthProviderForBetterAuthUser = async (
   ctx: MutationCtx,
   betterAuthUserId: string | undefined,
-): Promise<"google" | "apple" | "unknown"> => {
+): Promise<ResolvedAuthProvider> => {
   if (!betterAuthUserId) {
     return "unknown";
   }
@@ -71,7 +72,7 @@ const upsertUserRecord = async (
     email?: string;
     name?: string;
     image?: string;
-    authProvider?: "google" | "apple" | "unknown";
+    authProvider?: ResolvedAuthProvider;
   },
 ) => {
   const existing = await ctx.db
