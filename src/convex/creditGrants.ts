@@ -27,7 +27,7 @@ async function buildSettlementSummary(
     amountUsd: number;
     creditsGranted: number;
     currency: string;
-    pendingCheckoutId: Id<"pendingCheckouts"> | null | undefined;
+    pendingCheckoutId: Id<"pendingCheckouts"> | null;
     priceId: string;
     refundAmountUsd?: number;
     refundedAt?: number;
