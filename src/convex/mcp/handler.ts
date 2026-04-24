@@ -1,7 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import type { ActionCtx } from "../_generated/server.js";
-import type { Id } from "../_generated/dataModel.js";
 import { internal } from "../_generated/api.js";
 import { sha256Hex } from "./keys.js";
 import {
@@ -10,21 +9,13 @@ import {
   MCP_CORS_EXPOSED_HEADERS,
   MCP_SERVER_INFO,
 } from "./constants.js";
+import type { McpToolContext } from "./context.js";
 import { registerCreditsTools } from "./tools/credits.js";
 import { registerGenerateTools } from "./tools/generate.js";
 import { registerGetImageTools } from "./tools/getImage.js";
 import { registerListImageTools } from "./tools/listImages.js";
 
-export interface McpToolContext {
-  runQuery: ActionCtx["runQuery"];
-  runMutation: ActionCtx["runMutation"];
-  user: {
-    _id: Id<"users">;
-    credits?: number;
-    email?: string;
-  };
-  requestId: string;
-}
+export type { McpToolContext } from "./context.js";
 
 function parseBearerToken(authHeader: string | null): string | null {
   if (!authHeader) {
