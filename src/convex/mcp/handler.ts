@@ -15,8 +15,6 @@ import { registerGenerateTools } from "./tools/generate.js";
 import { registerGetImageTools } from "./tools/getImage.js";
 import { registerListImageTools } from "./tools/listImages.js";
 
-export type { McpToolContext } from "./context.js";
-
 function parseBearerToken(authHeader: string | null): string | null {
   if (!authHeader) {
     return null;
