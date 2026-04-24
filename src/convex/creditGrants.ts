@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalQuery, internalMutation, type MutationCtx, type QueryCtx } from "./_generated/server.js";
+import type { Id } from "./_generated/dataModel.js";
 import { creditGrantReasonValidator } from "./lib/validators.js";
 import { assertVerificationRunnerSecret } from "./lib/verificationRunnerSecret.js";
 import { applyCreditsToUser } from "./users.js";
@@ -26,14 +27,14 @@ async function buildSettlementSummary(
     amountUsd: number;
     creditsGranted: number;
     currency: string;
-    pendingCheckoutId: any;
+    pendingCheckoutId: Id<"pendingCheckouts"> | null | undefined;
     priceId: string;
     refundAmountUsd?: number;
     refundedAt?: number;
     stripeCheckoutSessionId: string;
     stripePaymentIntentId: string;
     stripeRefundId?: string;
-    userId: any;
+    userId: Id<"users">;
   }[],
 ) {
   if (settlements.length === 0) {
@@ -77,7 +78,7 @@ async function getSettlementSummaryByPaymentIntentId(
 
 async function getSettlementSummaryByPendingCheckoutId(
   ctx: QueryCtx | MutationCtx,
-  pendingCheckoutId: any,
+  pendingCheckoutId: Id<"pendingCheckouts">,
 ) {
   const settlements = await ctx.db
     .query("purchaseSettlements")

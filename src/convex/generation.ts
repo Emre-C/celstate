@@ -1,7 +1,7 @@
 "use node";
 
 import { v } from "convex/values";
-import { internalAction } from "./_generated/server.js";
+import { internalAction, type ActionCtx } from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
 import type { Doc, Id } from "./_generated/dataModel.js";
 import sharp from "sharp";
@@ -116,14 +116,7 @@ async function resizeToMatch(
   return new Uint8ClampedArray(data);
 }
 
-interface StageActionContext {
-  runMutation: (...args: any[]) => Promise<unknown>;
-  runQuery: (...args: any[]) => Promise<unknown>;
-  storage: {
-    get: (storageId: Id<"_storage">) => Promise<Blob | null>;
-    store: (blob: Blob) => Promise<Id<"_storage">>;
-  };
-}
+type StageActionContext = Pick<ActionCtx, "runMutation" | "runQuery" | "storage">;
 
 interface PipelineResult {
   finalPng: Buffer;
@@ -147,7 +140,7 @@ async function getGeneration(
   ctx: StageActionContext,
   generationId: Id<"generations">,
 ): Promise<Doc<"generations"> | null> {
-  return (await ctx.runQuery(internal.generations.getById, { generationId })) as Doc<"generations"> | null;
+  return await ctx.runQuery(internal.generations.getById, { generationId });
 }
 
 async function loadStoredImage(

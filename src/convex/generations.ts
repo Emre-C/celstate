@@ -1,5 +1,5 @@
 import { v, ConvexError } from "convex/values";
-import { paginationOptsValidator } from "convex/server";
+import { paginationOptsValidator, type Scheduler } from "convex/server";
 import {
   mutation,
   query,
@@ -78,7 +78,7 @@ const generationWithUrlsValidator = v.object({
 });
 
 async function scheduleGenerationStage(
-  ctx: { scheduler: { runAfter: (...args: any[]) => Promise<unknown> } },
+  ctx: { scheduler: Scheduler },
   generationId: Id<"generations">,
   stage: GenerationStage,
   delayMs = 0,
@@ -138,7 +138,7 @@ function getStageRetryCount(
 }
 
 async function scheduleGenerationAlert(
-  ctx: { scheduler: { runAfter: (...args: any[]) => Promise<unknown> } },
+  ctx: { scheduler: Scheduler },
   args: {
     alertType: "generation_failed" | "generation_stalled";
     error?: string;
