@@ -8,7 +8,7 @@ import {
   getErrorMessage,
   truncateText,
 } from "../toolResults.js";
-import type { McpToolContext } from "../handler.js";
+import type { McpToolContext } from "../context.js";
 
 export function registerGetImageTools(server: McpServer, ctx: McpToolContext): void {
   server.registerTool(

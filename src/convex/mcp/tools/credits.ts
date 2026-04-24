@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { internal } from "../../_generated/api.js";
 import { READ_ONLY_TOOL_ANNOTATIONS } from "../constants.js";
 import { createTextResult } from "../toolResults.js";
-import type { McpToolContext } from "../handler.js";
+import type { McpToolContext } from "../context.js";
 
 export function registerCreditsTools(server: McpServer, ctx: McpToolContext): void {
   server.registerTool(
