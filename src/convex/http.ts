@@ -18,6 +18,7 @@ import {
 } from "./lib/ops.js";
 import { canGrantCreditsForCheckoutSession } from "./lib/stripeCheckout.js";
 import { handleMcpRequest } from "./mcp/handler.js";
+import { jsonResponse, jsonRouteHandler, parseBearer } from "./lib/httpResponses.js";
 
 type CreditPackCheckoutEvent =
   | Stripe.CheckoutSessionAsyncPaymentSucceededEvent
@@ -29,17 +30,6 @@ type CreditPackCheckoutEvent =
 type CreditPackCheckoutEventContext = GenericActionCtx<GenericDataModel>;
 
 const http = httpRouter();
-
-const jsonResponse = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
-
-const parseBearer = (request: Request): string => {
-  const auth = request.headers.get("authorization");
-  return auth?.startsWith("Bearer ") ? auth.slice(7).trim() : "";
-};
 
 authComponent.registerRoutes(http, createAuth);
 
@@ -80,9 +70,9 @@ http.route({
   method: "POST",
   handler: httpAction(async (ctx, request) => {
     const token = parseBearer(request);
-    try {
+    return jsonRouteHandler(async () => {
       const body = (await request.json()) as Record<string, unknown>;
-      const result = await ctx.runMutation(internal.verification.ingestVerificationRun, {
+      return await ctx.runMutation(internal.verification.ingestVerificationRun, {
         runnerSecret: token,
         runKey: body.runKey as string,
         trigger: body.trigger as "PRE_MERGE_CI" | "POST_DEPLOY" | "SCHEDULED",
@@ -99,12 +89,7 @@ http.route({
         liveSettlementVerdict: body.liveSettlementVerdict as never,
         evidenceRows: (body.evidenceRows ?? []) as never[],
       });
-      return jsonResponse(result);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      const status = msg === "Unauthorized" ? 401 : 400;
-      return jsonResponse({ error: msg }, status);
-    }
+    });
   }),
 });
 
@@ -113,18 +98,14 @@ http.route({
   method: "POST",
   handler: httpAction(async (ctx, request) => {
     const token = parseBearer(request);
-    try {
+    return jsonRouteHandler(async () => {
       const body = (await request.json()) as { prompt?: string };
       const generationId = await ctx.runMutation(internal.generations.requestGenerationForCanaryRunner, {
         runnerSecret: token,
         prompt: typeof body.prompt === "string" ? body.prompt : "Celstate production canary",
       });
-      return jsonResponse({ generationId });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      const status = msg === "Unauthorized" ? 401 : 400;
-      return jsonResponse({ error: msg }, status);
-    }
+      return { generationId };
+    });
   }),
 });
 
@@ -137,17 +118,13 @@ http.route({
     if (!generationId) {
       return jsonResponse({ error: "generationId required" }, 400);
     }
-    try {
+    return jsonRouteHandler(async () => {
       const status = await ctx.runQuery(internal.generations.getGenerationStatusForCanaryRunner, {
         runnerSecret: token,
         generationId: generationId as Id<"generations">,
       });
-      return jsonResponse({ status });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      const status = msg === "Unauthorized" ? 401 : 400;
-      return jsonResponse({ error: msg }, status);
-    }
+      return { status };
+    });
   }),
 });
 
@@ -156,18 +133,14 @@ http.route({
   method: "POST",
   handler: httpAction(async (ctx, request) => {
     const token = parseBearer(request);
-    try {
+    return jsonRouteHandler(async () => {
       const body = (await request.json()) as { priceId?: string };
       const checkoutId = await ctx.runMutation(internal.pendingCheckouts.requestCheckoutForCanaryRunner, {
         runnerSecret: token,
         priceId: body.priceId,
       });
-      return jsonResponse({ checkoutId });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      const status = msg === "Unauthorized" ? 401 : 400;
-      return jsonResponse({ error: msg }, status);
-    }
+      return { checkoutId };
+    });
   }),
 });
 
@@ -180,17 +153,13 @@ http.route({
     if (!checkoutId) {
       return jsonResponse({ error: "checkoutId required" }, 400);
     }
-    try {
+    return jsonRouteHandler(async () => {
       const status = await ctx.runQuery(internal.pendingCheckouts.getCheckoutStatusForCanaryRunner, {
         runnerSecret: token,
         checkoutId: checkoutId as Id<"pendingCheckouts">,
       });
-      return jsonResponse({ status });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      const status = msg === "Unauthorized" ? 401 : 400;
-      return jsonResponse({ error: msg }, status);
-    }
+      return { status };
+    });
   }),
 });
 
@@ -203,17 +172,13 @@ http.route({
     if (!checkoutId) {
       return jsonResponse({ error: "checkoutId required" }, 400);
     }
-    try {
+    return jsonRouteHandler(async () => {
       const settlement = await ctx.runQuery(internal.creditGrants.getSettlementByPendingCheckoutForCanaryRunner, {
         runnerSecret: token,
         pendingCheckoutId: checkoutId as Id<"pendingCheckouts">,
       });
-      return jsonResponse({ settlement });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      const status = msg === "Unauthorized" ? 401 : 400;
-      return jsonResponse({ error: msg }, status);
-    }
+      return { settlement };
+    });
   }),
 });
 
@@ -226,17 +191,12 @@ http.route({
     if (!body.pendingCheckoutId) {
       return jsonResponse({ error: "pendingCheckoutId required" }, 400);
     }
-    try {
-      const result = await ctx.runAction(internal.stripeRefundVerification.refundSettlementByPendingCheckoutForCanary, {
+    return jsonRouteHandler(async () => {
+      return await ctx.runAction(internal.stripeRefundVerification.refundSettlementByPendingCheckoutForCanary, {
         runnerSecret: token,
         pendingCheckoutId: body.pendingCheckoutId as Id<"pendingCheckouts">,
       });
-      return jsonResponse(result);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      const status = msg === "Unauthorized" ? 401 : 400;
-      return jsonResponse({ error: msg }, status);
-    }
+    });
   }),
 });
 
@@ -251,17 +211,13 @@ http.route({
     if (!body.principalId) {
       return jsonResponse({ error: "principalId required" }, 400);
     }
-    try {
+    return jsonRouteHandler(async () => {
       const id = await ctx.runMutation(internal.verification.upsertCanaryPrincipal, {
         runnerSecret: token,
-        principalId: body.principalId,
+        principalId: body.principalId!,
       });
-      return jsonResponse({ canaryPrincipalId: id });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      const status = msg === "Unauthorized" ? 401 : 400;
-      return jsonResponse({ error: msg }, status);
-    }
+      return { canaryPrincipalId: id };
+    });
   }),
 });
 
@@ -270,18 +226,14 @@ http.route({
   method: "POST",
   handler: httpAction(async (ctx, request) => {
     const token = parseBearer(request);
-    try {
+    return jsonRouteHandler(async () => {
       const body = (await request.json()) as { priceId?: string };
       const checkoutId = await ctx.runMutation(internal.pendingCheckouts.requestSettlementCheckoutForCanaryRunner, {
         runnerSecret: token,
         priceId: body.priceId,
       });
-      return jsonResponse({ checkoutId });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      const status = msg === "Unauthorized" ? 401 : 400;
-      return jsonResponse({ error: msg }, status);
-    }
+      return { checkoutId };
+    });
   }),
 });
 
@@ -294,17 +246,13 @@ http.route({
     if (!checkoutId) {
       return jsonResponse({ error: "checkoutId required" }, 400);
     }
-    try {
+    return jsonRouteHandler(async () => {
       const status = await ctx.runQuery(internal.pendingCheckouts.getSettlementCheckoutStatusForCanaryRunner, {
         runnerSecret: token,
         checkoutId: checkoutId as Id<"pendingCheckouts">,
       });
-      return jsonResponse({ status });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      const status = msg === "Unauthorized" ? 401 : 400;
-      return jsonResponse({ error: msg }, status);
-    }
+      return { status };
+    });
   }),
 });
 
