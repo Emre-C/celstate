@@ -22,8 +22,16 @@ on:
     - cron: "0 6 * * 1"
 
 concurrency:
-  group: production-verification
-  cancel-in-progress: true
+  # Scheduled runs may execute the destructive LIVE_SETTLEMENT canary (live Stripe payment +
+  # Stripe refund). Cancelling such a run mid-payment leaves an orphaned charge that requires
+  # manual reconciliation, so scheduled runs go in their own group with cancel-in-progress: false.
+  # Non-scheduled runs (deployment_status, dispatch, call) are non-destructive and can supersede
+  # each other freely.
+  group: >-
+    production-verification-${{
+      github.event_name == 'schedule' && 'scheduled' || 'deploy'
+    }}
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
 
 jobs:
   verify:

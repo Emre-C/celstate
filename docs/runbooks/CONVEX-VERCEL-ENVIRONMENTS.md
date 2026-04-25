@@ -21,7 +21,7 @@ Every Convex **project** has separate **development** and **production** deploym
 - **Development** — what `pnpm exec convex dev` syncs to; default target for `convex env`, `convex run`, `convex logs` (without flags).
 - **Production** — what users rely on; only change when you intend to ship backend changes or prod-specific config.
 
-Stripe, Vertex, Better Auth secrets, and `SITE_URL` are **per deployment**. See also [STRIPE-CONVEX-ENVIRONMENTS.md](./STRIPE-CONVEX-ENVIRONMENTS.md) and [Authentication](../product/features/authentication.md) (local dev).
+Stripe, Vertex, Better Auth secrets, and `SITE_URL` are **per deployment**. See also [STRIPE-CONVEX-ENVIRONMENTS.md](./STRIPE-CONVEX-ENVIRONMENTS.md) and [Authentication](../product/authentication.md) (local dev).
 
 ---
 

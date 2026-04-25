@@ -1,6 +1,6 @@
 /**
  * Production confidence — formal contract types, gate evaluation, and state machines.
- * @see docs/implementation/PRODUCTION-CONFIDENCE-FORMAL-SPEC.md
+ * @see docs/product/production-confidence.md
  */
 
 // --- Bounded model constants (§2.3)
@@ -56,6 +56,10 @@ export interface DomainVerdictRecord {
 	readonly evidenceRef: string;
 	readonly startedAt: number;
 	readonly finishedAt?: number;
+	/** Optional human-readable diagnostic note (e.g. why a verdict is SKIPPED). */
+	readonly note?: string;
+	/** Populated only for LIVE_SETTLEMENT verdicts; absent for other domains. */
+	readonly settlementOutcome?: SettlementOutcome;
 }
 
 export interface DeploymentVerificationRun {

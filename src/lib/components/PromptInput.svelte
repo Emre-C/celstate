@@ -134,7 +134,6 @@
 </script>
 
 <div class="prompt-input-wrapper min-w-0 max-w-full">
-	<!-- Reference image previews -->
 	{#if referencePreviewUrls.length > 0}
 		<div class="mb-2 flex min-w-0 flex-wrap items-center gap-2 px-1">
 			<div class="flex min-w-0 flex-wrap gap-1.5">
@@ -159,7 +158,6 @@
 		</div>
 	{/if}
 
-	<!-- Zero-credit purchase bridge (GH-003) -->
 	{#if noCredits}
 		<div class="mb-3 border border-red-300 bg-red-50 px-3 py-3 sm:px-4">
 			<p class="text-sm font-medium text-red-800">You're out of credits</p>
@@ -183,7 +181,6 @@
 				? 'border-accent/40 shadow-[0_0_12px_-4px_var(--color-accent)]'
 				: 'border-border'}"
 	>
-		<!-- Reference upload button -->
 		<button
 			onclick={() => fileInput.click()}
 			disabled={disabled || referenceFiles.length >= 14}
@@ -208,12 +205,10 @@
 			aria-hidden="true"
 		/>
 
-		<!-- Terminal prompt indicator -->
 		<div class="flex shrink-0 items-center pr-2">
 			<span class="text-sm font-semibold text-accent" aria-hidden="true">→</span>
 		</div>
 
-		<!-- Input -->
 		<input
 			type="text"
 			bind:value
@@ -225,7 +220,6 @@
 			class="min-w-0 flex-1 bg-transparent py-3.5 text-sm text-text outline-none placeholder:text-dim/60 disabled:opacity-50"
 		/>
 
-		<!-- Submit button -->
 		<button
 			onclick={handleSubmit}
 			disabled={!canSubmit}
@@ -247,7 +241,6 @@
 		</button>
 	</div>
 
-	<!-- Aspect ratio selector -->
 	<div class="mt-3">
 		<AspectRatioSelector
 			value={aspectRatio}
@@ -256,7 +249,6 @@
 		/>
 	</div>
 
-	<!-- Helper text -->
 	<div
 		class="mt-2 flex flex-col gap-1.5 px-1 sm:flex-row sm:items-center sm:justify-between sm:gap-2"
 	>

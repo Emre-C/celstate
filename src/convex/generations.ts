@@ -1,5 +1,5 @@
 import { v, ConvexError } from "convex/values";
-import { paginationOptsValidator, type Scheduler } from "convex/server";
+import { paginationOptsValidator } from "convex/server";
 import {
   mutation,
   query,
@@ -13,7 +13,17 @@ import { internal } from "./_generated/api.js";
 import type { Doc, Id } from "./_generated/dataModel.js";
 import { GENERATION_CONFIG, isValidAspectRatio } from "./lib/config.js";
 import { insertGenerationOpsEventRow } from "./lib/generationOpsEvents.js";
-import { generationStageValidator } from "./lib/validators.js";
+import {
+  generationStageValidator,
+  transparentQaDecisionValidator,
+  transparentQaReasonCodeValidator,
+  transparentQaValidator,
+} from "./lib/validators.js";
+import {
+  TRANSPARENT_QA_NUMERIC_METRIC_KEYS,
+  type TransparentQaNumericMetricKey,
+  type TransparentQaReasonCode,
+} from "./lib/transparentQa.js";
 import {
   type GenerationStage,
   getGenerationLastProgressAt,
@@ -27,6 +37,7 @@ import {
 } from "../lib/analytics/generation.js";
 import { applyCreditsToUser, getCurrentAppUser, upsertCurrentUser } from "./users.js";
 import { validateReferenceImageMetadata } from "./lib/validation.js";
+import { mergedReferenceStorageIds } from "./lib/referenceStorageIds.js";
 import { assertVerificationRunnerSecret } from "./lib/verificationRunnerSecret.js";
 
 const generationWithUrlsValidator = v.object({
@@ -61,6 +72,7 @@ const generationWithUrlsValidator = v.object({
     v.literal("unknown"),
   )),
   failureStage: v.optional(generationStageValidator),
+  transparentQa: v.optional(transparentQaValidator),
   generationTimeMs: v.optional(v.number()),
   retryCount: v.optional(v.number()),
   whiteBgRetryCount: v.optional(v.number()),
@@ -71,13 +83,14 @@ const generationWithUrlsValidator = v.object({
   dimensionMismatch: v.optional(v.boolean()),
   stalledAlertedAt: v.optional(v.number()),
   creditRefundedAt: v.optional(v.number()),
+  // Storage URL fields resolved at query time
   optimizedUrl: v.union(v.string(), v.null()),
   referenceUrls: v.array(v.string()),
   resultUrl: v.union(v.string(), v.null()),
 });
 
 async function scheduleGenerationStage(
-  ctx: { scheduler: Scheduler },
+  ctx: { scheduler: { runAfter: (...args: any[]) => Promise<unknown> } },
   generationId: Id<"generations">,
   stage: GenerationStage,
   delayMs = 0,
@@ -137,7 +150,7 @@ function getStageRetryCount(
 }
 
 async function scheduleGenerationAlert(
-  ctx: { scheduler: Scheduler },
+  ctx: { scheduler: { runAfter: (...args: any[]) => Promise<unknown> } },
   args: {
     alertType: "generation_failed" | "generation_stalled";
     error?: string;
@@ -183,6 +196,170 @@ const generationStatusFilterValidator = v.union(
   v.literal("failed"),
 );
 
+interface TransparentQaMetricDistributionSummary {
+  count: number;
+  min: number | null;
+  max: number | null;
+  avg: number | null;
+  p10: number | null;
+  p50: number | null;
+  p90: number | null;
+  p95: number | null;
+}
+
+const transparentQaMetricDistributionValidator = v.object({
+  count: v.number(),
+  min: v.union(v.number(), v.null()),
+  max: v.union(v.number(), v.null()),
+  avg: v.union(v.number(), v.null()),
+  p10: v.union(v.number(), v.null()),
+  p50: v.union(v.number(), v.null()),
+  p90: v.union(v.number(), v.null()),
+  p95: v.union(v.number(), v.null()),
+});
+
+const transparentQaMetricDistributionFields = Object.fromEntries(
+  TRANSPARENT_QA_NUMERIC_METRIC_KEYS.map((key) => [key, transparentQaMetricDistributionValidator]),
+) as Record<TransparentQaNumericMetricKey, typeof transparentQaMetricDistributionValidator>;
+
+const transparentQaMetricsReportValidator = v.object({
+  filters: v.object({
+    statuses: v.array(generationStatusFilterValidator),
+    decision: v.union(transparentQaDecisionValidator, v.null()),
+    reasonCode: v.union(transparentQaReasonCodeValidator, v.null()),
+  }),
+  totals: v.object({
+    scannedGenerations: v.number(),
+    matchingGenerations: v.number(),
+    returnedSamples: v.number(),
+    scanLimit: v.number(),
+    sampleLimit: v.number(),
+    scanLimitReached: v.boolean(),
+  }),
+  statusCounts: v.object({
+    complete: v.number(),
+    generating: v.number(),
+    failed: v.number(),
+  }),
+  decisionCounts: v.object({
+    pass: v.number(),
+    retry_black: v.number(),
+    retry_white_and_black: v.number(),
+    review: v.number(),
+  }),
+  reasonCodeCounts: v.array(v.object({
+    reasonCode: transparentQaReasonCodeValidator,
+    count: v.number(),
+  })),
+  metricDistributions: v.object(transparentQaMetricDistributionFields),
+  recentSamples: v.array(v.object({
+    generationId: v.id("generations"),
+    createdAt: v.number(),
+    completedAt: v.optional(v.number()),
+    status: generationStatusFilterValidator,
+    decision: transparentQaDecisionValidator,
+    reasonCodes: v.array(transparentQaReasonCodeValidator),
+    alphaPresence: v.number(),
+    borderTransparencyRatio: v.number(),
+    recompositionResidual: v.number(),
+    channelDisagreement: v.number(),
+    alphaResidual: v.number(),
+    boundaryErrorRate: v.number(),
+    externalSpill: v.number(),
+    haloTail: v.number(),
+    topologyVolatility: v.number(),
+    fragmentNoise: v.number(),
+    persistentHoleCount: v.number(),
+    fragileHoleCount: v.number(),
+  })),
+  window: v.object({
+    hoursWindow: v.number(),
+    now: v.number(),
+    since: v.number(),
+  }),
+});
+
+function clampTransparentQaReportHoursWindow(hoursWindow: number | undefined): number {
+  if (hoursWindow === undefined || !Number.isFinite(hoursWindow)) {
+    return 24 * 7;
+  }
+
+  return Math.min(Math.max(Math.floor(hoursWindow), 1), 24 * 30);
+}
+
+function clampTransparentQaReportScanLimit(scanLimit: number | undefined): number {
+  if (scanLimit === undefined || !Number.isFinite(scanLimit)) {
+    return 200;
+  }
+
+  return Math.min(Math.max(Math.floor(scanLimit), 10), 1000);
+}
+
+function clampTransparentQaReportSampleLimit(
+  sampleLimit: number | undefined,
+  scanLimit: number,
+): number {
+  if (sampleLimit === undefined || !Number.isFinite(sampleLimit)) {
+    return Math.min(scanLimit, 25);
+  }
+
+  return Math.min(Math.max(Math.floor(sampleLimit), 1), Math.min(scanLimit, 100));
+}
+
+function createEmptyTransparentQaMetricBuckets(): Record<TransparentQaNumericMetricKey, number[]> {
+  return Object.fromEntries(
+    TRANSPARENT_QA_NUMERIC_METRIC_KEYS.map((key) => [key, [] as number[]]),
+  ) as Record<TransparentQaNumericMetricKey, number[]>;
+}
+
+function getPercentile(sortedValues: number[], percentile: number): number | null {
+  if (sortedValues.length === 0) {
+    return null;
+  }
+
+  const boundedPercentile = Math.max(0, Math.min(1, percentile));
+  const index = (sortedValues.length - 1) * boundedPercentile;
+  const lowerIndex = Math.floor(index);
+  const upperIndex = Math.ceil(index);
+  const lowerValue = sortedValues[lowerIndex]!;
+  const upperValue = sortedValues[upperIndex]!;
+
+  if (lowerIndex === upperIndex) {
+    return lowerValue;
+  }
+
+  return lowerValue + (upperValue - lowerValue) * (index - lowerIndex);
+}
+
+function summarizeTransparentQaMetricValues(values: number[]): TransparentQaMetricDistributionSummary {
+  if (values.length === 0) {
+    return {
+      count: 0,
+      min: null,
+      max: null,
+      avg: null,
+      p10: null,
+      p50: null,
+      p90: null,
+      p95: null,
+    };
+  }
+
+  const sortedValues = [...values].sort((left, right) => left - right);
+  const total = values.reduce((sum, value) => sum + value, 0);
+
+  return {
+    count: values.length,
+    min: sortedValues[0] ?? null,
+    max: sortedValues.at(-1) ?? null,
+    avg: total / values.length,
+    p10: getPercentile(sortedValues, 0.1),
+    p50: getPercentile(sortedValues, 0.5),
+    p90: getPercentile(sortedValues, 0.9),
+    p95: getPercentile(sortedValues, 0.95),
+  };
+}
+
 async function resolveGenerationWithUrls(
   ctx: Pick<QueryCtx, "storage">,
   generation: Doc<"generations">,
@@ -191,8 +368,7 @@ async function resolveGenerationWithUrls(
   referenceUrls: string[];
   resultUrl: string | null;
 }> {
-  const referenceStorageIds = generation.referenceStorageIds ??
-    (generation.referenceStorageId ? [generation.referenceStorageId] : []);
+  const referenceStorageIds = mergedReferenceStorageIds(generation);
   const referenceUrls = await Promise.all(
     referenceStorageIds.map((storageId) => ctx.storage.getUrl(storageId)),
   );
@@ -281,6 +457,11 @@ async function requestGenerationCore(
   return generationId;
 }
 
+/**
+ * Public mutation: atomically deducts credits, inserts a "generating" row,
+ * and schedules the internal Node action worker. Returns the generation ID
+ * so the reactive query picks up the row immediately.
+ */
 export const requestGeneration = mutation({
   args: {
     prompt: v.string(),
@@ -289,7 +470,7 @@ export const requestGeneration = mutation({
   },
   returns: v.id("generations"),
   handler: async (ctx, args) => {
-    const appUser = (await getCurrentAppUser(ctx)) ?? await upsertCurrentUser(ctx);
+    const appUser = await upsertCurrentUser(ctx);
 
     const prompt = args.prompt.trim();
     if (!prompt) {
@@ -421,7 +602,7 @@ export const generateUploadUrl = mutation({
   args: {},
   returns: v.string(),
   handler: async (ctx) => {
-    const appUser = (await getCurrentAppUser(ctx)) ?? await upsertCurrentUser(ctx);
+    const appUser = await upsertCurrentUser(ctx);
     if ((appUser.credits ?? 0) < GENERATION_CONFIG.creditsPerGeneration) {
       throw new ConvexError("Insufficient credits");
     }
@@ -451,6 +632,7 @@ async function failGenerationRecord(
   ctx: Pick<MutationCtx, "db" | "scheduler">,
   generationId: Id<"generations">,
   error: string,
+  transparentQa?: Doc<"generations">["transparentQa"],
   internalError?: string,
 ): Promise<void> {
   const generation = await ctx.db.get(generationId);
@@ -476,6 +658,7 @@ async function failGenerationRecord(
     stageStartedAt: undefined,
     status: "failed",
     statusMessage: undefined,
+    transparentQa,
   });
 
   const user = await ctx.db.get(generation.userId);
@@ -538,6 +721,7 @@ export const completeGeneration = internalMutation({
     generationTimeMs: v.number(),
     retryCount: v.number(),
     dimensionMismatch: v.boolean(),
+    transparentQa: transparentQaValidator,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -561,6 +745,7 @@ export const completeGeneration = internalMutation({
       stageStartedAt: undefined,
       status: "complete",
       statusMessage: undefined,
+      transparentQa: args.transparentQa,
       whiteBgStorageId: args.whiteBgStorageId,
     });
 
@@ -687,7 +872,9 @@ export const scheduleStageRetry = internalMutation({
     generationId: v.id("generations"),
     retryCount: v.number(),
     retryInstruction: v.optional(v.string()),
+    downstreamRetryInstruction: v.optional(v.string()),
     stage: generationStageValidator,
+    transparentQa: v.optional(transparentQaValidator),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -707,6 +894,8 @@ export const scheduleStageRetry = internalMutation({
       blackBgRetryInstruction:
         args.stage === "black_background"
           ? args.retryInstruction
+          : args.stage === "white_background"
+            ? args.downstreamRetryInstruction
           : generation.blackBgRetryInstruction,
       finalizeRetryCount:
         args.stage === "finalizing"
@@ -717,6 +906,7 @@ export const scheduleStageRetry = internalMutation({
       stage: args.stage,
       stageStartedAt: undefined,
       statusMessage,
+      transparentQa: args.transparentQa,
       whiteBgRetryCount:
         args.stage === "white_background"
           ? args.retryCount
@@ -756,10 +946,17 @@ export const failGeneration = internalMutation({
     generationId: v.id("generations"),
     error: v.string(),
     internalError: v.optional(v.string()),
+    transparentQa: v.optional(transparentQaValidator),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await failGenerationRecord(ctx, args.generationId, args.error, args.internalError);
+    await failGenerationRecord(
+      ctx,
+      args.generationId,
+      args.error,
+      args.transparentQa,
+      args.internalError,
+    );
     return null;
   },
 });
@@ -798,6 +995,7 @@ export const getById = internalQuery({
         v.literal("unknown"),
       )),
       failureStage: v.optional(generationStageValidator),
+      transparentQa: v.optional(transparentQaValidator),
       generationTimeMs: v.optional(v.number()),
       retryCount: v.optional(v.number()),
       whiteBgRetryCount: v.optional(v.number()),
@@ -814,6 +1012,138 @@ export const getById = internalQuery({
   ),
   handler: async (ctx, args) => {
     return await ctx.db.get(args.generationId);
+  },
+});
+
+export const getTransparentQaMetricsReport = internalQuery({
+  args: {
+    now: v.number(),
+    hoursWindow: v.optional(v.number()),
+    scanLimit: v.optional(v.number()),
+    sampleLimit: v.optional(v.number()),
+    status: v.optional(generationStatusFilterValidator),
+    decision: v.optional(transparentQaDecisionValidator),
+    reasonCode: v.optional(transparentQaReasonCodeValidator),
+  },
+  returns: transparentQaMetricsReportValidator,
+  handler: async (ctx, args) => {
+    const hoursWindow = clampTransparentQaReportHoursWindow(args.hoursWindow);
+    const scanLimit = clampTransparentQaReportScanLimit(args.scanLimit);
+    const sampleLimit = clampTransparentQaReportSampleLimit(args.sampleLimit, scanLimit);
+    const since = args.now - hoursWindow * 60 * 60 * 1000;
+    const statuses: Array<Doc<"generations">["status"]> = args.status
+      ? [args.status]
+      : ["complete", "failed"];
+
+    const scannedGenerations = await ctx.db
+      .query("generations")
+      .withIndex("by_createdAt", (q) => q.gte("createdAt", since).lte("createdAt", args.now))
+      .order("desc")
+      .take(scanLimit);
+
+    const matchingGenerations = scannedGenerations.filter((generation) => {
+      const transparentQa = generation.transparentQa;
+      if (!transparentQa) {
+        return false;
+      }
+      if (!statuses.includes(generation.status)) {
+        return false;
+      }
+      if (args.decision && transparentQa.decision !== args.decision) {
+        return false;
+      }
+      if (args.reasonCode && !transparentQa.reasonCodes.includes(args.reasonCode)) {
+        return false;
+      }
+      return true;
+    });
+
+    const statusCounts = {
+      complete: 0,
+      generating: 0,
+      failed: 0,
+    };
+    const decisionCounts = {
+      pass: 0,
+      retry_black: 0,
+      retry_white_and_black: 0,
+      review: 0,
+    };
+    const reasonCodeCounts = new Map<TransparentQaReasonCode, number>();
+    const metricBuckets = createEmptyTransparentQaMetricBuckets();
+
+    for (const generation of matchingGenerations) {
+      const transparentQa = generation.transparentQa!;
+      statusCounts[generation.status] += 1;
+      decisionCounts[transparentQa.decision] += 1;
+
+      for (const reasonCode of transparentQa.reasonCodes) {
+        reasonCodeCounts.set(reasonCode, (reasonCodeCounts.get(reasonCode) ?? 0) + 1);
+      }
+
+      for (const metricKey of TRANSPARENT_QA_NUMERIC_METRIC_KEYS) {
+        metricBuckets[metricKey].push(transparentQa.metrics[metricKey]);
+      }
+    }
+
+    const metricDistributions = Object.fromEntries(
+      TRANSPARENT_QA_NUMERIC_METRIC_KEYS.map((metricKey) => [
+        metricKey,
+        summarizeTransparentQaMetricValues(metricBuckets[metricKey]),
+      ]),
+    ) as Record<TransparentQaNumericMetricKey, TransparentQaMetricDistributionSummary>;
+
+    const recentSamples = matchingGenerations.slice(0, sampleLimit).map((generation) => {
+      const transparentQa = generation.transparentQa!;
+      return {
+        generationId: generation._id,
+        createdAt: generation.createdAt,
+        completedAt: generation.completedAt,
+        status: generation.status,
+        decision: transparentQa.decision,
+        reasonCodes: transparentQa.reasonCodes,
+        alphaPresence: transparentQa.metrics.alphaPresence,
+        borderTransparencyRatio: transparentQa.metrics.borderTransparencyRatio,
+        recompositionResidual: transparentQa.metrics.recompositionResidual,
+        channelDisagreement: transparentQa.metrics.channelDisagreement,
+        alphaResidual: transparentQa.metrics.alphaResidual,
+        boundaryErrorRate: transparentQa.metrics.boundaryErrorRate,
+        externalSpill: transparentQa.metrics.externalSpill,
+        haloTail: transparentQa.metrics.haloTail,
+        topologyVolatility: transparentQa.metrics.topologyVolatility,
+        fragmentNoise: transparentQa.metrics.fragmentNoise,
+        persistentHoleCount: transparentQa.metrics.persistentHoleCount,
+        fragileHoleCount: transparentQa.metrics.fragileHoleCount,
+      };
+    });
+
+    return {
+      filters: {
+        statuses,
+        decision: args.decision ?? null,
+        reasonCode: args.reasonCode ?? null,
+      },
+      totals: {
+        scannedGenerations: scannedGenerations.length,
+        matchingGenerations: matchingGenerations.length,
+        returnedSamples: recentSamples.length,
+        scanLimit,
+        sampleLimit,
+        scanLimitReached: scannedGenerations.length === scanLimit,
+      },
+      statusCounts,
+      decisionCounts,
+      reasonCodeCounts: Array.from(reasonCodeCounts.entries())
+        .map(([reasonCode, count]) => ({ reasonCode, count }))
+        .sort((left, right) => right.count - left.count || left.reasonCode.localeCompare(right.reasonCode)),
+      metricDistributions,
+      recentSamples,
+      window: {
+        hoursWindow,
+        now: args.now,
+        since,
+      },
+    };
   },
 });
 
@@ -923,7 +1253,10 @@ export const cleanupExpiredUploadUrlIssues = internalMutation({
   },
 });
 
-// Bounded by scanLimit to avoid reading unbounded storage metadata.
+/**
+ * Returns old image file IDs that are candidates for orphan deletion.
+ * Bounded by scanLimit to avoid reading unbounded storage metadata.
+ */
 export const getOrphanCleanupCandidates = internalQuery({
   args: { cutoff: v.number(), scanLimit: v.number() },
   returns: v.array(v.id("_storage")),
@@ -945,6 +1278,11 @@ export const getOrphanCleanupCandidates = internalQuery({
   },
 });
 
+/**
+ * Returns one page of storage IDs referenced by generations for orphan
+ * cross-referencing. Used by cleanupOrphanedReferenceUploads to paginate
+ * the full generations table without holding it all in memory at once.
+ */
 export const getGenerationStorageIdPage = internalQuery({
   args: { paginationOpts: paginationOptsValidator },
   returns: v.object({
@@ -959,8 +1297,7 @@ export const getGenerationStorageIdPage = internalQuery({
 
     const storageIds: Id<"_storage">[] = [];
     for (const gen of page) {
-      if (gen.referenceStorageId) storageIds.push(gen.referenceStorageId);
-      if (gen.referenceStorageIds) storageIds.push(...gen.referenceStorageIds);
+      storageIds.push(...mergedReferenceStorageIds(gen));
       if (gen.resultStorageId) storageIds.push(gen.resultStorageId);
       if (gen.whiteBgStorageId) storageIds.push(gen.whiteBgStorageId);
       if (gen.blackBgStorageId) storageIds.push(gen.blackBgStorageId);
@@ -971,7 +1308,60 @@ export const getGenerationStorageIdPage = internalQuery({
   },
 });
 
-// Separated from the action so ctx.storage.delete is available.
+export const backfillReferenceStorageIdPage = internalMutation({
+  args: { cursor: v.union(v.string(), v.null()) },
+  returns: v.object({
+    continueCursor: v.string(),
+    isDone: v.boolean(),
+    patched: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    const { page, continueCursor, isDone } = await ctx.db
+      .query("generations")
+      .paginate({ numItems: 100, cursor: args.cursor });
+
+    let patched = 0;
+    for (const gen of page) {
+      if (!gen.referenceStorageId) continue;
+      const existing = gen.referenceStorageIds ?? [];
+      const merged: Id<"_storage">[] = existing.includes(gen.referenceStorageId)
+        ? existing
+        : [...existing, gen.referenceStorageId];
+      await ctx.db.patch(gen._id, {
+        referenceStorageIds: merged.length > 0 ? merged : undefined,
+        referenceStorageId: undefined,
+      });
+      patched += 1;
+    }
+    return { continueCursor, isDone, patched };
+  },
+});
+
+export const backfillReferenceStorageId = internalAction({
+  args: {},
+  returns: v.object({ totalPatched: v.number() }),
+  handler: async (ctx) => {
+    let cursor: string | null = null;
+    let totalPatched = 0;
+    for (;;) {
+      const result: {
+        continueCursor: string;
+        isDone: boolean;
+        patched: number;
+      } = await ctx.runMutation(internal.generations.backfillReferenceStorageIdPage, { cursor });
+      totalPatched += result.patched;
+      if (result.isDone) {
+        return { totalPatched };
+      }
+      cursor = result.continueCursor;
+    }
+  },
+});
+
+/**
+ * Deletes a batch of storage files; separated from the action so it runs
+ * inside a mutation where ctx.storage.delete is available.
+ */
 export const deleteStorageFiles = internalMutation({
   args: { storageIds: v.array(v.id("_storage")) },
   returns: v.null(),
@@ -995,7 +1385,7 @@ export const cleanupOrphanedReferenceUploads = internalAction({
     const cutoff = Date.now() - GENERATION_CONFIG.orphanedUploadMaxAgeMs;
     const batchSize = GENERATION_CONFIG.orphanedUploadCleanupBatchSize;
 
-    // Explicit types required when calling functions from the same file (Convex type cycle).
+    // Type annotations required: calling functions defined in the same file.
     const candidates: Id<"_storage">[] = await ctx.runQuery(
       internal.generations.getOrphanCleanupCandidates,
       { cutoff, scanLimit: batchSize * 5 },
@@ -1003,6 +1393,7 @@ export const cleanupOrphanedReferenceUploads = internalAction({
 
     if (candidates.length === 0) return null;
 
+    // Paginate the full generations table to collect every referenced storage ID.
     const referencedIds = new Set<string>();
     let paginationOpts: { numItems: number; cursor: string | null } = {
       numItems: 200,
@@ -1058,6 +1449,7 @@ export const cleanupStaleGenerations = internalMutation({
           ctx,
           gen._id,
           "Generation timed out before completion. Your credit has been refunded — please try again.",
+          undefined,
           `Generation exceeded ${GENERATION_CONFIG.staleGenerationTimeoutMs}ms without progress`,
         );
         continue;
@@ -1101,7 +1493,8 @@ export const cleanupStaleGenerations = internalMutation({
   },
 });
 
-// MCP tool handlers accept userId resolved from an API key (no ctx.auth).
+// --- Internal functions for MCP tool handlers ---
+// These accept userId directly (resolved from API key, not ctx.auth).
 
 export const requestGenerationForMcp = internalMutation({
   args: {

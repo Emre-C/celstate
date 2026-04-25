@@ -9,6 +9,67 @@ export const generationStageValidator = v.union(
   v.literal("finalizing"),
 );
 
+export const transparentQaDecisionValidator = v.union(
+  v.literal("pass"),
+  v.literal("retry_black"),
+  v.literal("retry_white_and_black"),
+  v.literal("review"),
+);
+
+export const transparentQaReasonCodeValidator = v.union(
+  v.literal("white_recomposition_residual_high"),
+  v.literal("black_recomposition_residual_high"),
+  v.literal("channel_disagreement_high"),
+  v.literal("alpha_residual_high"),
+  v.literal("alpha_presence_low"),
+  v.literal("border_transparency_ratio_low"),
+  v.literal("dimension_mismatch"),
+  v.literal("boundary_error_rate_high"),
+  v.literal("external_spill_high"),
+  v.literal("halo_tail_high"),
+  v.literal("fragment_noise_high"),
+  v.literal("topology_volatility_high"),
+  v.literal("expected_hole_missing"),
+);
+
+export const transparentQaTopologySampleValidator = v.object({
+  threshold: v.number(),
+  foregroundAreaRatio: v.number(),
+  foregroundComponentCount: v.number(),
+  holeCount: v.number(),
+  holeAreaRatio: v.number(),
+});
+
+export const transparentQaMetricsValidator = v.object({
+  alphaPresence: v.number(),
+  transparentPixelRatio: v.number(),
+  borderTransparencyRatio: v.number(),
+  whiteRecompositionResidual: v.number(),
+  blackRecompositionResidual: v.number(),
+  recompositionResidual: v.number(),
+  channelDisagreement: v.number(),
+  alphaResidual: v.number(),
+  boundaryErrorRate: v.number(),
+  externalSpill: v.number(),
+  haloTail: v.number(),
+  persistentHoleCount: v.number(),
+  persistentHoleAreaRatio: v.number(),
+  fragileHoleCount: v.number(),
+  topologyVolatility: v.number(),
+  fragmentNoise: v.number(),
+  dimensionMismatchPenalty: v.number(),
+  holeKeywordMatched: v.boolean(),
+  holeKeywordCount: v.number(),
+  topologySamples: v.array(transparentQaTopologySampleValidator),
+});
+
+export const transparentQaValidator = v.object({
+  version: v.string(),
+  decision: transparentQaDecisionValidator,
+  reasonCodes: v.array(transparentQaReasonCodeValidator),
+  metrics: transparentQaMetricsValidator,
+});
+
 export const creditGrantReasonValidator = v.union(
   v.literal("signup_bonus"),
   v.literal("weekly_drip"),

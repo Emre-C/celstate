@@ -1,17 +1,19 @@
 export const MCP_SERVER_CONFIG_NAME = "celstate";
-export const MCP_URL_FALLBACK = "https://your-deployment.convex.site/mcp";
 
 export function buildHostedMcpUrl(publicConvexUrl: string): string {
+  let url: URL;
   try {
-    const url = new URL(publicConvexUrl);
-    const hostname = url.hostname.endsWith(".convex.cloud")
-      ? url.hostname.replace(/\.convex\.cloud$/, ".convex.site")
-      : url.hostname;
-
-    return `${url.protocol}//${hostname}/mcp`;
+    url = new URL(publicConvexUrl);
   } catch {
-    return MCP_URL_FALLBACK;
+    throw new Error(
+      "Invalid PUBLIC_CONVEX_URL: set a full deployment URL (for example https://<deployment>.convex.cloud) so the hosted MCP endpoint can be derived.",
+    );
   }
+  const hostname = url.hostname.endsWith(".convex.cloud")
+    ? url.hostname.replace(/\.convex\.cloud$/, ".convex.site")
+    : url.hostname;
+
+  return `${url.protocol}//${hostname}/mcp`;
 }
 
 export function buildClaudeCodeCommand(url: string, apiKey: string): string {

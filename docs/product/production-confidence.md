@@ -1,4 +1,6 @@
-# Production Confidence: formal specification
+# Production Confidence
+
+This is the product reference for Celstate's shipped production-verification system. The formal model remains useful because the runner, gate logic, evidence persistence, and canary flows are implemented and intentionally specified as strict contracts.
 
 ## 1. Document role
 
@@ -216,6 +218,10 @@ export interface DomainVerdictRecord {
   readonly evidenceRef: string;
   readonly startedAt: number;
   readonly finishedAt?: number;
+  /** Optional human-readable diagnostic note (e.g. why a verdict is SKIPPED or which probe stage failed). */
+  readonly note?: string;
+  /** Populated only for LIVE_SETTLEMENT verdicts; absent for other domains. */
+  readonly settlementOutcome?: SettlementOutcome;
 }
 
 export interface DeploymentVerificationRun {

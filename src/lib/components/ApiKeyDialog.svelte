@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { PUBLIC_CONVEX_URL } from '$env/static/public';
 	import { useQuery, useConvexClient } from '@mmailaender/convex-svelte';
+	import type { FunctionArgs } from 'convex/server';
 	import MonoLabel from '$lib/components/ui/MonoLabel.svelte';
 	import SectionLabel from '$lib/components/ui/SectionLabel.svelte';
 	import {
@@ -9,6 +10,8 @@
 		buildMcpJsonConfig
 	} from '$lib/mcp/clientConfig.js';
 	import { api } from '../../convex/_generated/api.js';
+
+	type McpApiKeyId = FunctionArgs<typeof api.mcp.keys.revokeKey>['keyId'];
 
 	let { open = $bindable(false) }: { open: boolean } = $props();
 
@@ -22,7 +25,7 @@
 	let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 	let resetTimer: ReturnType<typeof setTimeout> | undefined;
 	let creating = $state(false);
-	let revoking = $state<string | null>(null);
+	let revoking = $state<McpApiKeyId | null>(null);
 
 	const activeKeys = $derived.by(() =>
 		(keysQuery.data ?? []).filter((key) => key.revokedAt === undefined)
@@ -30,8 +33,18 @@
 	const revokedKeys = $derived.by(() =>
 		(keysQuery.data ?? []).filter((key) => key.revokedAt !== undefined)
 	);
-	const hasKeys = $derived(activeKeys.length > 0);
-	const mcpUrl = $derived(buildHostedMcpUrl(PUBLIC_CONVEX_URL));
+	const mcpUrlState = $derived.by(() => {
+		try {
+			return { url: buildHostedMcpUrl(PUBLIC_CONVEX_URL), error: null as string | null };
+		} catch (e) {
+			return {
+				url: '',
+				error: e instanceof Error ? e.message : 'Invalid deployment URL'
+			};
+		}
+	});
+	const mcpUrl = $derived(mcpUrlState.url);
+	const mcpUrlError = $derived(mcpUrlState.error);
 	const claudeCodeCommand = $derived(rawKey ? buildClaudeCodeCommand(mcpUrl, rawKey) : '');
 	const configSnippet = $derived(rawKey ? buildMcpJsonConfig(mcpUrl, rawKey) : '');
 	const isRevealView = $derived(rawKey !== null);
@@ -84,13 +97,13 @@
 		}
 	}
 
-	async function handleRevoke(keyId: string) {
+	async function handleRevoke(keyId: McpApiKeyId) {
 		if (revoking) return;
 		revoking = keyId;
 		error = '';
 
 		try {
-			await client.mutation(api.mcp.keys.revokeKey, { keyId: keyId as any });
+			await client.mutation(api.mcp.keys.revokeKey, { keyId });
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to revoke key';
 		} finally {
@@ -104,9 +117,7 @@
 			copied = which;
 			clearTimeout(copiedTimer);
 			copiedTimer = setTimeout(() => (copied = null), 2000);
-		} catch {
-			// Fallback: select text
-		}
+		} catch {}
 	}
 
 	function formatRelativeTime(ms: number): string {
@@ -172,6 +183,11 @@
 			</div>
 
 			<div class="space-y-6 px-6 py-6 sm:px-8">
+				{#if mcpUrlError}
+					<div class="rounded-[1.75rem] border border-amber-300 bg-amber-50 px-4 py-3">
+						<p class="text-sm leading-6 text-amber-900">{mcpUrlError}</p>
+					</div>
+				{/if}
 				{#if error}
 					<div class="rounded-[1.75rem] border border-red-300 bg-red-50 px-4 py-3">
 						<p class="text-sm leading-6 text-red-700">{error}</p>
@@ -202,36 +218,44 @@
 						</div>
 
 						<div class="space-y-4">
-							<div class="rounded-[2rem] border border-border bg-white/40 p-5">
-								<div class="space-y-3">
-									<MonoLabel>Claude Code</MonoLabel>
+							{#if mcpUrlError}
+								<div class="rounded-[2rem] border border-border bg-white/40 p-5">
 									<p class="text-sm leading-6 text-dim">
-										Paste this once in your terminal to add Celstate as a remote HTTP MCP server.
+										Fix the deployment URL (see above) to generate Claude Code and JSON config snippets.
 									</p>
-									<pre class="overflow-x-auto rounded-[1.5rem] border border-border bg-bg p-4 text-sm leading-6 whitespace-pre-wrap text-text">{claudeCodeCommand}</pre>
-									<button
-										type="button"
-										onclick={() => copyToClipboard(claudeCodeCommand, 'command')}
-										class="rounded-full border border-border px-4 py-2 text-[10px] font-medium uppercase tracking-[0.06em] text-dim transition-colors hover:border-accent hover:text-text"
-									>
-										{copied === 'command' ? 'Command copied' : 'Copy command'}
-									</button>
 								</div>
-							</div>
+							{:else}
+								<div class="rounded-[2rem] border border-border bg-white/40 p-5">
+									<div class="space-y-3">
+										<MonoLabel>Claude Code</MonoLabel>
+										<p class="text-sm leading-6 text-dim">
+											Paste this once in your terminal to add Celstate as a remote HTTP MCP server.
+										</p>
+										<pre class="overflow-x-auto rounded-[1.5rem] border border-border bg-bg p-4 text-sm leading-6 whitespace-pre-wrap text-text">{claudeCodeCommand}</pre>
+										<button
+											type="button"
+											onclick={() => copyToClipboard(claudeCodeCommand, 'command')}
+											class="rounded-full border border-border px-4 py-2 text-[10px] font-medium uppercase tracking-[0.06em] text-dim transition-colors hover:border-accent hover:text-text"
+										>
+											{copied === 'command' ? 'Command copied' : 'Copy command'}
+										</button>
+									</div>
+								</div>
 
-							<div class="rounded-[2rem] border border-border bg-white/40 p-5">
-								<div class="space-y-3">
-									<MonoLabel>Manual JSON config</MonoLabel>
-									<pre class="overflow-x-auto rounded-[1.5rem] border border-border bg-bg p-4 text-sm leading-6 whitespace-pre-wrap text-text">{configSnippet}</pre>
-									<button
-										type="button"
-										onclick={() => copyToClipboard(configSnippet, 'config')}
-										class="rounded-full border border-border px-4 py-2 text-[10px] font-medium uppercase tracking-[0.06em] text-dim transition-colors hover:border-accent hover:text-text"
-									>
-										{copied === 'config' ? 'Config copied' : 'Copy JSON config'}
-									</button>
+								<div class="rounded-[2rem] border border-border bg-white/40 p-5">
+									<div class="space-y-3">
+										<MonoLabel>Manual JSON config</MonoLabel>
+										<pre class="overflow-x-auto rounded-[1.5rem] border border-border bg-bg p-4 text-sm leading-6 whitespace-pre-wrap text-text">{configSnippet}</pre>
+										<button
+											type="button"
+											onclick={() => copyToClipboard(configSnippet, 'config')}
+											class="rounded-full border border-border px-4 py-2 text-[10px] font-medium uppercase tracking-[0.06em] text-dim transition-colors hover:border-accent hover:text-text"
+										>
+											{copied === 'config' ? 'Config copied' : 'Copy JSON config'}
+										</button>
+									</div>
 								</div>
-							</div>
+							{/if}
 						</div>
 					</div>
 

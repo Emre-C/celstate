@@ -27,6 +27,8 @@ const userDoc = v.object({
   stripeCustomerId: v.optional(v.string()),
 });
 
+type BetterAuthAccountRecord = { providerId?: string } | null;
+
 const getCurrentTokenIdentifier = async (ctx: QueryCtx | MutationCtx) => {
   const identity = await ctx.auth.getUserIdentity();
   return identity?.tokenIdentifier ?? null;
@@ -44,11 +46,9 @@ const getAuthProviderForBetterAuthUser = async (
     model: "account",
     select: ["providerId"],
     where: [{ field: "userId", operator: "eq", value: betterAuthUserId }],
-  });
+  }) as BetterAuthAccountRecord;
 
-  const providerId = typeof (account as { providerId?: unknown } | null)?.providerId === "string"
-    ? (account as { providerId: string }).providerId
-    : undefined;
+  const providerId = account?.providerId;
 
   return providerId === "google" || providerId === "apple" ? providerId : "unknown";
 };
@@ -152,12 +152,7 @@ export const upsertCurrentUser = async (ctx: MutationCtx) => {
     throw new Error("Authenticated user record not found");
   }
 
-  const authProvider = await getAuthProviderForBetterAuthUser(
-    ctx,
-    typeof (authUser as { userId?: unknown }).userId === "string"
-      ? (authUser as { userId: string }).userId
-      : undefined,
-  );
+  const authProvider = await getAuthProviderForBetterAuthUser(ctx, authUser.userId ?? undefined);
 
   return await upsertUserRecord(ctx, {
     tokenIdentifier,

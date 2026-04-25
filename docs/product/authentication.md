@@ -158,7 +158,7 @@ The get-session status contract is shared with tests in `scripts/auth-canary-pro
 
 Separately from the smoke workflow above, **`scripts/production-verification.ts`** (GitHub Actions: `.github/workflows/production-verification.yml`) proves **authenticated protected-route reachability** for production using Playwright and a pre-generated storage state (`AUTH_CANARY_STORAGE_JSON`). That satisfies the **AUTH** domain’s `protectedRouteReachable` evidence for **POST_DEPLOY** and **SCHEDULED** triggers by default (opt-out via `AUTH_CANARY_REQUIRE_PROTECTED_ROUTE=false`). It does **not** replace a full end-to-end OAuth redirect/callback test in CI.
 
-Formal contract, other domains (generation, checkout, live settlement), and persistence: [`docs/implementation/PRODUCTION-CONFIDENCE-FORMAL-SPEC.md`](../implementation/PRODUCTION-CONFIDENCE-FORMAL-SPEC.md).
+Formal contract, other domains (generation, checkout, live settlement), and persistence: [`docs/product/production-confidence.md`](./production-confidence.md).
 
 Additional areas still worth covering over time: full OAuth redirect/callback automation, protected-route **hydration** edge cases after social login, first authenticated render when the Convex user row does not exist yet, and env selection when switching between cloud dev and local Convex.
 
@@ -193,7 +193,7 @@ Legacy names such as `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` are intentional
 
 **Dev vs prod isolation** — Separate Convex deployments and env stores; `pnpm exec convex env set` defaults to dev (`--prod` for production). Local `.env` uses dev URLs; production builds use prod URLs. Google Cloud Console can list both localhost and production origins on the same OAuth client.
 
-See also: [`docs/implementation/STRIPE-CONVEX-ENVIRONMENTS.md`](../../implementation/STRIPE-CONVEX-ENVIRONMENTS.md) (same dev/prod split pattern for Stripe).
+See also: [`docs/runbooks/STRIPE-CONVEX-ENVIRONMENTS.md`](../runbooks/STRIPE-CONVEX-ENVIRONMENTS.md) (same dev/prod split pattern for Stripe).
 
 **Known operational note:** Convex local deployment on Windows has shown upstream path issues (`InvalidExternalModules` with duplicated drive-letter paths). Treat local Convex switching as an operational validation separate from auth code changes.
 

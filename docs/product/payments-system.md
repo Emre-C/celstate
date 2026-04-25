@@ -4,7 +4,12 @@
 
 Celstate uses a **credit-based** payments model. Users spend credits to generate images. Credits are acquired via sign-up bonus, weekly free drip, and one-time Stripe purchases. No subscriptions — pay-per-pack when you need more.
 
-**Product doc**: End-to-end behavior. For implementation gaps and production checklist, see `docs/implementation/PAYMENT-IMPLEMENTATION.md`.
+Supporting docs:
+
+- `docs/product/weekly-credit-drip.md` — weekly replenishment behavior and batching model
+- `docs/product/credit-system-abuse-prevention.md` — credit-spend and checkout hardening
+- `docs/runbooks/STRIPE-CONVEX-ENVIRONMENTS.md` — live vs test Stripe configuration by Convex deployment
+- `docs/runbooks/ANALYTICS-OPS-PRODUCTION-SMOKE.md` — production payment and analytics smoke checks
 
 ---
 
@@ -128,5 +133,3 @@ Stripe component tables (customers, payments, checkout_sessions, etc.) live in t
 | **Ops** | Optional webhook | If `OPS_ALERT_WEBHOOK_URL` is set (`src/convex/lib/ops.ts`), a purchase notification is sent once per successful grant (same gate as PostHog). |
 
 Convex env for server capture: `POSTHOG_API_KEY`, `POSTHOG_HOST` (see runbook). Public client key: `PUBLIC_POSTHOG_KEY` / `PUBLIC_POSTHOG_HOST`.
-
-For remaining implementation gaps and production/testing steps, see `docs/implementation/PAYMENT-IMPLEMENTATION.md`.

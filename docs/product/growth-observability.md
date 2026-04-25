@@ -1,4 +1,6 @@
-# Growth observability: formal specification
+# Growth Observability
+
+This document captures the implemented growth-observability system in the current product. It keeps the formal contract shape because the event taxonomy, truth classes, and verification rules are used as a precise reference for ongoing analytics work.
 
 ## 1. Scope
 

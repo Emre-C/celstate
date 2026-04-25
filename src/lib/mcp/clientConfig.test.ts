@@ -3,7 +3,6 @@ import {
   buildClaudeCodeCommand,
   buildHostedMcpUrl,
   buildMcpJsonConfig,
-  MCP_URL_FALLBACK,
 } from "./clientConfig.js";
 
 describe("clientConfig", () => {
@@ -19,8 +18,8 @@ describe("clientConfig", () => {
     );
   });
 
-  it("falls back to a placeholder when the public URL is invalid", () => {
-    expect(buildHostedMcpUrl("not-a-url")).toBe(MCP_URL_FALLBACK);
+  it("throws when the public URL cannot be parsed", () => {
+    expect(() => buildHostedMcpUrl("not-a-url")).toThrow(/Invalid PUBLIC_CONVEX_URL/);
   });
 
   it("builds a Claude Code command with the http transport", () => {

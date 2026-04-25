@@ -14,7 +14,7 @@ FACT:    Chat thinkingConfig: ThinkingLevel.LOW, includeThoughts: false (reduces
 
 ## Vertex env resolution (`readGeminiRuntimeConfigFromEnv`)
 
-Authoritative duplicate: [`docs/implementation/VERTEX-AI-CONVEX-SETUP.md`](../../implementation/VERTEX-AI-CONVEX-SETUP.md).
+Authoritative duplicate: [`docs/runbooks/VERTEX-AI-CONVEX-SETUP.md`](../runbooks/VERTEX-AI-CONVEX-SETUP.md).
 
 ```typescript
 // src/convex/lib/gemini.ts — project + location + auth (paraphrase; keep in sync with source)
@@ -58,7 +58,7 @@ ai.chats.create({
 
 Celstate generates transparent-background images using **difference matting** — a mathematically exact technique that recovers perfect alpha channels without ML post-processing. This is Celstate's core technical differentiation.
 
-Raster passes use **Vertex AI** (Generative AI on Vertex), not the Gemini Developer API (`GEMINI_API_KEY`). Convex Node actions call `@google/genai` with `vertexai: true` and service-account auth; configuration is documented in [`docs/implementation/VERTEX-AI-CONVEX-SETUP.md`](../../implementation/VERTEX-AI-CONVEX-SETUP.md). Implementation module: `src/convex/lib/gemini.ts` (historical filename; client is Vertex-backed).
+Raster passes use **Vertex AI** (Generative AI on Vertex), not the Gemini Developer API (`GEMINI_API_KEY`). Convex Node actions call `@google/genai` with `vertexai: true` and service-account auth; configuration is documented in [`docs/runbooks/VERTEX-AI-CONVEX-SETUP.md`](../runbooks/VERTEX-AI-CONVEX-SETUP.md). Implementation module: `src/convex/lib/gemini.ts` (historical filename; client is Vertex-backed).
 
 ## How It Works
 
@@ -187,7 +187,15 @@ INVARIANT: creditRefundedAt set once on refund; failGeneration paths check befor
 ### Step 5: Finalize (`finalizing`)
 
 - Loads white + black from storage; optional resize when dimensions mismatch; aspect ratio guard may throw
-- Difference matte (`src/convex/lib/matte.ts`), optional optimize (`optimizeForWeb`), `completeGeneration` mutation
+- Difference matte (`src/convex/lib/matte.ts`)
+- Deterministic transparent QA (`src/convex/lib/transparentQa.ts`) runs before finalization using:
+  - conservative coverage gates on `alphaPresence` and `borderTransparencyRatio`, tuned from persisted live dev QA samples so grossly opaque or edge-cropped outputs rerender before shipping
+  - white/black recomposition residuals
+  - multithreshold topology persistence for cutouts and holes
+  - shell-based halo / spill analysis around the silhouette
+- QA outcomes are `pass`, `retry_black`, `retry_white_and_black`, or `review`
+- Only `pass` proceeds to PNG encoding, optimization (`optimizeForWeb`), and `completeGeneration`
+- QA-triggered retries target the upstream source-pass stage instead of re-running finalization alone
 
 ### Step 6: Storage and completion
 
@@ -298,7 +306,7 @@ On terminal failure: credits refunded (unless already refunded), `status → fai
 
 ## Observability (cross-reference)
 
-[`observability-generation.md`](./observability-generation.md) — `generationOpsEvents` schema, event-type → producer matrix, `OPS_ALERT_*` webhooks, `scheduleGenerationAlert` → `sendGenerationAlert` / `recordAlertEvent`, `internal.ops.getGenerationOpsSummary` / `internal.ops.getRecentGenerationOpsFeed`, rollup helpers (`summarizeGenerationOpsEvents`). This file stays limited to **pipeline and lifecycle**; durable ops `error` column semantics and alert preconditions are specified there.
+[`observability.md`](./observability.md) — `generationOpsEvents` schema, event-type → producer matrix, `OPS_ALERT_*` webhooks, `scheduleGenerationAlert` → `sendGenerationAlert` / `recordAlertEvent`, `internal.ops.getGenerationOpsSummary` / `internal.ops.getRecentGenerationOpsFeed`, rollup helpers (`summarizeGenerationOpsEvents`). This file stays limited to **pipeline and lifecycle**; durable ops `error` column semantics and alert preconditions are specified there.
 
 **PostHog** — client `posthog-js` captures `generation_started`, `generation_completed`, and `generation_failed` (subscription-driven on the app page); Convex uses `@posthog/convex` for purchase and sign-up server events, not per-stage generation worker events. Inventory and env vars: observability doc.
 
@@ -678,7 +686,7 @@ Animated "pixel scanner" during generation:
 
 ## Retention Policy
 
-Per VISION.md: Images stored for minimum 30 days.
+Current product retention target: images are stored for a minimum of 30 days.
 
 - Users can view history within retention window
 - Users can re-download any image within retention window

@@ -128,15 +128,6 @@ export const getMissingCanonicalAuthEnvKeys = (envSource: EnvSource) => {
 		missing.push(CANONICAL_AUTH_SERVER_ENV.googleClientSecret);
 	}
 
-	// TODO: Re-enable Apple credential requirements once Apple Sign-In is back.
-	// if (requiresAppleCredentials(env) && !env.appleClientId) {
-	// 	missing.push(CANONICAL_AUTH_SERVER_ENV.appleClientId);
-	// }
-	//
-	// if (requiresAppleCredentials(env) && !env.appleClientSecret) {
-	// 	missing.push(CANONICAL_AUTH_SERVER_ENV.appleClientSecret);
-	// }
-
 	return missing;
 };
 

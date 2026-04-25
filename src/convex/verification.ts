@@ -1,10 +1,6 @@
 import { v } from "convex/values";
 import { components } from "./_generated/api.js";
-import {
-  internalMutation,
-  internalQuery,
-  type MutationCtx,
-} from "./_generated/server.js";
+import { internalMutation, internalQuery, type MutationCtx } from "./_generated/server.js";
 import {
   canaryPrincipalBindingValidator,
   canaryPrincipalIdValidator,
@@ -31,8 +27,10 @@ type BetterAuthUserRecord = {
   userId?: string;
 };
 
+type BetterAuthLookupCtx = Pick<MutationCtx, "runQuery">;
+
 async function resolveCanonicalBetterAuthUser(
-  ctx: Pick<MutationCtx, "runQuery">,
+  ctx: BetterAuthLookupCtx,
   email: string,
 ): Promise<Required<Pick<BetterAuthUserRecord, "email" | "userId">> & BetterAuthUserRecord> {
   const user = (await ctx.runQuery(components.betterAuth.adapter.findOne, {

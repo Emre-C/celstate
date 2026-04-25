@@ -39,50 +39,129 @@ import {
   type GenerationCanaryEvidence,
   type LiveSettlementCanaryEvidence,
   type CanaryPrincipalId,
+  type SettlementOutcome,
   type VerificationTrigger,
 } from "../src/lib/production-confidence.js";
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-function resolveConvexHttpUrl(): string {
+// --- Polling deadlines and intervals (tunable runner constants) ---
+//
+// These are upper bounds on how long the runner will wait for an asynchronous
+// observation before declaring TIMEOUT. They are NOT contract values — increasing
+// them never makes a healthy run fail; decreasing them risks false TIMEOUTs.
+
+const PLAYWRIGHT_NAVIGATION_TIMEOUT_MS = 30_000;
+const PLAYWRIGHT_PAY_BUTTON_TIMEOUT_MS = 15_000;
+const PLAYWRIGHT_REDIRECT_AWAY_TIMEOUT_MS = 60_000;
+
+const GENERATION_POLL_DEADLINE_MS = 5 * 60_000;
+const GENERATION_POLL_INTERVAL_MS = 5_000;
+
+const CHECKOUT_POLL_DEADLINE_MS = 90_000;
+const CHECKOUT_POLL_INTERVAL_MS = 2_000;
+
+const SETTLEMENT_POLL_DEADLINE_MS = 3 * 60_000;
+const SETTLEMENT_POLL_INTERVAL_MS = 5_000;
+
+const REFUND_POLL_DEADLINE_MS = 30_000;
+const REFUND_POLL_INTERVAL_MS = 2_000;
+
+interface RunnerEnv {
+  readonly runnerSecret: string;
+  readonly convexHttpBase: string;
+  readonly siteUrl: string;
+  readonly trigger: VerificationTrigger;
+  readonly deploymentId?: string;
+  readonly gitSha?: string;
+  readonly workflowRunId?: string;
+  readonly storagePath?: string;
+  readonly requireProtectedRoute: boolean;
+}
+
+function readTrigger(): VerificationTrigger {
+  const t = process.env.VERIFICATION_TRIGGER?.trim().toUpperCase();
+  if (t === "SCHEDULED" || t === "POST_DEPLOY" || t === "PRE_MERGE_CI") {
+    return t;
+  }
+  return "POST_DEPLOY";
+}
+
+function deriveConvexHttpBase(missing: string[]): string {
   const explicit = process.env.CONVEX_HTTP_VERIFICATION_URL?.trim();
   if (explicit) {
     return explicit.replace(/\/$/, "");
   }
   const convexUrl = process.env.CONVEX_URL?.trim();
   if (!convexUrl) {
-    throw new Error("Set CONVEX_HTTP_VERIFICATION_URL or CONVEX_URL");
+    missing.push("CONVEX_URL or CONVEX_HTTP_VERIFICATION_URL");
+    return "";
   }
   if (!convexUrl.includes(".convex.cloud")) {
-    throw new Error("CONVEX_URL must be a *.convex.cloud deployment URL for HTTP derivation");
+    throw new Error(
+      "CONVEX_URL must be a *.convex.cloud deployment URL for HTTP derivation, " +
+        "or set CONVEX_HTTP_VERIFICATION_URL explicitly",
+    );
   }
   return convexUrl.replace(".convex.cloud", ".convex.site");
 }
 
-function getRunnerSecret(): string {
-  const s = process.env.VERIFICATION_RUNNER_SECRET?.trim();
-  if (!s) {
-    throw new Error("VERIFICATION_RUNNER_SECRET is required");
+/**
+ * Validate every input the runner depends on up front. Fail fast with a single
+ * error listing every missing variable, instead of failing deep inside a probe.
+ */
+function readRunnerEnv(): RunnerEnv {
+  const missing: string[] = [];
+
+  const runnerSecret = process.env.VERIFICATION_RUNNER_SECRET?.trim();
+  if (!runnerSecret) missing.push("VERIFICATION_RUNNER_SECRET");
+
+  const convexHttpBase = deriveConvexHttpBase(missing);
+
+  const siteUrl =
+    process.env.AUTH_CANARY_BASE_URL?.trim() ||
+    process.env.PUBLIC_SITE_URL?.trim() ||
+    "";
+  if (!siteUrl) missing.push("AUTH_CANARY_BASE_URL or PUBLIC_SITE_URL");
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Production verification runner is missing required environment variables: ${missing.join(", ")}`,
+    );
   }
-  return s;
+
+  const trigger = readTrigger();
+  const requireProtectedRoute =
+    trigger !== "PRE_MERGE_CI" &&
+    process.env.AUTH_CANARY_REQUIRE_PROTECTED_ROUTE !== "false";
+
+  return {
+    runnerSecret: runnerSecret!,
+    convexHttpBase,
+    siteUrl,
+    trigger,
+    deploymentId:
+      process.env.VERCEL_DEPLOYMENT_ID?.trim() ||
+      process.env.GITHUB_RUN_ID?.trim() ||
+      undefined,
+    gitSha:
+      process.env.VERCEL_GIT_COMMIT_SHA?.trim() ||
+      process.env.GITHUB_SHA?.trim() ||
+      undefined,
+    workflowRunId: process.env.GITHUB_RUN_ID?.trim() || undefined,
+    storagePath: process.env.AUTH_CANARY_PROTECTED_STORAGE_STATE?.trim() || undefined,
+    requireProtectedRoute,
+  };
 }
 
-async function convexHttp(path: string, init: RequestInit): Promise<Response> {
-  const url = `${resolveConvexHttpUrl()}${path}`;
+async function convexHttp(env: RunnerEnv, path: string, init: RequestInit): Promise<Response> {
+  const url = `${env.convexHttpBase}${path}`;
   const headers = new Headers(init.headers);
-  headers.set("Authorization", `Bearer ${getRunnerSecret()}`);
+  headers.set("Authorization", `Bearer ${env.runnerSecret}`);
   if (init.body && !headers.has("content-type")) {
     headers.set("content-type", "application/json");
   }
   return fetch(url, { ...init, headers });
-}
-
-function getTrigger(): VerificationTrigger {
-  const t = process.env.VERIFICATION_TRIGGER?.trim().toUpperCase();
-  if (t === "SCHEDULED" || t === "POST_DEPLOY" || t === "PRE_MERGE_CI") {
-    return t;
-  }
-  return "POST_DEPLOY";
 }
 
 function record(
@@ -91,6 +170,7 @@ function record(
   verdict: DomainVerdictRecord["verdict"],
   evidenceRef: string,
   startedAt: number,
+  extras: { note?: string; settlementOutcome?: SettlementOutcome } = {},
 ): DomainVerdictRecord {
   return {
     domain,
@@ -100,6 +180,8 @@ function record(
     evidenceRef,
     startedAt,
     finishedAt: Date.now(),
+    ...(extras.note !== undefined && { note: extras.note }),
+    ...(extras.settlementOutcome !== undefined && { settlementOutcome: extras.settlementOutcome }),
   };
 }
 
@@ -149,108 +231,117 @@ async function probeProtectedRoute(baseUrl: string, storageStatePath: string): P
   const raw = readFileSync(storageStatePath, "utf-8");
   const storageState = JSON.parse(raw);
   const browser = await chromium.launch({ headless: true });
+  let context: Awaited<ReturnType<typeof browser.newContext>> | null = null;
   try {
-    const context = await browser.newContext({ storageState });
+    context = await browser.newContext({ storageState });
     const page = await context.newPage();
     const normalized = baseUrl.replace(/\/$/, "");
-    const response = await page.goto(`${normalized}/app`, { waitUntil: "domcontentloaded", timeout: 30_000 });
+    const response = await page.goto(`${normalized}/app`, {
+      waitUntil: "domcontentloaded",
+      timeout: PLAYWRIGHT_NAVIGATION_TIMEOUT_MS,
+    });
     if (!response || !response.ok()) {
       return false;
     }
-    // A silent redirect to /auth still returns 200; assert final path.
+    // Verify we actually landed on /app and weren't silently redirected to /auth.
+    // A redirect to /auth returns 200 and passes response.ok(), so we must check the final URL.
     const finalPath = new URL(page.url()).pathname;
-    if (!finalPath.startsWith("/app")) {
-      return false;
-    }
-    await context.close();
-    return true;
+    return finalPath.startsWith("/app");
   } finally {
+    if (context) await context.close().catch(() => {});
     await browser.close();
   }
 }
 
-async function automateStripeCheckout(checkoutUrl: string): Promise<boolean> {
+/**
+ * Drive the Stripe hosted checkout flow to completion. Throws (rather than
+ * returning false) so callers see the underlying selector / navigation /
+ * timeout error in the verdict's note instead of an opaque "payment failed".
+ */
+async function automateStripeCheckout(checkoutUrl: string): Promise<void> {
   const browser = await chromium.launch({ headless: true });
+  let context: Awaited<ReturnType<typeof browser.newContext>> | null = null;
   try {
-    const context = await browser.newContext();
+    context = await browser.newContext();
     const page = await context.newPage();
-    await page.goto(checkoutUrl, { waitUntil: "networkidle", timeout: 30_000 });
+    await page.goto(checkoutUrl, {
+      waitUntil: "networkidle",
+      timeout: PLAYWRIGHT_NAVIGATION_TIMEOUT_MS,
+    });
 
-    // Selectors layered for resilience across Stripe hosted-checkout UI revisions.
+    // Stripe hosted checkout: find the submit/pay button.
+    // Multiple selectors for resilience across Stripe UI revisions.
     const payButton = page.locator('[data-testid="hosted-payment-submit-button"]')
       .or(page.locator(".SubmitButton"))
       .or(page.getByRole("button", { name: /pay/i }));
 
-    await payButton.first().waitFor({ state: "visible", timeout: 15_000 });
+    await payButton.first().waitFor({ state: "visible", timeout: PLAYWRIGHT_PAY_BUTTON_TIMEOUT_MS });
     await payButton.first().click();
 
+    // Wait for redirect away from checkout.stripe.com (payment committed).
     await page.waitForURL(
       (url) => !url.href.includes("checkout.stripe.com"),
-      { timeout: 60_000 },
+      { timeout: PLAYWRIGHT_REDIRECT_AWAY_TIMEOUT_MS },
     );
-
-    await context.close();
-    return true;
-  } catch {
-    return false;
   } finally {
+    if (context) await context.close().catch(() => {});
     await browser.close();
   }
 }
 
-async function provisionCanaryPrincipals(trigger: VerificationTrigger): Promise<void> {
+/**
+ * Provision required canary principals before probes run. Provisioning is
+ * infrastructure: a failure here will produce probe errors with the wrong
+ * root cause (e.g. "no canaryPrincipals row" instead of "principal X failed
+ * to provision: Y"). Throw so the deploy gate DENYs with a clear message.
+ */
+async function provisionCanaryPrincipals(env: RunnerEnv): Promise<void> {
   const principalIds: CanaryPrincipalId[] = ["CANARY_GENERATION", "CANARY_CHECKOUT"];
-  if (trigger === "SCHEDULED") {
+  if (env.trigger === "SCHEDULED") {
     principalIds.push("CANARY_SETTLEMENT");
   }
 
+  const failures: string[] = [];
   for (const principalId of principalIds) {
     try {
-      const res = await convexHttp("/verification/canary/upsert-principal", {
+      const res = await convexHttp(env, "/verification/canary/upsert-principal", {
         method: "POST",
         body: JSON.stringify({ principalId }),
       });
       if (!res.ok) {
         const errText = await res.text();
-        console.warn(`Principal provisioning ${principalId}: ${res.status} ${errText}`);
+        failures.push(`${principalId}: ${res.status} ${errText}`);
       } else {
         console.log(`Principal ${principalId} provisioned`);
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      console.warn(`Principal provisioning ${principalId} failed: ${msg}`);
+      failures.push(`${principalId}: ${msg}`);
     }
+  }
+
+  if (failures.length > 0) {
+    throw new Error(
+      `Canary principal provisioning failed (deploy gate will DENY): ${failures.join("; ")}`,
+    );
   }
 }
 
 async function main(): Promise<void> {
-  const trigger = getTrigger();
+  const env = readRunnerEnv();
+  const trigger = env.trigger;
   const startedAt = Date.now();
 
-  // Non-fatal: probe itself will produce FAILED if provisioning fails.
-  await provisionCanaryPrincipals(trigger);
+  // Provision canary principals before running probes. Failure here is fatal:
+  // a probe failing because the principal is unprovisioned would surface a
+  // misleading root cause downstream.
+  await provisionCanaryPrincipals(env);
 
-  const deploymentId =
-    process.env.VERCEL_DEPLOYMENT_ID?.trim() ||
-    process.env.GITHUB_RUN_ID?.trim() ||
-    undefined;
-  const gitSha =
-    process.env.VERCEL_GIT_COMMIT_SHA?.trim() ||
-    process.env.GITHUB_SHA?.trim() ||
-    undefined;
-  const siteUrl =
-    process.env.AUTH_CANARY_BASE_URL?.trim() ||
-    process.env.PUBLIC_SITE_URL?.trim() ||
-    undefined;
-
-  if (!siteUrl) {
-    throw new Error("Set AUTH_CANARY_BASE_URL or PUBLIC_SITE_URL for auth probes");
-  }
-
+  const siteUrl = env.siteUrl;
   const runKey = createRunKey({
     trigger,
-    deploymentId,
-    gitSha,
+    deploymentId: env.deploymentId,
+    gitSha: env.gitSha,
     startedAt,
   });
 
@@ -266,56 +357,77 @@ async function main(): Promise<void> {
 
   // --- AUTH ---
   const authStart = Date.now();
-  let authVerdict: DomainVerdictRecord;
+  // Protected-route proof is required by default for POST_DEPLOY and SCHEDULED triggers.
+  // PRE_MERGE_CI never requires it (no production environment to test against).
+  // Set AUTH_CANARY_REQUIRE_PROTECTED_ROUTE=false to explicitly opt out (e.g., emergency deploys).
+  const requireProtected = env.requireProtectedRoute;
+  const storagePath = env.storagePath;
+  type AuthFailureStage = "auth_page" | "get_session" | "protected_route";
+  let authFailureStage: AuthFailureStage | null = null;
+  let authFailureMessage: string | null = null;
+  let authPageHealthy = false;
+  let sessionEndpointHealthy = false;
+  let protectedRouteReachable = false;
   try {
     await probeAuthSmoke(siteUrl);
-    // PRE_MERGE_CI has no production env to test against; AUTH_CANARY_REQUIRE_PROTECTED_ROUTE=false is the emergency-deploy opt-out.
-    const requireProtected = trigger !== "PRE_MERGE_CI" &&
-      process.env.AUTH_CANARY_REQUIRE_PROTECTED_ROUTE !== "false";
-    const storagePath = process.env.AUTH_CANARY_PROTECTED_STORAGE_STATE?.trim();
-    let protectedOk = false;
-    if (storagePath && existsSync(storagePath)) {
-      protectedOk = await probeProtectedRoute(siteUrl, storagePath);
-    } else if (requireProtected) {
-      throw new Error(
-        "AUTH_CANARY_REQUIRE_PROTECTED_ROUTE=true but AUTH_CANARY_PROTECTED_STORAGE_STATE is missing or not a file",
-      );
-    }
-    const authEvidence: AuthCanaryEvidence = {
-      authPageHealthy: true,
-      sessionEndpointHealthy: true,
-      protectedRouteReachable: storagePath ? protectedOk : false,
-    };
-    const authVerdictResult = classifyAuthProbeVerdict(authEvidence, { requireProtectedRoute: requireProtected });
-    const evidenceRef = createEvidenceRef({ runKey, domain: "AUTH", startedAt: authStart });
-    evidenceRows.push({
-      evidenceRef,
-      runKey,
-      domain: "AUTH",
-      trigger,
-      payloadJson: JSON.stringify(authEvidence),
-    });
-    authVerdict = record("AUTH", trigger, authVerdictResult, evidenceRef, authStart);
+    authPageHealthy = true;
+    sessionEndpointHealthy = true;
   } catch (e) {
-    const evidenceRef = createEvidenceRef({ runKey, domain: "AUTH", startedAt: authStart });
-    evidenceRows.push({
-      evidenceRef,
-      runKey,
-      domain: "AUTH",
-      trigger,
-      payloadJson: JSON.stringify({
-        error: formatAuthCanaryProbeFailure("auth_page", e),
-      }),
-    });
-    authVerdict = record("AUTH", trigger, "FAILED", evidenceRef, authStart);
+    // probeAuthSmoke runs /auth then /api/auth/get-session sequentially. Without
+    // re-probing each in isolation we infer stage from the message body.
+    const msg = e instanceof Error ? e.message : String(e);
+    authFailureStage = msg.includes("get-session") ? "get_session" : "auth_page";
+    authFailureMessage = formatAuthCanaryProbeFailure(authFailureStage, e);
   }
+  if (!authFailureStage) {
+    try {
+      if (storagePath && existsSync(storagePath)) {
+        protectedRouteReachable = await probeProtectedRoute(siteUrl, storagePath);
+      } else if (requireProtected) {
+        throw new Error(
+          "AUTH_CANARY_REQUIRE_PROTECTED_ROUTE=true but AUTH_CANARY_PROTECTED_STORAGE_STATE is missing or not a file",
+        );
+      }
+    } catch (e) {
+      authFailureStage = "protected_route";
+      authFailureMessage = `[protected_route] ${e instanceof Error ? e.message : String(e)}`;
+    }
+  }
+  const authEvidence: AuthCanaryEvidence = {
+    authPageHealthy,
+    sessionEndpointHealthy,
+    protectedRouteReachable,
+  };
+  const authVerdictResult = authFailureStage
+    ? "FAILED"
+    : classifyAuthProbeVerdict(authEvidence, { requireProtectedRoute: requireProtected });
+  const authEvidenceRef = createEvidenceRef({ runKey, domain: "AUTH", startedAt: authStart });
+  evidenceRows.push({
+    evidenceRef: authEvidenceRef,
+    runKey,
+    domain: "AUTH",
+    trigger,
+    payloadJson: JSON.stringify(
+      authFailureStage
+        ? { ...authEvidence, failureStage: authFailureStage, error: authFailureMessage }
+        : authEvidence,
+    ),
+  });
+  const authVerdict: DomainVerdictRecord = record(
+    "AUTH",
+    trigger,
+    authVerdictResult,
+    authEvidenceRef,
+    authStart,
+    authFailureMessage ? { note: authFailureMessage } : {},
+  );
   verdicts.push(authVerdict);
 
   // --- GENERATION ---
   const genStart = Date.now();
   let generationVerdict: DomainVerdictRecord;
   try {
-    const startRes = await convexHttp("/verification/canary/start-generation", {
+    const startRes = await convexHttp(env, "/verification/canary/start-generation", {
       method: "POST",
       body: JSON.stringify({
         prompt: "Production canary — minimal smoke generation",
@@ -327,12 +439,13 @@ async function main(): Promise<void> {
     }
     const { generationId } = (await startRes.json()) as { generationId: string };
 
-    const deadline = Date.now() + 5 * 60_000;
+    const deadline = Date.now() + GENERATION_POLL_DEADLINE_MS;
     let terminalStatus: "complete" | "failed" | undefined;
     let probeResultStorageId: string | undefined;
     let probeRefundedAt: number | undefined;
     while (Date.now() < deadline) {
       const stRes = await convexHttp(
+        env,
         `/verification/canary/generation-status?generationId=${encodeURIComponent(generationId)}`,
         { method: "GET" },
       );
@@ -361,7 +474,7 @@ async function main(): Promise<void> {
         probeRefundedAt = st.creditRefundedAt;
         break;
       }
-      await sleep(5000);
+      await sleep(GENERATION_POLL_INTERVAL_MS);
     }
 
     const genEvidence: GenerationCanaryEvidence = {
@@ -370,7 +483,8 @@ async function main(): Promise<void> {
       artifactPresent: Boolean(probeResultStorageId),
       refundObserved: Boolean(probeRefundedAt),
     };
-    // Timeout is a runner concern (polling exhausted); terminal states go through the library classifier.
+    // Delegate to library classifier — timeout is a runner concern (polling exhausted),
+    // terminal states are classified by the library function.
     const terminal: DomainVerdictRecord["verdict"] = terminalStatus
       ? classifyGenerationOutcome({ status: terminalStatus, resultStorageId: probeResultStorageId })
       : "TIMEOUT";
@@ -402,7 +516,7 @@ async function main(): Promise<void> {
   const coStart = Date.now();
   let checkoutVerdict: DomainVerdictRecord;
   try {
-    const startRes = await convexHttp("/verification/canary/start-checkout", {
+    const startRes = await convexHttp(env, "/verification/canary/start-checkout", {
       method: "POST",
       body: JSON.stringify({}),
     });
@@ -412,12 +526,13 @@ async function main(): Promise<void> {
     }
     const { checkoutId } = (await startRes.json()) as { checkoutId: string };
 
-    const deadline = Date.now() + 90_000;
+    const deadline = Date.now() + CHECKOUT_POLL_DEADLINE_MS;
     let pendingObserved = false;
     let readyObserved = false;
     let hostedCheckoutUrlPresent = false;
     while (Date.now() < deadline) {
       const stRes = await convexHttp(
+        env,
         `/verification/canary/checkout-status?checkoutId=${encodeURIComponent(checkoutId)}`,
         { method: "GET" },
       );
@@ -446,7 +561,7 @@ async function main(): Promise<void> {
       if (st.status === "failed") {
         throw new Error(st.error);
       }
-      await sleep(2000);
+      await sleep(CHECKOUT_POLL_INTERVAL_MS);
     }
 
     const coEvidence: CheckoutSessionCanaryEvidence = {
@@ -484,18 +599,27 @@ async function main(): Promise<void> {
   let liveSettlementVerdict: DomainVerdictRecord;
   if (trigger !== "SCHEDULED") {
     const evidenceRef = createEvidenceRef({ runKey, domain: "LIVE_SETTLEMENT", startedAt: lsStart });
+    const skipNote = "LIVE_SETTLEMENT is destructive; only the SCHEDULED trigger exercises it";
     evidenceRows.push({
       evidenceRef,
       runKey,
       domain: "LIVE_SETTLEMENT",
       trigger,
-      payloadJson: JSON.stringify({ skipped: true, reason: "not required for this trigger" }),
+      payloadJson: JSON.stringify({ skipped: true, reason: skipNote }),
     });
-    liveSettlementVerdict = record("LIVE_SETTLEMENT", trigger, "SKIPPED", evidenceRef, lsStart);
+    liveSettlementVerdict = record(
+      "LIVE_SETTLEMENT",
+      trigger,
+      "SKIPPED",
+      evidenceRef,
+      lsStart,
+      { note: skipNote },
+    );
   } else {
+    // Fresh settlement: create checkout → pay via Playwright → observe settlement → refund.
     // Fails loudly if CANARY_SETTLEMENT is not provisioned or has no saved payment method.
     try {
-      const startRes = await convexHttp("/verification/canary/start-settlement-checkout", {
+      const startRes = await convexHttp(env, "/verification/canary/start-settlement-checkout", {
         method: "POST",
         body: JSON.stringify({}),
       });
@@ -506,9 +630,10 @@ async function main(): Promise<void> {
       const { checkoutId } = (await startRes.json()) as { checkoutId: string };
 
       let checkoutUrl = "";
-      const checkoutDeadline = Date.now() + 90_000;
+      const checkoutDeadline = Date.now() + CHECKOUT_POLL_DEADLINE_MS;
       while (Date.now() < checkoutDeadline) {
         const stRes = await convexHttp(
+          env,
           `/verification/canary/settlement-checkout-status?checkoutId=${encodeURIComponent(checkoutId)}`,
           { method: "GET" },
         );
@@ -533,25 +658,27 @@ async function main(): Promise<void> {
         if (st.status === "failed") {
           throw new Error(`settlement checkout failed: ${st.error}`);
         }
-        await sleep(2000);
+        await sleep(CHECKOUT_POLL_INTERVAL_MS);
       }
       if (!checkoutUrl) {
         throw new Error("settlement checkout timed out waiting for hosted checkout URL");
       }
 
-      // Canary customer has a saved payment method; Playwright just clicks Pay.
-      const paymentOk = await automateStripeCheckout(checkoutUrl);
-      if (!paymentOk) {
-        throw new Error("Stripe checkout automation failed — could not complete payment on hosted checkout");
-      }
+      // Canary customer has a saved payment method; selector/timeout/navigation failures
+      // bubble up into the outer catch so the verdict's note carries the real root cause.
+      await automateStripeCheckout(checkoutUrl);
 
-      // Settlement chain: Stripe webhook → credit grant → settlement row.
-      const settlementDeadline = Date.now() + 3 * 60_000;
+      // Settlement chain: webhook → credit grant → settlement row. observedSettlementOutcome
+      // captures the canonical pre-refund classification — ledger integrity faults
+      // (DUPLICATE_GRANT, FAILED) throw and short-circuit the run.
+      const settlementDeadline = Date.now() + SETTLEMENT_POLL_DEADLINE_MS;
       let creditGrantCount: 0 | 1 = 0;
       let authoritativeRevenueCount: 0 | 1 = 0;
       let paidWebhookObserved = false;
+      let observedSettlementOutcome: SettlementOutcome = "UNOBSERVED";
       while (Date.now() < settlementDeadline) {
         const stRes = await convexHttp(
+          env,
           `/verification/canary/settlement-by-checkout?checkoutId=${encodeURIComponent(checkoutId)}`,
           { method: "GET" },
         );
@@ -575,18 +702,23 @@ async function main(): Promise<void> {
             refundedAt: settlement.refundedAt,
           });
           if (outcome === "GRANTED_ONCE") {
+            observedSettlementOutcome = outcome;
             break;
           }
           if (outcome === "DUPLICATE_GRANT" || outcome === "FAILED") {
             throw new Error(`settlement classified as ${outcome} — ledger integrity issue`);
           }
+          // outcome === "REFUNDED" or "UNOBSERVED" — keep polling until we observe
+          // GRANTED_ONCE (or a fault) or hit the deadline. A pre-existing REFUNDED
+          // state would mean a stale ledger row leaked through — assertNoActiveSettlementCanary
+          // should have prevented that, so timing out here is the safe terminal.
         }
-        await sleep(5000);
+        await sleep(SETTLEMENT_POLL_INTERVAL_MS);
       }
 
-      // Idempotent refund, scoped to this canary checkout.
+      // Idempotent refund scoped to this canary checkout.
       let refundObserved = false;
-      const rfRes = await convexHttp("/verification/canary/refund-settlement", {
+      const rfRes = await convexHttp(env, "/verification/canary/refund-settlement", {
         method: "POST",
         body: JSON.stringify({ pendingCheckoutId: checkoutId }),
       });
@@ -599,10 +731,11 @@ async function main(): Promise<void> {
         alreadyRefunded: boolean;
       };
 
-      const refundDeadline = Date.now() + 30_000;
+      const refundDeadline = Date.now() + REFUND_POLL_DEADLINE_MS;
       refundObserved = refundResult.alreadyRefunded;
       while (Date.now() < refundDeadline && !refundObserved) {
         const stRes = await convexHttp(
+          env,
           `/verification/canary/settlement-by-checkout?checkoutId=${encodeURIComponent(checkoutId)}`,
           { method: "GET" },
         );
@@ -615,14 +748,9 @@ async function main(): Promise<void> {
             break;
           }
         }
-        await sleep(2000);
+        await sleep(REFUND_POLL_INTERVAL_MS);
       }
 
-      const settlementOutcome = classifySettlementOutcome({
-        creditGrantCount,
-        revenueEventCount: authoritativeRevenueCount,
-        refundedAt: refundObserved ? Date.now() : undefined,
-      });
       const lsEvidence: LiveSettlementCanaryEvidence = {
         checkoutCommitted: true,
         paidWebhookObserved,
@@ -630,8 +758,10 @@ async function main(): Promise<void> {
         authoritativeRevenueCount,
         refundObserved,
       };
+      // Pass the pre-refund outcome captured during polling — classifyLiveSettlementVerdict
+      // expects refundConfirmed as a separate signal (see SI7 in the spec).
       const lsVerdictResult = classifyLiveSettlementVerdict({
-        settlementOutcome: paidWebhookObserved ? "GRANTED_ONCE" : "UNOBSERVED",
+        settlementOutcome: observedSettlementOutcome,
         refundConfirmed: refundObserved,
       });
       const evidenceRef = createEvidenceRef({ runKey, domain: "LIVE_SETTLEMENT", startedAt: lsStart });
@@ -640,9 +770,19 @@ async function main(): Promise<void> {
         runKey,
         domain: "LIVE_SETTLEMENT",
         trigger,
-        payloadJson: JSON.stringify(lsEvidence),
+        payloadJson: JSON.stringify({
+          ...lsEvidence,
+          settlementOutcome: observedSettlementOutcome,
+        }),
       });
-      liveSettlementVerdict = record("LIVE_SETTLEMENT", trigger, lsVerdictResult, evidenceRef, lsStart);
+      liveSettlementVerdict = record(
+        "LIVE_SETTLEMENT",
+        trigger,
+        lsVerdictResult,
+        evidenceRef,
+        lsStart,
+        { settlementOutcome: observedSettlementOutcome },
+      );
     } catch (e) {
       const evidenceRef = createEvidenceRef({ runKey, domain: "LIVE_SETTLEMENT", startedAt: lsStart });
       const msg = e instanceof Error ? e.message : String(e);
@@ -653,7 +793,14 @@ async function main(): Promise<void> {
         trigger,
         payloadJson: JSON.stringify({ error: msg }),
       });
-      liveSettlementVerdict = record("LIVE_SETTLEMENT", trigger, "FAILED", evidenceRef, lsStart);
+      liveSettlementVerdict = record(
+        "LIVE_SETTLEMENT",
+        trigger,
+        "FAILED",
+        evidenceRef,
+        lsStart,
+        { note: msg },
+      );
     }
   }
   verdicts.push(liveSettlementVerdict);
@@ -668,10 +815,10 @@ async function main(): Promise<void> {
   const payload = {
     runKey,
     trigger,
-    deploymentId,
-    gitSha,
+    deploymentId: env.deploymentId,
+    gitSha: env.gitSha,
     siteUrl,
-    workflowRunId: process.env.GITHUB_RUN_ID?.trim(),
+    workflowRunId: env.workflowRunId,
     startedAt,
     finishedAt,
     authVerdict: verdicts.find((v) => v.domain === "AUTH"),
@@ -681,7 +828,7 @@ async function main(): Promise<void> {
     evidenceRows,
   };
 
-  const ingest = await convexHttp("/verification/ingest", {
+  const ingest = await convexHttp(env, "/verification/ingest", {
     method: "POST",
     body: JSON.stringify(payload),
   });

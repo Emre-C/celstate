@@ -46,7 +46,6 @@
 </script>
 
 <div class="flex flex-col gap-2">
-	<!-- Common ratios -->
 	<div class="flex flex-wrap items-center gap-1.5">
 		{#each commonRatios as ratio (ratio.key)}
 			<button
@@ -71,7 +70,6 @@
 			</button>
 		{/each}
 
-		<!-- More toggle -->
 		<button
 			type="button"
 			onclick={() => (expanded = !expanded)}
@@ -95,7 +93,6 @@
 		</button>
 	</div>
 
-	<!-- Expanded ratios -->
 	{#if expanded}
 		<div class="flex flex-wrap items-center gap-1.5">
 			{#each moreRatios as ratio (ratio.key)}

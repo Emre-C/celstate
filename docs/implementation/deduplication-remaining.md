@@ -1,6 +1,6 @@
 # Remaining deduplication & Convex quality work
 
-This document tracks **follow-up work** after the preventive tooling and refactors described in [hardening.md](./hardening.md). It complements the audit context in [CODE-CLEAN.md](./CODE-CLEAN.md).
+This document tracks **follow-up work** after the preventive tooling and refactors already applied in the repo. It complements the standing Convex quality rules in [Convex conventions](../conventions/convex.md).
 
 ## Background
 
@@ -115,4 +115,4 @@ This is **not** about chasing 0% duplication (often impossible or harmful with v
 
 - **Planning:** Pick one numbered section per PR; avoid mixing unrelated refactors.
 - **Definition of done:** `pnpm verify` green (including `pnpm test:e2e` in that flow); `pnpm dupcheck` still green; behavior unchanged or explicitly approved (product/testing).
-- **Related reading:** [hardening.md](./hardening.md), [Convex conventions](../conventions/convex.md), [CODE-CLEAN.md](./CODE-CLEAN.md).
+- **Related reading:** [Convex conventions](../conventions/convex.md), [Credit System Abuse Prevention](../product/credit-system-abuse-prevention.md).

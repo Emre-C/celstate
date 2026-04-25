@@ -47,7 +47,17 @@ unbounded table scans in production paths.
 When adding a new query or filter, add or extend an index first, then write
 the query against that index.
 
+## HTTP authentication boundaries (verification vs MCP)
+
+**Rule:** Do not unify Bearer parsing between **`/verification/*` routes** and **`/mcp`** without an explicit product/API decision. Today they are intentionally different:
+
+- **`src/convex/http.ts`** — Runner and canary routes use an inline `parseBearer(request)` that requires a canonical `Bearer ` prefix (case-sensitive) and yields an **empty string** when missing. That flows into verification-specific auth and error classification (`jsonRouteHandler` / `Unauthorized`).
+- **`src/convex/mcp/handler.ts`** — `parseBearerToken` matches `Bearer` **case-insensitively** and returns **`null`** when the header is missing or malformed, so MCP returns **401** at the HTTP layer before MCP protocol handling.
+
+MCP product semantics and client expectations: [`docs/product/mcp-server.md`](../product/mcp-server.md). Operational context: [`docs/runbooks/CODEBASE-HYGIENE.md`](../runbooks/CODEBASE-HYGIENE.md).
+
 ## References
 
-- Preventive tooling: `docs/implementation/hardening.md`
+- Related safeguards: `docs/product/credit-system-abuse-prevention.md`
 - Agent guidance: `AGENTS.md`
+- Code hygiene and audits: `docs/runbooks/CODEBASE-HYGIENE.md`

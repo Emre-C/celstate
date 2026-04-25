@@ -1,9 +1,11 @@
 import { v } from "convex/values";
 import { internalQuery, internalMutation, type MutationCtx, type QueryCtx } from "./_generated/server.js";
-import type { Id } from "./_generated/dataModel.js";
+import type { Doc, Id } from "./_generated/dataModel.js";
 import { creditGrantReasonValidator } from "./lib/validators.js";
 import { assertVerificationRunnerSecret } from "./lib/verificationRunnerSecret.js";
 import { applyCreditsToUser } from "./users.js";
+
+type PurchaseSettlement = Doc<"purchaseSettlements">;
 
 const settlementSummaryValidator = v.object({
   stripePaymentIntentId: v.string(),
@@ -23,19 +25,7 @@ const settlementSummaryValidator = v.object({
 
 async function buildSettlementSummary(
   ctx: QueryCtx | MutationCtx,
-  settlements: {
-    amountUsd: number;
-    creditsGranted: number;
-    currency: string;
-    pendingCheckoutId: Id<"pendingCheckouts"> | null;
-    priceId: string;
-    refundAmountUsd?: number;
-    refundedAt?: number;
-    stripeCheckoutSessionId: string;
-    stripePaymentIntentId: string;
-    stripeRefundId?: string;
-    userId: Id<"users">;
-  }[],
+  settlements: PurchaseSettlement[],
 ) {
   if (settlements.length === 0) {
     return null;
@@ -126,6 +116,7 @@ export const recordGrant = internalMutation({
       return false;
     }
 
+    // Insert audit record
     await ctx.db.insert("creditGrants", {
       userId: args.userId,
       amount: args.amount,

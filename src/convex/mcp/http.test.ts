@@ -27,6 +27,14 @@ const initializeRequest = {
   },
 };
 
+/** Registration order in `createMcpServer` — `tools/list` must stay aligned. */
+const EXPECTED_MCP_TOOL_NAMES = [
+  "celstate_check_credits",
+  "celstate_generate",
+  "celstate_get_image",
+  "celstate_list_images",
+] as const;
+
 async function seedAuthenticatedUser(tokenIdentifier: string) {
   const t = convexTest(schema, modules);
   const identity = t.withIdentity({
@@ -104,6 +112,46 @@ describe("/mcp http action", () => {
 
     const after = await identity.query(api.mcp.keys.listKeys, {});
     expect(after[0]?.lastUsedAt).toEqual(expect.any(Number));
+  });
+
+  it("exposes the registered tool set via tools/list after initialize", async () => {
+    const { created, t } = await seedAuthenticatedUser("tools-list-token");
+
+    const initRes = await t.fetch("/mcp", {
+      method: "POST",
+      headers: {
+        accept: "application/json, text/event-stream",
+        authorization: `Bearer ${created.rawKey}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(initializeRequest),
+    });
+    expect(initRes.status).toBe(200);
+
+    const listBody = {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/list",
+      params: {},
+    };
+
+    const listRes = await t.fetch("/mcp", {
+      method: "POST",
+      headers: {
+        accept: "application/json, text/event-stream",
+        authorization: `Bearer ${created.rawKey}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(listBody),
+    });
+
+    expect(listRes.status).toBe(200);
+    const listPayload = await listRes.json();
+    expect(listPayload).toMatchObject({ jsonrpc: "2.0", id: 2 });
+    const tools = listPayload?.result?.tools;
+    expect(Array.isArray(tools)).toBe(true);
+    const names = tools.map((tool: { name: string }) => tool.name);
+    expect(names).toEqual([...EXPECTED_MCP_TOOL_NAMES]);
   });
 
   it("returns a deliberate 405 for standalone GET probes", async () => {

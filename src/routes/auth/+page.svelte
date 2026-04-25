@@ -3,7 +3,6 @@
 	import { page } from '$app/stores';
 	import { getAuthProviderDescriptors, type AuthProviderId } from '$lib/auth/providers';
 	import { authClient } from '$lib/auth-client';
-	import { resolveAuthClientBaseUrl } from '$lib/auth-client';
 	import { growthEvents } from '$lib/analytics/growth-events.js';
 	import { initPostHog, posthog } from '$lib/posthog';
 	import NavBar from '$lib/components/ui/NavBar.svelte';
@@ -18,8 +17,7 @@
 	};
 
 	const session = authClient.useSession();
-	const providers = getAuthProviderDescriptors(resolveAuthClientBaseUrl());
-	const appleProvider = providers.find((provider) => provider.id === 'apple');
+	const providers = getAuthProviderDescriptors();
 	let errorMessage = $state('');
 	let activeProvider = $state<AuthProviderId | null>(null);
 
@@ -93,7 +91,6 @@
 				<h1 class="mt-3 text-2xl font-display italic tracking-tight text-text">
 					Trusted sign-in only
 				</h1>
-				<!-- TODO: Restore to "Google and Apple" once Apple Sign-In is re-enabled -->
 				<p class="mt-2 text-sm text-dim">
 					Celstate uses Google for identity. Apple Sign-In is coming soon. We do not support email/password accounts.
 				</p>
@@ -129,7 +126,6 @@
 									<span class="block text-xs text-dim">{provider.description}</span>
 								</span>
 							</span>
-							<!-- TODO: Remove the `comingSoon` branch once Apple Sign-In is re-enabled -->
 							<span class="text-xs font-medium uppercase tracking-[0.06em] text-dim">
 								{#if provider.comingSoon}
 									Coming soon
@@ -145,7 +141,6 @@
 					{/each}
 				</div>
 
-				<!-- TODO: Restore original info box copy once Apple Sign-In is re-enabled -->
 				<div class="border border-border bg-bg px-4 py-3">
 					<p class="text-sm text-dim">
 						Sign in with Google is available now. Apple Sign-In support is coming soon.

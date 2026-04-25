@@ -1,5 +1,9 @@
 # Assisted Mode — Frontend Design Specification
 
+> Review status (2026-04-15): remains in `docs/implementation`.
+>
+> Reason: the assisted-mode frontend described here is not implemented in the current product. The live prompt UI still renders only the standard input flow in `src/lib/components/PromptInput.svelte`; the app page still submits directly to `requestGeneration` in `src/routes/(app)/app/+page.svelte`; and the Convex schema/runtime do not yet include assisted-mode persistence, session lifecycle, or analytics wiring in `src/convex/schema.ts` and `src/convex/generations.ts`.
+
 > Companion to `ASSISTED-MODE-SPEC.md`. This document defines the visual design, interaction patterns, motion choreography, and component-level specifications for the Assisted Mode UI. It is the authoritative source for how this feature looks and feels.
 
 ## 1. Design Direction

@@ -1,5 +1,31 @@
 # Gemini 3.1 Flash Image Pipeline Enhancements
 
+## Status Review (2026-04-15)
+
+This document remains in `docs/implementation` because the enhancement bundle described here is only **partially implemented** in the current codebase.
+
+Already shipped in the current product:
+- Multi-reference uploads and generation requests using `referenceStorageIds` (up to 14 images).
+- Full 14-ratio aspect-ratio support, including `1:4`, `4:1`, `1:8`, and `8:1`.
+- Vertex-backed chat sessions that already pass a fixed `imageSize` of `1K` by default.
+- A fixed low-thinking configuration (`ThinkingLevel.LOW`, `includeThoughts: false`).
+
+Still not shipped:
+- No user-selectable resolution tiers (`Web` / `Full` / `Ultra HD`) in the request flow or download UI.
+- No `imageSize`, `thinkingLevel`, `searchGrounded`, or `groundingMetadata` fields on `generations`.
+- No Google Search or Google Image Search grounding, and no attribution component/UI.
+- No user-facing thinking-level toggle.
+- No credit or pricing differentiation tied to higher-resolution output.
+- Retry repair still uses the local validation-driven repair prompt builder, not a second LLM pass.
+
+Source-of-truth implementation references:
+- `src/convex/lib/config.ts`
+- `src/convex/lib/gemini.ts`
+- `src/convex/generation.ts`
+- `src/convex/generations.ts`
+- `src/lib/components/PromptInput.svelte`
+- `src/lib/components/GenerationCard.svelte`
+
 New: Enhancement from Tommy
 - Changes to previously generated images
 

@@ -1,5 +1,7 @@
 # Celstate MCP Server
 
+This is product documentation for the shipped remote MCP surface. The server is implemented and live in the current codebase, so it belongs in `docs/product` rather than `docs/implementation`.
+
 ## Overview
 
 Celstate ships a remote, Convex-hosted MCP endpoint for agentic clients such as Claude Code and Cursor.
@@ -44,6 +46,8 @@ That shape is deliberate for AI harnesses. It matches the MCP spec's expectation
 
 Bearer token auth backed by user-generated Celstate API keys stored in Convex.
 
+**Bearer header semantics (MCP only):** the MCP handler accepts a standard `Authorization: Bearer <key>` header and parses the prefix **case-insensitively** (`bearer` / `Bearer`). A missing or malformed header yields **401** before any MCP JSON-RPC handling. This is **not** the same helper as `/verification/*` routes in `src/convex/http.ts`, which use a **case-sensitive** `Bearer ` check and feed runner-secret verification; that divergence is **intentional** (see [`docs/conventions/convex.md`](../conventions/convex.md)).
+
 The hosted handler authenticates each request by hashing the presented key and calling one internal Convex mutation that:
 
 1. finds the key by hash,
@@ -69,12 +73,19 @@ Following Anthropic's 2026 guidance on avoiding context bloat:
 
 ### Tools
 
+Registration order in the hosted server (and therefore in MCP **`tools/list`**) is fixed:
+
+1. `celstate_check_credits`
+2. `celstate_generate`
+3. `celstate_get_image`
+4. `celstate_list_images`
+
 | Tool                     | Annotations              | Purpose                                              |
 | ------------------------ | ------------------------ | ---------------------------------------------------- |
+| `celstate_check_credits` | read-only, idempotent    | Check remaining credits                               |
 | `celstate_generate`      | destructive, open-world, non-idempotent | Generate a transparent-background image from a prompt |
 | `celstate_get_image`     | read-only, idempotent    | Get status/download URL for a generation              |
 | `celstate_list_images`   | read-only, idempotent    | List recent generations (paginated, max 10)           |
-| `celstate_check_credits` | read-only, idempotent    | Check remaining credits                               |
 
 ### What We Intentionally Don't Expose
 
@@ -93,6 +104,8 @@ Following Anthropic's 2026 guidance on avoiding context bloat:
 
 The hosted Convex implementation is the only real MCP server implementation.
 
+**Regression tests:** `src/convex/mcp/http.test.ts` exercises CORS rejection, `initialize`, durable key `lastUsedAt`, deliberate `405` on standalone `GET`, and a **`tools/list` smoke check** after `initialize` so the exposed tool **names** stay aligned with registration order above.
+
 Relevant files:
 
 ```text
@@ -101,6 +114,7 @@ src/convex/mcp/handler.ts
 src/convex/mcp/keys.ts
 src/convex/mcp/tools/*.ts
 src/convex/generations.ts
+src/convex/mcp/http.test.ts
 ```
 
 `packages/mcp-server` is now only an optional reverse proxy for environments that want a local URL in front of the hosted endpoint. It no longer defines its own tools, auth, or transport contract.

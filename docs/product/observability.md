@@ -6,7 +6,7 @@
 document_id: "observability-generation-product"
 audience: ["llm", "autonomous_coding_agent"]
 human_readability: "not_required"
-canonical_spec: "docs/implementation/GROWTH-OBSERVABILITY-AGENT-SPEC.md"
+canonical_spec: "docs/product/observability.md"
 scope:
   in: ["PostHog client+server", "Convex generationOpsEvents", "OPS ops webhooks", "Sentry boundary", "Stripe purchase→analytics+Discord"]
   out: ["Vertex pipeline details", "GENERATION_CONFIG", "difference matting internals"]
@@ -343,6 +343,12 @@ interface GenerationsAnalyticsFailureFields {
   failureStage?: "white_background" | "black_background" | "finalizing";
   retryCount?: number;
   error?: string; // user-facing on terminal failed
+  transparentQa?: {
+    version: string;
+    decision: "pass" | "retry_black" | "retry_white_and_black" | "review";
+    reasonCodes: string[];
+    metrics: Record<string, number | boolean | Array<Record<string, number>>>;
+  };
 }
 ```
 
@@ -401,6 +407,12 @@ ON subscription transition prev===generating AND status===failed:
 invariant_no_raw_errors_posthog:
   rule: "PostHog generation_failed MUST NOT include raw error strings"
   allowed_properties: ["generation_id", "failure_kind", "failure_stage", "retry_count"]
+
+transparent_qa_metrics_storage:
+  location: "generations.transparentQa"
+  purpose: "durable per-generation threshold-audit and tuning data for deterministic matte QA, including the now-gated alphaPresence and borderTransparencyRatio signals"
+  excluded_from_posthog: "yes — stored in Convex only, not emitted as analytics event properties"
+  reporting_query: "internal.generations.getTransparentQaMetricsReport (recent-window distributions + sample rows for threshold tuning)"
 ```
 
 ---
@@ -707,7 +719,7 @@ canary:
   - "scripts/production-verification.ts"
   - ".github/workflows/production-verification.yml"
   - "docs/runbooks/CI-AND-CANARIES.md"
-  - "docs/implementation/PRODUCTION-CONFIDENCE-FORMAL-SPEC.md"
+  - "docs/product/production-confidence.md"
 ```
 
 ---

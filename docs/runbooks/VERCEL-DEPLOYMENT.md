@@ -26,7 +26,7 @@ flowchart LR
 
 ## Prerequisites (you complete before execution)
 
-Per [VERCEL-DEPLOYMENT.md](docs/implementation/VERCEL-DEPLOYMENT.md) §2, you must have:
+Before following this runbook, you must have:
 
 - Vercel account + GitHub connected; repo `celstate` visible.
 - Namecheap: either Vercel nameservers (Option A) or A + CNAME records (Option B) for `celstate.com` / `www`.
@@ -49,7 +49,7 @@ PUBLIC_CONVEX_URL=https://<prod-project>.convex.cloud
 
 - **Add adapter**: `pnpm add -D @sveltejs/adapter-vercel`
 - **Remove adapter-auto**: `pnpm remove @sveltejs/adapter-auto`
-- **Update** [svelte.config.js](svelte.config.js): replace `adapter-auto` with `@sveltejs/adapter-vercel`, use `adapter: adapter()` with no options (doc: do not hardcode runtime; Vercel 2026 default is Node 24; set Node version in Vercel project settings if needed).
+- **Update** [svelte.config.js](../../svelte.config.js): replace `adapter-auto` with `@sveltejs/adapter-vercel`, use `adapter: adapter()` with no options (doc: do not hardcode runtime; Vercel 2026 default is Node 24; set Node version in Vercel project settings if needed).
 - **Verify**: `pnpm build` succeeds.
 
 **2026 practice**: Explicit adapter (not `adapter-auto`) for stability and config access. Do not pass `runtime: 'nodejs18.x'` or `'nodejs20.x'`; do not use `split: true` unless required for size limits.
@@ -65,7 +65,7 @@ PUBLIC_CONVEX_URL=https://<prod-project>.convex.cloud
 - `vercel env add PUBLIC_CONVEX_URL production` — paste production Convex URL when prompted. Must be an **origin-only** value (e.g. `https://foo-bar-123.convex.cloud` — no trailing slash, no path).
 - `vercel env add PUBLIC_CONVEX_URL preview` — same value (preview deploys use prod Convex unless you add preview Convex later).
 - **Verify**: `vercel env ls` shows `PUBLIC_CONVEX_URL` for Production and Preview.
-- `PUBLIC_CONVEX_SITE_URL` is **optional** — only set it when `PUBLIC_CONVEX_URL` is not a standard `*.convex.cloud` URL (see [AUTH-PROXY-CONVEX-HARDENING.md](../implementation/AUTH-PROXY-CONVEX-HARDENING.md) §5).
+- `PUBLIC_CONVEX_SITE_URL` is **optional** — only set it when `PUBLIC_CONVEX_URL` is not a standard `*.convex.cloud` URL; when `PUBLIC_CONVEX_URL` is a normal Convex cloud URL, the app derives the matching `*.convex.site` host automatically.
 
 No secrets (Stripe, Gemini) in Vercel; they stay in Convex.
 
@@ -90,7 +90,7 @@ No secrets (Stripe, Gemini) in Vercel; they stay in Convex.
 
 ### 7. Optional: Cursor MCP (for future AI-driven deploys)
 
-- Add Vercel MCP to [.cursor/mcp.json](.cursor/mcp.json) as in doc §3.1 (no code changes required for initial deploy).
+- Add Vercel MCP to `.cursor/mcp.json` as in doc §3.1 (no code changes required for initial deploy).
 
 ---
 
@@ -126,8 +126,8 @@ No secrets (Stripe, Gemini) in Vercel; they stay in Convex.
 
 ## Files to touch
 
-- [svelte.config.js](svelte.config.js) — adapter swap and config.
-- [package.json](package.json) — add `@sveltejs/adapter-vercel`, remove `@sveltejs/adapter-auto`.
-- Optional: [.cursor/mcp.json](.cursor/mcp.json) — Vercel MCP entry.
+- [svelte.config.js](../../svelte.config.js) — adapter swap and config.
+- [package.json](../../package.json) — add `@sveltejs/adapter-vercel`, remove `@sveltejs/adapter-auto`.
+- Optional: `.cursor/mcp.json` — Vercel MCP entry.
 
 No changes to Convex, Stripe, or app code beyond ensuring build passes with the new adapter.

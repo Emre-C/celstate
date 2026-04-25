@@ -8,10 +8,13 @@ import {
   type QueryCtx,
 } from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
+import type { Doc, Id } from "./_generated/dataModel.js";
 import { upsertCurrentUser, getCurrentAppUser } from "./users.js";
 import { assertStripeEnv } from "./lib/stripeEnv.js";
 import { isKnownCreditPackPriceId } from "./lib/stripeCheckout.js";
 import { assertVerificationRunnerSecret } from "./lib/verificationRunnerSecret.js";
+
+type PendingCheckoutRecord = Doc<"pendingCheckouts">;
 
 const CHECKOUT_SESSION_EXPIRY_MS = 26 * 60 * 60 * 1000;
 
@@ -48,7 +51,7 @@ async function requestCheckoutCore(
     name?: string;
     priceId: string;
     requireExistingStripeCustomerId?: boolean;
-    userId: any;
+    userId: Id<"users">;
   },
 ) {
   const checkoutId = await ctx.db.insert("pendingCheckouts", {
@@ -91,7 +94,7 @@ async function getProvisionedCanaryUser(
   return { principal, user };
 }
 
-async function assertNoActiveSettlementCanary(ctx: MutationCtx, userId: any) {
+async function assertNoActiveSettlementCanary(ctx: MutationCtx, userId: Id<"users">) {
   const pendingCheckouts = await ctx.db
     .query("pendingCheckouts")
     .withIndex("by_user_status", (q) => q.eq("userId", userId).eq("status", "pending"))
@@ -132,12 +135,9 @@ async function assertNoActiveSettlementCanary(ctx: MutationCtx, userId: any) {
   }
 }
 
-function toCheckoutStatus(checkout: {
-  checkoutUrl?: string;
-  error?: string;
-  status: "pending" | "ready" | "failed";
-  stripeCheckoutSessionId?: string;
-}) {
+function toCheckoutStatus(
+  checkout: Pick<PendingCheckoutRecord, "checkoutUrl" | "error" | "status" | "stripeCheckoutSessionId">,
+) {
   if (checkout.status === "ready") {
     return {
       status: "ready" as const,
@@ -149,6 +149,25 @@ function toCheckoutStatus(checkout: {
     return { status: "failed" as const, error: checkout.error ?? "Unknown error" };
   }
   return { status: "pending" as const };
+}
+
+async function getCanaryCheckoutStatus(
+  ctx: QueryCtx,
+  args: {
+    checkoutId: Id<"pendingCheckouts">;
+    runnerSecret: string;
+  },
+  principalId: "CANARY_CHECKOUT" | "CANARY_SETTLEMENT",
+) {
+  assertVerificationRunnerSecret(args.runnerSecret);
+  const { principal } = await getProvisionedCanaryUser(ctx, principalId);
+
+  const checkout = await ctx.db.get(args.checkoutId);
+  if (!checkout || checkout.userId !== principal.appUserId) {
+    return null;
+  }
+
+  return toCheckoutStatus(checkout);
 }
 
 export const requestCheckout = mutation({
@@ -238,15 +257,7 @@ export const getCheckoutStatusForCanaryRunner = internalQuery({
   },
   returns: canaryCheckoutStatusValidator,
   handler: async (ctx, args) => {
-    assertVerificationRunnerSecret(args.runnerSecret);
-    const { principal } = await getProvisionedCanaryUser(ctx, "CANARY_CHECKOUT");
-
-    const checkout = await ctx.db.get(args.checkoutId);
-    if (!checkout || checkout.userId !== principal.appUserId) {
-      return null;
-    }
-
-    return toCheckoutStatus(checkout);
+    return await getCanaryCheckoutStatus(ctx, args, "CANARY_CHECKOUT");
   },
 });
 
@@ -257,15 +268,7 @@ export const getSettlementCheckoutStatusForCanaryRunner = internalQuery({
   },
   returns: canaryCheckoutStatusValidator,
   handler: async (ctx, args) => {
-    assertVerificationRunnerSecret(args.runnerSecret);
-    const { principal } = await getProvisionedCanaryUser(ctx, "CANARY_SETTLEMENT");
-
-    const checkout = await ctx.db.get(args.checkoutId);
-    if (!checkout || checkout.userId !== principal.appUserId) {
-      return null;
-    }
-
-    return toCheckoutStatus(checkout);
+    return await getCanaryCheckoutStatus(ctx, args, "CANARY_SETTLEMENT");
   },
 });
 

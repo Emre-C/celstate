@@ -25,13 +25,11 @@
 		{ src: '/images/celstate-an-exploding-wooden-statue-thats-signifi.png', alt: 'Wooden deity disintegrating in an explosion of splinters, pagodas, and dragon heads on a transparent background', label: 'Statue' }
 	];
 
-	// Start on Transparent (checker) — index 0 now
 	let selectedBg = $state(0);
 	let selectedImage = $state(0);
 	let userHasInteracted = $state(false);
 	let autoCycling = $state(false);
 
-	// Auto-cycle: white → dark → emerald → mesh → back to transparent (settle)
 	const autoCycleSequence = [1, 2, 3, 4, 0];
 
 	function selectBackground(i: number) {
@@ -46,7 +44,6 @@
 		let step = 0;
 		let timeoutId: ReturnType<typeof setTimeout>;
 
-		// Start auto-cycling after 1.8s
 		timeoutId = setTimeout(() => {
 			autoCycling = true;
 
@@ -68,7 +65,6 @@
 </script>
 
 <div class="showcase-wrapper min-w-0 max-w-full">
-	<!-- Background switcher -->
 	<div class="mb-3 flex flex-wrap items-center gap-1.5">
 		<span
 			class="mr-2 text-[10px] font-medium tracking-[0.06em] uppercase text-dim"
@@ -85,13 +81,10 @@
 		{/each}
 	</div>
 
-	<!-- Showcase stage -->
 	<div class="relative overflow-hidden border border-border">
-		<!-- Background layer -->
 		<div
 			class="aspect-[4/3] transition-all duration-700 ease-[cubic-bezier(0.25,1,0.5,1)] {backgrounds[selectedBg].class}"
 		>
-			<!-- Image -->
 			<img
 				src={images[selectedImage].src}
 				alt={images[selectedImage].alt}
@@ -101,11 +94,9 @@
 			/>
 		</div>
 
-		<!-- Bottom bar -->
 		<div
 			class="absolute bottom-0 left-0 right-0 flex items-center justify-between border-t border-border bg-bg px-4 py-2.5"
 		>
-			<!-- Image tabs -->
 			<div class="flex items-center gap-1">
 				{#each images as img, i}
 					<button
@@ -119,14 +110,12 @@
 				{/each}
 			</div>
 
-			<!-- Format badge -->
 			<span class="text-[10px] font-medium tracking-wide uppercase text-dim">
 				PNG · 32-bit RGBA
 			</span>
 		</div>
 	</div>
 
-	<!-- Stats row -->
 	<div class="mt-3 flex items-center gap-5 text-[10px] font-medium uppercase tracking-wide text-dim">
 		<span>0 halos</span>
 		<span>Edge-true</span>
@@ -135,7 +124,6 @@
 </div>
 
 <style>
-	/* Sweep highlight on the currently-active button during auto-cycle */
 	.showcase-active-sweep {
 		animation: showcase-sweep 600ms cubic-bezier(0.25, 1, 0.5, 1) forwards;
 	}

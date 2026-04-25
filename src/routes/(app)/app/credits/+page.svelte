@@ -73,14 +73,12 @@
 		</h1>
 	</div>
 
-	<!-- Current balance -->
 	<div class="mb-10">
 		<span class="text-xs font-medium uppercase tracking-[0.06em] {credits === 0 ? 'text-red-700' : 'text-dim'}">
 			{credits} {credits === 1 ? 'credit' : 'credits'} remaining
 		</span>
 	</div>
 
-	<!-- Error -->
 	{#if error}
 		<div class="mb-6 border border-red-300 bg-red-50 px-4 py-3">
 			<div class="flex items-center gap-2">
@@ -93,7 +91,6 @@
 		</div>
 	{/if}
 
-	<!-- Pricing grid -->
 	<div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
 		<div class="flex flex-col border border-border p-6 sm:p-8">
 			<span class="mb-6 block text-[11px] font-medium uppercase tracking-[0.08em] text-accent">Starter</span>

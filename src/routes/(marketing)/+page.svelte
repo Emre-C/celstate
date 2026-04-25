@@ -37,33 +37,27 @@
 	const features = [
 		{
 			title: 'Native Transparency',
-			description: 'Generated with alpha from the start. No background removal step, no edge degradation.',
-			stat: 'Zero-step'
+			description: 'Generated with alpha from the start. No background removal step, no edge degradation.'
 		},
 		{
 			title: 'Clean Edges',
-			description: 'No halos, no color bleed, no fringing. Edges that hold up on any background.',
-			stat: 'Pixel-perfect'
+			description: 'No halos, no color bleed, no fringing. Edges that hold up on any background.'
 		},
 		{
 			title: 'Production Ready',
-			description: '32-bit RGBA PNGs with a proper alpha channel. Drop into any project immediately.',
-			stat: 'Ship-ready'
+			description: '32-bit RGBA PNGs with a proper alpha channel. Drop into any project immediately.'
 		},
 		{
 			title: 'Any Subject',
-			description: 'Logos, characters, product shots, icons, stickers — if you can describe it, we generate it.',
-			stat: 'Unlimited'
+			description: 'Logos, characters, product shots, icons, stickers — if you can describe it, we generate it.'
 		},
 		{
 			title: 'Instant Results',
-			description: 'Type a prompt, get your image. No queues, no waiting, no multi-step workflows.',
-			stat: '<2 seconds'
+			description: 'Type a prompt, get your image. No queues, no waiting, no multi-step workflows.'
 		},
 		{
 			title: 'Simple Pricing',
-			description: 'Start free, buy credit packs when you need more. No subscriptions, no expiration.',
-			stat: 'Pay-as-you-go'
+			description: 'Start free, buy credit packs when you need more. No subscriptions, no expiration.'
 		}
 	];
 
@@ -108,18 +102,15 @@
 </svelte:head>
 
 <div class="min-h-dvh">
-	<!-- Nav -->
 	<NavBar>
 		<Button href="/app" class="px-4 py-1.5" onclick={() => captureLandingCta('nav_start')}>
 			Start Generating
 		</Button>
 	</NavBar>
 
-	<!-- Hero: Split layout — editorial left, interactive proof right -->
 	<section class="pt-24 pb-16 sm:pt-28 sm:pb-20 lg:pt-32 lg:pb-24">
 		<PageContainer>
 			<div class="grid items-start gap-10 sm:gap-12 lg:grid-cols-[1fr_1.4fr] lg:gap-16">
-				<!-- Left: editorial -->
 				<div class="hero-stagger min-w-0 pt-4 lg:pt-8">
 					<div class="hero-item mb-4">
 						<SectionLabel text="AI transparent PNG generator" />
@@ -142,7 +133,6 @@
 					</div>
 				</div>
 
-				<!-- Right: interactive showcase -->
 				<div class="hero-item min-w-0 max-w-full" style="--hero-delay: 4">
 					<HeroShowcase />
 				</div>
@@ -150,7 +140,6 @@
 		</PageContainer>
 	</section>
 
-	<!-- Edge Quality: Zoom inspector -->
 	<section class="border-t border-border py-24">
 		<PageContainer>
 			<div class="mb-10 max-w-xl min-w-0">
@@ -184,7 +173,6 @@
 		</PageContainer>
 	</section>
 
-	<!-- Features: Bento grid -->
 	<section id="features" class="border-t border-border py-16">
 		<PageContainer>
 			<div class="mb-10 max-w-xl min-w-0">
@@ -211,7 +199,6 @@
 		</PageContainer>
 	</section>
 
-	<!-- Pricing -->
 	<section class="border-t border-border py-24">
 		<PageContainer>
 			<div class="mb-10 max-w-xl min-w-0">
@@ -265,7 +252,6 @@
 		</PageContainer>
 	</section>
 
-	<!-- Footer -->
 	<footer class="border-t border-border py-10">
 		<PageContainer>
 			<div

@@ -27,7 +27,6 @@
 </script>
 
 <div class="flex flex-col items-center gap-4 py-8">
-	<!-- Pixel grid scanner -->
 	<div class="grid-scanner" aria-hidden="true">
 		{#each Array(48) as _, i}
 			<div
@@ -37,7 +36,6 @@
 		{/each}
 	</div>
 
-	<!-- Status text -->
 	<div class="flex w-full min-w-0 flex-col items-center gap-1.5 overflow-hidden px-4">
 		<span class="generating-text text-[11px] font-medium uppercase tracking-[0.06em] text-accent">
 			Generating

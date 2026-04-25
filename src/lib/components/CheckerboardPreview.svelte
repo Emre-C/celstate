@@ -5,10 +5,8 @@
 </script>
 
 <div class="checkerboard-preview relative overflow-hidden border border-border {className}">
-	<!-- Checkerboard background -->
 	<div class="checkerboard-bg absolute inset-0"></div>
 
-	<!-- Image -->
 	<img
 		{src}
 		{alt}
@@ -16,7 +14,6 @@
 		onload={() => (loaded = true)}
 	/>
 
-	<!-- Corner brackets — targeting reticle aesthetic -->
 	<svg class="pointer-events-none absolute top-2 left-2 h-4 w-4 text-accent/40" viewBox="0 0 16 16">
 		<path d="M0 5V0H5" stroke="currentColor" stroke-width="1.5" fill="none" />
 	</svg>

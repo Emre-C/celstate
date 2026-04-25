@@ -18,7 +18,30 @@ import {
 } from "./lib/ops.js";
 import { canGrantCreditsForCheckoutSession } from "./lib/stripeCheckout.js";
 import { handleMcpRequest } from "./mcp/handler.js";
-import { jsonResponse, jsonRouteHandler, parseBearer } from "./lib/httpResponses.js";
+
+const jsonResponse = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+
+const parseBearer = (request: Request): string => {
+  const auth = request.headers.get("authorization");
+  return auth?.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+};
+
+const jsonRouteHandler = async <T>(
+  handler: () => Promise<T>,
+): Promise<Response> => {
+  try {
+    const result = await handler();
+    return jsonResponse(result);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const status = msg === "Unauthorized" ? 401 : 400;
+    return jsonResponse({ error: msg }, status);
+  }
+};
 
 type CreditPackCheckoutEvent =
   | Stripe.CheckoutSessionAsyncPaymentSucceededEvent

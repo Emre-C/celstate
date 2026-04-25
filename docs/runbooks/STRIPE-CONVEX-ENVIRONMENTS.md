@@ -38,7 +38,7 @@ Before or when going live with real charges:
 4. Create/configure the **live** webhook endpoint in Stripe; set `STRIPE_WEBHOOK_SECRET` to that endpoint’s signing secret (`whsec_…`).
 5. Set `SITE_URL` to your real public origin (e.g. `https://www.example.com`).
 
-Related: [PAYMENT-IMPLEMENTATION.md](./PAYMENT-IMPLEMENTATION.md), [PRODUCTION-DEPLOYMENT.md](./PRODUCTION-DEPLOYMENT.md).
+Related: [Payments System](../product/payments-system.md), [Vercel Deployment](./VERCEL-DEPLOYMENT.md).
 
 ---
 

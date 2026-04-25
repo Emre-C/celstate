@@ -4,6 +4,7 @@ import {
   canaryPrincipalBindingFields,
   creditGrantReasonValidator,
   generationStageValidator,
+  transparentQaValidator,
   verificationEvidenceFields,
   verificationRunFields,
 } from "./lib/validators.js";
@@ -64,6 +65,7 @@ export default defineSchema({
       v.literal("unknown")
     )),
     failureStage: v.optional(generationStageValidator),
+    transparentQa: v.optional(transparentQaValidator),
     generationTimeMs: v.optional(v.number()),
     retryCount: v.optional(v.number()),
     whiteBgRetryCount: v.optional(v.number()),
@@ -77,6 +79,7 @@ export default defineSchema({
   })
     .index("by_user", ["userId", "createdAt"])
     .index("by_user_status", ["userId", "status"])
+    .index("by_createdAt", ["createdAt"])
     .index("by_status", ["status"]),
 
   generationOpsEvents: defineTable({

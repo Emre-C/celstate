@@ -1,5 +1,25 @@
 # Assisted Mode — Technical Specification
 
+## Implementation Review Status
+
+Reviewed against the current codebase on 2026-04-15.
+
+Status: Not implemented. This document remains in `docs/implementation`.
+
+Evidence from the current codebase:
+
+- `src/convex/schema.ts` defines `users` and `generations` without `assistedModeEnabled`, `assistedSessions`, `originalPrompt`, or `assistedSessionId`.
+- `src/convex/assistedMode.ts`, `src/convex/lib/designer.ts`, and `src/convex/lib/designerPrompts.ts` do not exist.
+- `src/convex/generations.ts` only exposes the direct `requestGeneration({ prompt, referenceStorageIds, aspectRatio })` flow; there is no assisted-session orchestration, clarifying-question action, or prompt rewrite stage.
+- `src/lib/components/PromptInput.svelte` includes reference-upload and aspect-ratio controls only; it does not render the assisted toggle or inline clarifying-question panel described below.
+- `src/routes/(app)/app/+page.svelte` submits prompts directly to `api.generations.requestGeneration`; it does not subscribe to or orchestrate assisted-mode session state.
+- No Minimax client/config wiring or assisted-mode analytics events exist in the application source.
+
+Reason this stays in implementation:
+
+- The shipped product still uses the direct prompt-to-generation path.
+- The spec's persistence layer, Convex actions/mutations, and client-side assisted-mode UX are still planned work rather than implemented behavior.
+
 ## 1. System Overview
 
 ```

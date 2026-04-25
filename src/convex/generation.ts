@@ -6,6 +6,7 @@ import { internal } from "./_generated/api.js";
 import type { Doc, Id } from "./_generated/dataModel.js";
 import sharp from "sharp";
 import { GENERATION_CONFIG } from "./lib/config.js";
+import { mergedReferenceStorageIds } from "./lib/referenceStorageIds.js";
 import {
   createChatSession,
   type GeminiImageResult,
@@ -31,8 +32,38 @@ import {
   validateBlackBackground,
   validateDimensionMatch,
 } from "./lib/validation.js";
-import { differenceMatte } from "./lib/matte.js";
+import { differenceMatte, type MatteOutput } from "./lib/matte.js";
 import { optimizeForWeb } from "./lib/optimize.js";
+import {
+  analyzeTransparentOutput,
+  buildTransparentQaRetryPlan,
+  type TransparentQaDecision,
+  type TransparentQaReasonCode,
+  type TransparentQaResult,
+} from "./lib/transparentQa.js";
+
+interface DecodedImage {
+  pixels: Uint8ClampedArray;
+  width: number;
+  height: number;
+}
+
+export class AspectRatioMismatchError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AspectRatioMismatchError";
+  }
+}
+
+export function buildBlackBackgroundStagePrompt(retryInstruction?: string): string {
+  return retryInstruction ? buildBlackBgRetryPrompt(retryInstruction) : buildBlackBgPrompt();
+}
+
+export function shouldRecoverFinalizingWithFullRerender(
+  error: unknown,
+): error is AspectRatioMismatchError {
+  return error instanceof AspectRatioMismatchError;
+}
 
 function aspectRatioMatches(
   w1: number,
@@ -49,7 +80,7 @@ function aspectRatioMatches(
 async function decodeImage(
   base64: string,
   mimeType?: string,
-): Promise<{ pixels: Uint8ClampedArray; width: number; height: number }> {
+): Promise<DecodedImage> {
   const raw = Buffer.from(base64, "base64");
 
   if (raw.length === 0) {
@@ -120,10 +151,17 @@ async function resizeToMatch(
 type StageActionContext = Pick<ActionCtx, "runMutation" | "runQuery" | "storage">;
 
 interface PipelineResult {
-  finalPng: Buffer;
-  whiteBgPng: Buffer;
-  blackBgPng: Buffer;
+  matteOutput: MatteOutput;
+  whiteDecoded: DecodedImage;
+  blackDecoded: DecodedImage;
   dimensionMismatch: boolean;
+}
+
+function isRunnableGenerationStage(
+  generation: Doc<"generations"> | null,
+  stage: Doc<"generations">["stage"],
+): generation is Doc<"generations"> {
+  return !!generation && generation.status === "generating" && generation.stage === stage;
 }
 
 async function updateStatus(
@@ -183,6 +221,18 @@ function createUserFacingFailureMessage(): string {
   return "Something went wrong generating your image. Your credit has been refunded — please try again.";
 }
 
+function throwStageValidationFailure(
+  stage: "white_background" | "black_background",
+  reason: string | undefined,
+  retryInstruction: string | undefined,
+): never {
+  const stageLabel = stage === "white_background" ? "White" : "Black";
+  throw Object.assign(
+    new Error(`${stageLabel} background validation failed: ${reason ?? "unknown reason"}`),
+    { retryInstruction },
+  );
+}
+
 async function handleStageFailure(
   ctx: StageActionContext,
   generationId: Id<"generations">,
@@ -208,6 +258,122 @@ async function handleStageFailure(
     generationId,
     error: createUserFacingFailureMessage(),
     internalError: rawError,
+  });
+}
+
+async function scheduleFullRerenderOrFail(
+  ctx: StageActionContext,
+  generation: Doc<"generations">,
+  options: {
+    internalError: string;
+    reasonCodes: TransparentQaReasonCode[];
+    transparentQa?: TransparentQaResult;
+    userFacingError?: string;
+  },
+): Promise<void> {
+  const retryCount = generation.whiteBgRetryCount ?? 0;
+  if (!hasRemainingStageRetries("white_background", retryCount)) {
+    await ctx.runMutation(internal.generations.failGeneration, {
+      generationId: generation._id,
+      error: options.userFacingError ?? createUserFacingFailureMessage(),
+      internalError: options.internalError,
+      transparentQa: options.transparentQa,
+    });
+    return;
+  }
+
+  const retryPlan = buildTransparentQaRetryPlan("retry_white_and_black", options.reasonCodes);
+  await ctx.runMutation(internal.generations.scheduleStageRetry, {
+    generationId: generation._id,
+    retryCount: retryCount + 1,
+    retryInstruction: retryPlan.retryInstruction,
+    downstreamRetryInstruction: retryPlan.downstreamRetryInstruction,
+    stage: "white_background",
+    transparentQa: options.transparentQa,
+  });
+}
+
+function buildTransparentQaInternalError(result: TransparentQaResult): string {
+  const metrics = result.metrics;
+  const summary = [
+    `decision=${result.decision}`,
+    `alphaPresence=${metrics.alphaPresence.toFixed(4)}`,
+    `borderTransparencyRatio=${metrics.borderTransparencyRatio.toFixed(4)}`,
+    `recomposition=${metrics.recompositionResidual.toFixed(4)}`,
+    `channelDisagreement=${metrics.channelDisagreement.toFixed(4)}`,
+    `alphaResidual=${metrics.alphaResidual.toFixed(4)}`,
+    `externalSpill=${metrics.externalSpill.toFixed(4)}`,
+    `haloTail=${metrics.haloTail.toFixed(4)}`,
+    `topologyVolatility=${metrics.topologyVolatility.toFixed(4)}`,
+    `persistentHoles=${metrics.persistentHoleCount}`,
+    `fragileHoles=${metrics.fragileHoleCount}`,
+  ].join(" ");
+  const reasonCodes = result.reasonCodes.length > 0 ? result.reasonCodes.join(",") : "none";
+  return `Transparent background QA failed (${reasonCodes}) ${summary}`;
+}
+
+function getStageRetryCount(
+  generation: Doc<"generations">,
+  stage: "white_background" | "black_background",
+): number {
+  return stage === "white_background"
+    ? generation.whiteBgRetryCount ?? 0
+    : generation.blackBgRetryCount ?? 0;
+}
+
+async function handleTransparentQaFailure(
+  ctx: StageActionContext,
+  generation: Doc<"generations">,
+  qa: TransparentQaResult,
+): Promise<void> {
+  const internalError = buildTransparentQaInternalError(qa);
+  const userFacingError =
+    qa.decision === "review"
+      ? "We couldn't verify a production-ready transparent background for this image. Your credit has been refunded — please try again."
+      : createUserFacingFailureMessage();
+
+  if (qa.decision === "review") {
+    await ctx.runMutation(internal.generations.failGeneration, {
+      generationId: generation._id,
+      error: userFacingError,
+      internalError,
+      transparentQa: qa,
+    });
+    return;
+  }
+
+  if (qa.decision === "retry_white_and_black") {
+    await scheduleFullRerenderOrFail(ctx, generation, {
+      internalError,
+      reasonCodes: qa.reasonCodes,
+      transparentQa: qa,
+      userFacingError,
+    });
+    return;
+  }
+
+  const retryStage: "black_background" = "black_background";
+  const retryCount = getStageRetryCount(generation, retryStage);
+  if (hasRemainingStageRetries(retryStage, retryCount)) {
+    const retryPlan = buildTransparentQaRetryPlan("retry_black", qa.reasonCodes);
+    await ctx.runMutation(internal.generations.scheduleStageRetry, {
+      generationId: generation._id,
+      retryCount: retryCount + 1,
+      retryInstruction: retryPlan.retryInstruction,
+      stage: retryStage,
+      transparentQa: qa,
+    });
+    return;
+  }
+
+  await scheduleFullRerenderOrFail(ctx, generation, {
+    internalError,
+    reasonCodes: qa.reasonCodes,
+    transparentQa: {
+      ...qa,
+      decision: "retry_white_and_black",
+    },
+    userFacingError,
   });
 }
 
@@ -238,7 +404,7 @@ async function finalizePipeline(
       blackDecoded.width,
       blackDecoded.height,
     )) {
-      throw new Error(
+      throw new AspectRatioMismatchError(
         `Aspect ratio mismatch: white=${whiteDecoded.width}x${whiteDecoded.height}, black=${blackDecoded.width}x${blackDecoded.height}.`,
       );
     }
@@ -282,17 +448,10 @@ async function finalizePipeline(
     height: whiteDecoded.height,
   });
 
-  await updateStatus(ctx, generation._id, "Preparing final image…");
-  const [finalPng, whiteBgPng, blackBgPng] = await Promise.all([
-    encodePng(matteOutput.pixels, matteOutput.width, matteOutput.height),
-    encodePng(whiteDecoded.pixels, whiteDecoded.width, whiteDecoded.height),
-    encodePng(blackDecoded.pixels, blackDecoded.width, blackDecoded.height),
-  ]);
-
   return {
-    finalPng,
-    whiteBgPng,
-    blackBgPng,
+    matteOutput,
+    whiteDecoded,
+    blackDecoded,
     dimensionMismatch: hadDimensionMismatch,
   };
 }
@@ -306,7 +465,7 @@ export const generateWhiteBackground = internalAction({
   returns: v.null(),
   handler: async (ctx, args) => {
     const generation = await getGeneration(ctx, args.generationId);
-    if (!generation || generation.status !== "generating" || generation.stage !== "white_background") {
+    if (!isRunnableGenerationStage(generation, "white_background")) {
       return null;
     }
 
@@ -319,7 +478,7 @@ export const generateWhiteBackground = internalAction({
 
     try {
       const runtimeConfig = readGeminiRuntimeConfigFromEnv();
-      const referenceImages = await loadStoredImages(ctx, generation.referenceStorageIds);
+      const referenceImages = await loadStoredImages(ctx, mergedReferenceStorageIds(generation));
       const session = createChatSession(runtimeConfig, { aspectRatio: generation.aspectRatio });
       const retryInstruction = retryCount > 0 ? generation.whiteBgRetryInstruction : undefined;
       const prompt = referenceImages.length > 0
@@ -342,10 +501,7 @@ export const generateWhiteBackground = internalAction({
       const validation = validateWhiteBackground(decoded.pixels, decoded.width, decoded.height);
       if (!validation.valid) {
         const repair = buildRepairInstruction("white_background", validation);
-        throw Object.assign(
-          new Error(`White background validation failed: ${validation.reason}`),
-          { retryInstruction: repair },
-        );
+        throwStageValidationFailure("white_background", validation.reason, repair);
       }
 
       const whiteBgStorageId = await storeGeneratedImage(ctx, result);
@@ -368,7 +524,7 @@ export const generateBlackBackground = internalAction({
   returns: v.null(),
   handler: async (ctx, args) => {
     const generation = await getGeneration(ctx, args.generationId);
-    if (!generation || generation.status !== "generating" || generation.stage !== "black_background") {
+    if (!isRunnableGenerationStage(generation, "black_background")) {
       return null;
     }
 
@@ -392,8 +548,8 @@ export const generateBlackBackground = internalAction({
       const runtimeConfig = readGeminiRuntimeConfigFromEnv();
       const session = createChatSession(runtimeConfig, { aspectRatio: generation.aspectRatio });
       const whiteBgImage = await loadStoredImage(ctx, generation.whiteBgStorageId!);
-      const retryInstruction = retryCount > 0 ? generation.blackBgRetryInstruction : undefined;
-      const prompt = retryCount === 0 ? buildBlackBgPrompt() : buildBlackBgRetryPrompt(retryInstruction);
+      const retryInstruction = generation.blackBgRetryInstruction;
+      const prompt = buildBlackBackgroundStagePrompt(retryInstruction);
 
       let result;
       let rawError: string | undefined;
@@ -409,10 +565,7 @@ export const generateBlackBackground = internalAction({
       const validation = validateBlackBackground(decoded.pixels, decoded.width, decoded.height);
       if (!validation.valid) {
         const repair = buildRepairInstruction("black_background", validation);
-        throw Object.assign(
-          new Error(`Black background validation failed: ${validation.reason}`),
-          { retryInstruction: repair },
-        );
+        throwStageValidationFailure("black_background", validation.reason, repair);
       }
 
       const blackBgStorageId = await storeGeneratedImage(ctx, result);
@@ -435,7 +588,7 @@ export const finalizeGeneration = internalAction({
   returns: v.null(),
   handler: async (ctx, args) => {
     const generation = await getGeneration(ctx, args.generationId);
-    if (!generation || generation.status !== "generating" || generation.stage !== "finalizing") {
+    if (!isRunnableGenerationStage(generation, "finalizing")) {
       return null;
     }
 
@@ -457,15 +610,38 @@ export const finalizeGeneration = internalAction({
 
     try {
       const result = await finalizePipeline(ctx, generation);
-      const whiteBgBlob = new Blob([new Uint8Array(result.whiteBgPng)], { type: "image/png" });
+      await updateStatus(ctx, args.generationId, "Verifying transparency…");
+      const transparentQa = analyzeTransparentOutput({
+        whiteBg: result.whiteDecoded.pixels,
+        blackBg: result.blackDecoded.pixels,
+        matte: result.matteOutput,
+        width: result.matteOutput.width,
+        height: result.matteOutput.height,
+        prompt: generation.prompt,
+        dimensionMismatch: result.dimensionMismatch,
+      });
+
+      if (transparentQa.decision !== "pass") {
+        await handleTransparentQaFailure(ctx, generation, transparentQa);
+        return null;
+      }
+
+      await updateStatus(ctx, args.generationId, "Preparing final image…");
+      const [finalPng, whiteBgPng, blackBgPng] = await Promise.all([
+        encodePng(result.matteOutput.pixels, result.matteOutput.width, result.matteOutput.height),
+        encodePng(result.whiteDecoded.pixels, result.whiteDecoded.width, result.whiteDecoded.height),
+        encodePng(result.blackDecoded.pixels, result.blackDecoded.width, result.blackDecoded.height),
+      ]);
+
+      const whiteBgBlob = new Blob([new Uint8Array(whiteBgPng)], { type: "image/png" });
       const whiteBgStorageId = await ctx.storage.store(whiteBgBlob);
-      const blackBgBlob = new Blob([new Uint8Array(result.blackBgPng)], { type: "image/png" });
+      const blackBgBlob = new Blob([new Uint8Array(blackBgPng)], { type: "image/png" });
       const blackBgStorageId = await ctx.storage.store(blackBgBlob);
-      const resultBlob = new Blob([new Uint8Array(result.finalPng)], { type: "image/png" });
+      const resultBlob = new Blob([new Uint8Array(finalPng)], { type: "image/png" });
       const resultStorageId = await ctx.storage.store(resultBlob);
 
       await updateStatus(ctx, args.generationId, "Optimizing for download…");
-      const optimizedPng = await optimizeForWeb(result.finalPng);
+      const optimizedPng = await optimizeForWeb(finalPng);
       const optimizedBlob = new Blob([new Uint8Array(optimizedPng)], { type: "image/png" });
       const optimizedStorageId = await ctx.storage.store(optimizedBlob);
 
@@ -477,9 +653,17 @@ export const finalizeGeneration = internalAction({
         optimizedStorageId,
         resultStorageId,
         retryCount: generation.retryCount ?? 0,
+        transparentQa,
         whiteBgStorageId,
       });
     } catch (error) {
+      if (shouldRecoverFinalizingWithFullRerender(error)) {
+        await scheduleFullRerenderOrFail(ctx, generation, {
+          internalError: error.message,
+          reasonCodes: ["dimension_mismatch"],
+        });
+        return null;
+      }
       await handleStageFailure(ctx, args.generationId, "finalizing", retryCount, error);
     }
 

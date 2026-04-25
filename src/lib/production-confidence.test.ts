@@ -27,10 +27,20 @@ import {
 	transitionLiveSettlementCanary,
 	type AuthCanaryEvidence,
 	type CheckoutSessionCanaryEvidence,
+	type CheckoutSessionCanaryEvent,
+	type CheckoutSessionCanaryState,
 	type CoordinatorDomainVerdict,
+	type CoordinatorEvent,
+	type CoordinatorState,
+	type DomainLifecycleEvent,
 	type DomainVerdictRecord,
+	type FeatureDomain,
+	type GenerationCanaryEvent,
 	type GenerationCanaryEvidence,
+	type GenerationCanaryState,
+	type LiveSettlementCanaryEvent,
 	type LiveSettlementCanaryEvidence,
+	type LiveSettlementCanaryState,
 } from "./production-confidence.js";
 
 const req = (domain: DomainVerdictRecord["domain"], verdict: DomainVerdictRecord["verdict"]): DomainVerdictRecord => ({
@@ -573,5 +583,351 @@ describe("gate config validation", () => {
 				requiredOnSchedule: ["AUTH"],
 			}),
 		).toThrow();
+	});
+
+	it("rejects requiredOnDeploy beyond MAX_REQUIRED_DEPLOY_DOMAINS", () => {
+		expect(() =>
+			assertValidGateConfig({
+				requiredOnDeploy: ["AUTH", "GENERATION", "CHECKOUT_SESSION", "LIVE_SETTLEMENT"],
+				requiredOnSchedule: ["AUTH"],
+			}),
+		).toThrow();
+	});
+});
+
+// ─── Totality across (state × event) for every transition (closes spec VO4) ──────
+
+const COORDINATOR_STATES: CoordinatorState[] = ["IDLE", "RUNNING", "PASSED", "FAILED"];
+const COORDINATOR_EVENTS: CoordinatorEvent[] = ["E_START", "E_FINALIZE_PASS", "E_FINALIZE_FAIL", "E_NOOP"];
+const COORDINATOR_DOMAIN_VERDICTS: CoordinatorDomainVerdict[] = [
+	"ABSENT", "PENDING", "RUNNING", "PASSED", "FAILED", "TIMEOUT", "SKIPPED",
+];
+const DOMAIN_LIFECYCLE_EVENTS: DomainLifecycleEvent[] = [
+	"E_REQUIRE", "E_BEGIN", "E_PASS", "E_FAIL", "E_TIMEOUT", "E_SKIP", "E_NOOP",
+];
+const GENERATION_STATES: GenerationCanaryState[] = [
+	"IDLE", "REQUESTED", "WHITE_BACKGROUND", "BLACK_BACKGROUND", "FINALIZING",
+	"COMPLETE", "FAILED", "REFUNDED", "TIMEOUT",
+];
+const GENERATION_EVENTS: GenerationCanaryEvent[] = [
+	"E_REQUEST_ACCEPTED", "E_ENTER_WHITE_BACKGROUND", "E_ENTER_BLACK_BACKGROUND",
+	"E_ENTER_FINALIZING", "E_COMPLETE", "E_FAIL", "E_TIMEOUT", "E_REFUND", "E_NOOP",
+];
+const CHECKOUT_STATES: CheckoutSessionCanaryState[] = [
+	"IDLE", "REQUESTED", "PENDING", "READY", "FAILED", "TIMEOUT",
+];
+const CHECKOUT_EVENTS: CheckoutSessionCanaryEvent[] = [
+	"E_REQUEST_ACCEPTED", "E_PENDING_OBSERVED", "E_READY_OBSERVED",
+	"E_FAIL_OBSERVED", "E_TIMEOUT", "E_NOOP",
+];
+const LIVE_SETTLEMENT_STATES: LiveSettlementCanaryState[] = [
+	"IDLE", "SESSION_READY", "PAYMENT_COMMITTED", "PAID_WEBHOOK_OBSERVED",
+	"GRANT_RECORDED", "REFUND_RECORDED", "FAILED", "TIMEOUT",
+];
+const LIVE_SETTLEMENT_EVENTS: LiveSettlementCanaryEvent[] = [
+	"E_SESSION_READY", "E_PAYMENT_COMMITTED", "E_PAID_WEBHOOK_OBSERVED",
+	"E_GRANT_RECORDED", "E_REFUND_RECORDED", "E_FAIL", "E_TIMEOUT", "E_NOOP",
+];
+
+describe("transition totality (§6 δ functions are total over State × Event)", () => {
+	it("transitionDomainVerdict never throws and always returns a known verdict", () => {
+		const valid = new Set<CoordinatorDomainVerdict>(COORDINATOR_DOMAIN_VERDICTS);
+		for (const verdict of COORDINATOR_DOMAIN_VERDICTS) {
+			for (const event of DOMAIN_LIFECYCLE_EVENTS) {
+				let next: CoordinatorDomainVerdict | undefined;
+				expect(() => { next = transitionDomainVerdict(verdict, event); }).not.toThrow();
+				expect(valid.has(next!)).toBe(true);
+			}
+		}
+	});
+
+	it("transitionCoordinator never throws and always returns a known state", () => {
+		const valid = new Set<CoordinatorState>(COORDINATOR_STATES);
+		const requiredOnDeploy: FeatureDomain[] = ["AUTH", "GENERATION", "CHECKOUT_SESSION"];
+		// Two representative outcome vectors: all-PASSED and AUTH-FAILED.
+		const verdictVectors: Record<FeatureDomain, CoordinatorDomainVerdict>[] = [
+			{ AUTH: "PASSED", GENERATION: "PASSED", CHECKOUT_SESSION: "PASSED", LIVE_SETTLEMENT: "PENDING" },
+			{ AUTH: "FAILED", GENERATION: "PASSED", CHECKOUT_SESSION: "PASSED", LIVE_SETTLEMENT: "PENDING" },
+		];
+		for (const state of COORDINATOR_STATES) {
+			for (const event of COORDINATOR_EVENTS) {
+				for (const verdicts of verdictVectors) {
+					let next: CoordinatorState | undefined;
+					expect(() => { next = transitionCoordinator(state, event, verdicts, requiredOnDeploy); }).not.toThrow();
+					expect(valid.has(next!)).toBe(true);
+				}
+			}
+		}
+	});
+
+	it("transitionGenerationCanary never throws and always returns a known state", () => {
+		const valid = new Set<GenerationCanaryState>(GENERATION_STATES);
+		for (const state of GENERATION_STATES) {
+			for (const event of GENERATION_EVENTS) {
+				let next: GenerationCanaryState | undefined;
+				expect(() => { next = transitionGenerationCanary(state, event); }).not.toThrow();
+				expect(valid.has(next!)).toBe(true);
+			}
+		}
+	});
+
+	it("transitionCheckoutSessionCanary never throws and always returns a known state", () => {
+		const valid = new Set<CheckoutSessionCanaryState>(CHECKOUT_STATES);
+		for (const state of CHECKOUT_STATES) {
+			for (const event of CHECKOUT_EVENTS) {
+				let next: CheckoutSessionCanaryState | undefined;
+				expect(() => { next = transitionCheckoutSessionCanary(state, event); }).not.toThrow();
+				expect(valid.has(next!)).toBe(true);
+			}
+		}
+	});
+
+	it("transitionLiveSettlementCanary never throws and always returns a known state", () => {
+		const valid = new Set<LiveSettlementCanaryState>(LIVE_SETTLEMENT_STATES);
+		for (const state of LIVE_SETTLEMENT_STATES) {
+			for (const event of LIVE_SETTLEMENT_EVENTS) {
+				let next: LiveSettlementCanaryState | undefined;
+				expect(() => { next = transitionLiveSettlementCanary(state, event); }).not.toThrow();
+				expect(valid.has(next!)).toBe(true);
+			}
+		}
+	});
+
+	it("terminal states are absorbing for every transition function", () => {
+		const coordinatorRequired: FeatureDomain[] = ["AUTH", "GENERATION", "CHECKOUT_SESSION"];
+		const coordinatorVerdicts: Record<FeatureDomain, CoordinatorDomainVerdict> = {
+			AUTH: "PASSED", GENERATION: "PASSED", CHECKOUT_SESSION: "PASSED", LIVE_SETTLEMENT: "PENDING",
+		};
+		for (const state of ["PASSED", "FAILED"] as const satisfies readonly CoordinatorState[]) {
+			for (const event of COORDINATOR_EVENTS) {
+				expect(transitionCoordinator(state, event, coordinatorVerdicts, coordinatorRequired)).toBe(state);
+			}
+		}
+		for (const verdict of ["PASSED", "FAILED", "TIMEOUT", "SKIPPED"] satisfies CoordinatorDomainVerdict[]) {
+			for (const event of DOMAIN_LIFECYCLE_EVENTS) {
+				expect(transitionDomainVerdict(verdict, event)).toBe(verdict);
+			}
+		}
+		for (const state of ["COMPLETE", "REFUNDED"] satisfies GenerationCanaryState[]) {
+			for (const event of GENERATION_EVENTS) {
+				expect(transitionGenerationCanary(state, event)).toBe(state);
+			}
+		}
+		for (const state of ["READY", "FAILED", "TIMEOUT"] satisfies CheckoutSessionCanaryState[]) {
+			for (const event of CHECKOUT_EVENTS) {
+				expect(transitionCheckoutSessionCanary(state, event)).toBe(state);
+			}
+		}
+		for (const state of ["REFUND_RECORDED", "FAILED", "TIMEOUT"] satisfies LiveSettlementCanaryState[]) {
+			for (const event of LIVE_SETTLEMENT_EVENTS) {
+				expect(transitionLiveSettlementCanary(state, event)).toBe(state);
+			}
+		}
+	});
+});
+
+// ─── Coordinator §6.1: full δd path coverage ──────────────────────────────────
+
+describe("transitionDomainVerdict path coverage", () => {
+	it("ABSENT → PENDING → RUNNING → PASSED is the happy path", () => {
+		expect(transitionDomainVerdict("ABSENT", "E_REQUIRE")).toBe("PENDING");
+		expect(transitionDomainVerdict("PENDING", "E_BEGIN")).toBe("RUNNING");
+		expect(transitionDomainVerdict("RUNNING", "E_PASS")).toBe("PASSED");
+	});
+
+	it("PENDING → SKIPPED is allowed; RUNNING → SKIPPED is not", () => {
+		expect(transitionDomainVerdict("PENDING", "E_SKIP")).toBe("SKIPPED");
+		expect(transitionDomainVerdict("RUNNING", "E_SKIP")).toBe("RUNNING");
+	});
+
+	it("E_FAIL and E_TIMEOUT terminate from PENDING and RUNNING", () => {
+		expect(transitionDomainVerdict("PENDING", "E_FAIL")).toBe("FAILED");
+		expect(transitionDomainVerdict("RUNNING", "E_FAIL")).toBe("FAILED");
+		expect(transitionDomainVerdict("PENDING", "E_TIMEOUT")).toBe("TIMEOUT");
+		expect(transitionDomainVerdict("RUNNING", "E_TIMEOUT")).toBe("TIMEOUT");
+	});
+
+	it("E_NOOP never changes state", () => {
+		for (const v of COORDINATOR_DOMAIN_VERDICTS) {
+			expect(transitionDomainVerdict(v, "E_NOOP")).toBe(v);
+		}
+	});
+});
+
+describe("transitionCoordinator path coverage", () => {
+	const required: FeatureDomain[] = ["AUTH", "GENERATION", "CHECKOUT_SESSION"];
+	const allPassed: Record<FeatureDomain, CoordinatorDomainVerdict> = {
+		AUTH: "PASSED", GENERATION: "PASSED", CHECKOUT_SESSION: "PASSED", LIVE_SETTLEMENT: "PENDING",
+	};
+	const oneTimeout: Record<FeatureDomain, CoordinatorDomainVerdict> = {
+		AUTH: "PASSED", GENERATION: "TIMEOUT", CHECKOUT_SESSION: "PASSED", LIVE_SETTLEMENT: "PENDING",
+	};
+
+	it("E_FINALIZE_PASS in RUNNING stays RUNNING when not all required passed", () => {
+		const partial: Record<FeatureDomain, CoordinatorDomainVerdict> = {
+			AUTH: "PASSED", GENERATION: "PENDING", CHECKOUT_SESSION: "PASSED", LIVE_SETTLEMENT: "PENDING",
+		};
+		expect(transitionCoordinator("RUNNING", "E_FINALIZE_PASS", partial, required)).toBe("RUNNING");
+	});
+
+	it("E_FINALIZE_FAIL in RUNNING stays RUNNING when no required is in a bad terminal", () => {
+		const allPending: Record<FeatureDomain, CoordinatorDomainVerdict> = {
+			AUTH: "PENDING", GENERATION: "PENDING", CHECKOUT_SESSION: "PENDING", LIVE_SETTLEMENT: "PENDING",
+		};
+		expect(transitionCoordinator("RUNNING", "E_FINALIZE_FAIL", allPending, required)).toBe("RUNNING");
+	});
+
+	it("TIMEOUT in a required domain triggers FAILED on E_FINALIZE_FAIL", () => {
+		const s = transitionCoordinator("RUNNING", "E_FINALIZE_FAIL", oneTimeout, required);
+		expect(s).toBe("FAILED");
+	});
+
+	it("E_START from non-IDLE is a no-op", () => {
+		expect(transitionCoordinator("RUNNING", "E_START", allPassed, required)).toBe("RUNNING");
+		expect(transitionCoordinator("PASSED", "E_START", allPassed, required)).toBe("PASSED");
+	});
+});
+
+// ─── Lifecycle §6.2/6.3/6.4: terminal absorption + faulting paths ────────────
+
+describe("generation canary lifecycle (§6.2) path coverage", () => {
+	it("FAIL during any active phase terminates as FAILED", () => {
+		for (const s of ["REQUESTED", "WHITE_BACKGROUND", "BLACK_BACKGROUND", "FINALIZING"] as const) {
+			expect(transitionGenerationCanary(s, "E_FAIL")).toBe("FAILED");
+		}
+	});
+
+	it("TIMEOUT during any active phase terminates as TIMEOUT", () => {
+		for (const s of ["REQUESTED", "WHITE_BACKGROUND", "BLACK_BACKGROUND", "FINALIZING"] as const) {
+			expect(transitionGenerationCanary(s, "E_TIMEOUT")).toBe("TIMEOUT");
+		}
+	});
+
+	it("REFUND is permitted only from FAILED or TIMEOUT", () => {
+		expect(transitionGenerationCanary("FAILED", "E_REFUND")).toBe("REFUNDED");
+		expect(transitionGenerationCanary("TIMEOUT", "E_REFUND")).toBe("REFUNDED");
+		expect(transitionGenerationCanary("REQUESTED", "E_REFUND")).toBe("REQUESTED");
+		expect(transitionGenerationCanary("COMPLETE", "E_REFUND")).toBe("COMPLETE");
+	});
+});
+
+describe("checkout-session canary lifecycle (§6.3) path coverage", () => {
+	it("REQUESTED → PENDING → READY is the canonical path", () => {
+		let s: CheckoutSessionCanaryState = transitionCheckoutSessionCanary("IDLE", "E_REQUEST_ACCEPTED");
+		s = transitionCheckoutSessionCanary(s, "E_PENDING_OBSERVED");
+		s = transitionCheckoutSessionCanary(s, "E_READY_OBSERVED");
+		expect(s).toBe("READY");
+	});
+
+	it("REQUESTED can shortcut to READY without observing PENDING", () => {
+		expect(transitionCheckoutSessionCanary("REQUESTED", "E_READY_OBSERVED")).toBe("READY");
+	});
+
+	it("FAIL/TIMEOUT terminate from REQUESTED or PENDING", () => {
+		expect(transitionCheckoutSessionCanary("REQUESTED", "E_FAIL_OBSERVED")).toBe("FAILED");
+		expect(transitionCheckoutSessionCanary("REQUESTED", "E_TIMEOUT")).toBe("TIMEOUT");
+		expect(transitionCheckoutSessionCanary("PENDING", "E_FAIL_OBSERVED")).toBe("FAILED");
+		expect(transitionCheckoutSessionCanary("PENDING", "E_TIMEOUT")).toBe("TIMEOUT");
+	});
+});
+
+describe("live-settlement canary lifecycle (§6.4) path coverage", () => {
+	it("full happy path IDLE → REFUND_RECORDED", () => {
+		let s: LiveSettlementCanaryState = transitionLiveSettlementCanary("IDLE", "E_SESSION_READY");
+		s = transitionLiveSettlementCanary(s, "E_PAYMENT_COMMITTED");
+		s = transitionLiveSettlementCanary(s, "E_PAID_WEBHOOK_OBSERVED");
+		s = transitionLiveSettlementCanary(s, "E_GRANT_RECORDED");
+		s = transitionLiveSettlementCanary(s, "E_REFUND_RECORDED");
+		expect(s).toBe("REFUND_RECORDED");
+	});
+
+	it("FAIL is permitted from any post-IDLE active state", () => {
+		for (const s of ["SESSION_READY", "PAYMENT_COMMITTED", "PAID_WEBHOOK_OBSERVED", "GRANT_RECORDED"] as const) {
+			expect(transitionLiveSettlementCanary(s, "E_FAIL")).toBe("FAILED");
+			expect(transitionLiveSettlementCanary(s, "E_TIMEOUT")).toBe("TIMEOUT");
+		}
+	});
+
+	it("REFUND from non-GRANT_RECORDED states is a no-op (never collapses to REFUND_RECORDED)", () => {
+		expect(transitionLiveSettlementCanary("PAID_WEBHOOK_OBSERVED", "E_REFUND_RECORDED")).toBe(
+			"PAID_WEBHOOK_OBSERVED",
+		);
+		expect(transitionLiveSettlementCanary("FAILED", "E_REFUND_RECORDED")).toBe("FAILED");
+	});
+});
+
+// ─── Gate evaluation: override paths and predicate edges ────────────────────
+
+describe("evaluateReleaseDecision requiredDomains override (§5/§14)", () => {
+	it("requiredDomains override takes precedence over gateConfig defaults", () => {
+		const verdicts: DomainVerdictRecord[] = [req("AUTH", "PASSED")];
+		const evaluation = evaluateReleaseDecision({
+			trigger: "POST_DEPLOY",
+			verdicts,
+			requiredDomains: ["AUTH"],
+		});
+		expect(evaluation.releaseDecision).toBe("ALLOW");
+		expect(evaluation.requiredDomains).toEqual(["AUTH"]);
+	});
+
+	it("override that includes a missing domain still produces DENY", () => {
+		const verdicts: DomainVerdictRecord[] = [req("AUTH", "PASSED")];
+		const evaluation = evaluateReleaseDecision({
+			trigger: "POST_DEPLOY",
+			verdicts,
+			requiredDomains: ["AUTH", "LIVE_SETTLEMENT"],
+		});
+		expect(evaluation.releaseDecision).toBe("DENY");
+		expect(evaluation.missingRequiredDomains).toEqual(["LIVE_SETTLEMENT"]);
+	});
+});
+
+describe("acceptDeploy / rejectDeploy / scheduledSystemHealthy edges (§14)", () => {
+	const allPassed: Record<FeatureDomain, "PASSED"> = {
+		AUTH: "PASSED", GENERATION: "PASSED", CHECKOUT_SESSION: "PASSED", LIVE_SETTLEMENT: "PASSED",
+	};
+
+	it("empty required set is vacuously accepted, never rejected", () => {
+		expect(acceptDeploy([], allPassed)).toBe(true);
+		expect(rejectDeploy([], allPassed)).toBe(false);
+		expect(scheduledSystemHealthy([], allPassed)).toBe(true);
+	});
+
+	it("PENDING / RUNNING required verdicts neither accept nor reject", () => {
+		const v: Record<FeatureDomain, "PENDING" | "RUNNING" | "PASSED"> = {
+			AUTH: "PENDING", GENERATION: "RUNNING", CHECKOUT_SESSION: "PASSED", LIVE_SETTLEMENT: "PASSED",
+		};
+		expect(acceptDeploy(["AUTH", "GENERATION", "CHECKOUT_SESSION"], v)).toBe(false);
+		expect(rejectDeploy(["AUTH", "GENERATION", "CHECKOUT_SESSION"], v)).toBe(false);
+	});
+
+	it("rejectDeploy fires on TIMEOUT and SKIPPED, not just FAILED", () => {
+		const timeoutVec: Record<FeatureDomain, "PASSED" | "TIMEOUT"> = {
+			AUTH: "PASSED", GENERATION: "TIMEOUT", CHECKOUT_SESSION: "PASSED", LIVE_SETTLEMENT: "PASSED",
+		};
+		expect(rejectDeploy(["AUTH", "GENERATION", "CHECKOUT_SESSION"], timeoutVec)).toBe(true);
+		const skippedVec: Record<FeatureDomain, "PASSED" | "SKIPPED"> = {
+			AUTH: "PASSED", GENERATION: "PASSED", CHECKOUT_SESSION: "SKIPPED", LIVE_SETTLEMENT: "PASSED",
+		};
+		expect(rejectDeploy(["AUTH", "GENERATION", "CHECKOUT_SESSION"], skippedVec)).toBe(true);
+	});
+});
+
+// ─── DomainVerdictRecord supports note + settlementOutcome optional fields ────
+
+describe("DomainVerdictRecord optional fields (matches Convex validator)", () => {
+	it("accepts a note string for diagnostic context", () => {
+		const r: DomainVerdictRecord = { ...req("AUTH", "FAILED"), note: "[protected_route] redirect to /auth" };
+		expect(r.note).toBe("[protected_route] redirect to /auth");
+	});
+
+	it("accepts a settlementOutcome on LIVE_SETTLEMENT verdicts", () => {
+		const r: DomainVerdictRecord = {
+			...req("LIVE_SETTLEMENT", "PASSED"),
+			trigger: "SCHEDULED",
+			requirement: "REQUIRED_ON_SCHEDULE",
+			settlementOutcome: "GRANTED_ONCE",
+		};
+		expect(r.settlementOutcome).toBe("GRANTED_ONCE");
 	});
 });

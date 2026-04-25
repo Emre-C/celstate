@@ -1,8 +1,62 @@
 # Transparent Background QA
 
-> **Status:** Research backlog
+> **Status:** Implemented in the deterministic production pipeline
 >
 > **Purpose:** Track the work required to verify that Celstate outputs truly preserve transparent backgrounds, including internal voids such as donut holes, cutouts, and other fully transparent negative space.
+
+---
+
+## Current Codebase Status
+
+The deterministic transparent-background QA stack now runs inside `src/convex/generation.ts` immediately after `differenceMatte` and before image finalization.
+
+What exists today:
+
+- the generation pipeline produces RGBA output via difference matting in `src/convex/lib/matte.ts`
+- the white-background and black-background passes are validated with corner-patch checks in `src/convex/lib/validation.ts`
+- `src/convex/lib/transparentQa.ts` verifies the final matte against both source passes using dual-pass recomposition residuals, multithreshold topology persistence, and shell-based halo/spill analysis
+- conservative production gates now also reject outputs with too little overall transparency or insufficient transparent border coverage, using `alphaPresence` and `borderTransparencyRatio` thresholds tuned from an initial live dev sample batch
+- generations now persist structured transparent QA decisions, reason codes, and numeric metrics for tuning and observability
+- Convex now exposes an internal `getTransparentQaMetricsReport` query for bounded recent-window metric distributions and sample rows, so threshold tuning can read `transparentQa.metrics` directly without ad hoc CLI sampling
+- failed, retried, stalled, and completed generations are tracked in `src/convex/generation.ts`, `src/convex/generations.ts`, and `docs/product/observability.md`
+- deterministic QA failures now route retries back to the correct upstream stage instead of retrying finalization blindly
+
+What does **not** exist today:
+
+- no semantic validation layer to determine whether expected cutouts were preserved
+- no manual-review queue or per-generation transparent-background QA score
+
+The current code can now deterministically detect upstream matte defects, reroute retries toward the correct generation stage, and capture QA metrics for threshold tuning. It still does **not** infer intent beyond lightweight prompt heuristics or provide a manual-review queue.
+
+---
+
+## Implemented Deterministic Stack
+
+### Layer 1: Dual-Pass Compositing Invariants
+
+- recomposes the recovered foreground and alpha back onto white and black
+- compares those recompositions to the original white/black renders
+- records `whiteRecompositionResidual`, `blackRecompositionResidual`, `channelDisagreement`, and `alphaResidual`
+- treats large residuals as a full upstream inconsistency and retries both source passes
+
+### Layer 2: Multithreshold Topology Persistence
+
+- thresholds the alpha mask at multiple levels
+- counts persistent enclosed holes across thresholds, fragile holes that only appear briefly, and overall topology volatility
+- uses explicit connectivity assumptions in code: 4-connected foreground, 8-connected background-hole flood fill
+
+### Layer 3: Shell-Based Halo / Spill Analysis
+
+- builds an external border-connected background region around the silhouette
+- measures `boundaryErrorRate`, `externalSpill`, and `haloTail` in narrow shells outside the subject
+- routes structurally consistent but contaminated mattes to a black-pass retry instead of re-running finalization
+
+### Decision Model
+
+- `pass`: finalize and store the generation
+- `retry_black`: regenerate the black-background pass with targeted repair instructions
+- `retry_white_and_black`: regenerate the white pass and carry a downstream repair instruction into the black pass
+- `review`: block finalization and fail safely until a future review path exists
 
 ---
 

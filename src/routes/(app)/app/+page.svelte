@@ -27,7 +27,6 @@
 	/** Avoids reactive feedback loops when syncing Convex subscription → PostHog. */
 	const generationStatusPrev = new Map<string, 'generating' | 'complete' | 'failed'>();
 
-	// Handle Stripe redirect params
 	$effect(() => {
 		const params = $page.url.searchParams;
 		if (params.get('success') === 'true') {
@@ -91,13 +90,11 @@
 	);
 	const generating = $derived(!!activeGeneration);
 
-	// Track completed generation count to detect new completions
 	const completedCount = $derived(
 		generations.data?.filter((g) => g.status === 'complete').length ?? 0
 	);
 	let prevCompletedCount = $state(0);
 
-	// Show credit nudge when a generation completes and credits are low
 	$effect(() => {
 		if (completedCount > prevCompletedCount && prevCompletedCount > 0) {
 			if (credits !== undefined && credits <= 2) {
@@ -144,7 +141,6 @@
 </svelte:head>
 
 <PageContainer max="4xl" class="min-w-0 py-6 sm:py-8">
-		<!-- Header -->
 		<div class="mb-8 min-w-0">
 			<SectionLabel text="Generation workspace" />
 			<h1
@@ -154,7 +150,6 @@
 			</h1>
 		</div>
 
-		<!-- Prompt Input -->
 		<div class="mb-10">
 			<PromptInput
 				onsubmit={handleGenerate}
@@ -163,7 +158,6 @@
 			/>
 		</div>
 
-		<!-- Post-generation credit nudge -->
 		{#if creditNudge}
 			<div
 				class="mb-6 flex flex-wrap items-start gap-2 px-1 sm:flex-nowrap sm:items-center sm:justify-between sm:gap-3"
@@ -196,7 +190,6 @@
 			</div>
 		{/if}
 
-		<!-- Success message -->
 		{#if successMessage}
 			<div class="mb-6 border border-green-300 bg-green-50 px-4 py-3">
 				<div class="flex items-start gap-3 sm:items-center sm:justify-between">
@@ -215,7 +208,6 @@
 			</div>
 		{/if}
 
-		<!-- Error message -->
 		{#if errorMessage}
 			<div class="mb-6 border border-red-300 bg-red-50 px-4 py-3">
 				<div class="flex items-start gap-2">
@@ -228,18 +220,15 @@
 			</div>
 		{/if}
 
-		<!-- Generation results -->
 		{#if generations.isLoading}
 			<div class="flex items-center justify-center py-16">
 				<span class="text-xs font-medium uppercase tracking-[0.06em] text-dim">Loading history...</span>
 			</div>
 		{:else if hasGenerations}
-			<!-- Section label -->
 			<div class="mb-6">
 				<SectionLabel text="Your generations" />
 			</div>
 
-			<!-- Grid of generation cards -->
 			<div
 				class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 [&>*]:min-w-0"
 			>
@@ -260,7 +249,6 @@
 				{/each}
 			</div>
 		{:else}
-			<!-- Empty state -->
 			<div class="flex flex-col items-center justify-center px-2 py-16 sm:py-20">
 				<div class="empty-state-grid mb-6" aria-hidden="true">
 					{#each Array(16) as _, i}

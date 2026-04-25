@@ -2,7 +2,14 @@
 
 Short reference for what runs on GitHub Actions, common failure modes, and how to avoid regressions.
 
-**Scope:** `ci.yml` is **preview-local** (build + marketing E2E). `auth-canary.yml` is a **lightweight production smoke** on `/auth` and get-session. **`production-verification.yml`** runs **deploy-scoped** probes against live production (auth with protected-route proof, generation, checkout session, and scheduled live settlement). Contract and evidence model: [`docs/implementation/PRODUCTION-CONFIDENCE-FORMAL-SPEC.md`](../implementation/PRODUCTION-CONFIDENCE-FORMAL-SPEC.md).
+**Scope:** `ci.yml` is **preview-local** (build + marketing E2E). `auth-canary.yml` is a **lightweight production smoke** on `/auth` and get-session. **`production-verification.yml`** runs **deploy-scoped** probes against live production (auth with protected-route proof, generation, checkout session, and scheduled live settlement). Contract and evidence model: [`docs/product/production-confidence.md`](../product/production-confidence.md).
+
+## Local verification tiers
+
+- **Fast gate** — `pnpm check`, `pnpm typecheck:tsc`, `pnpm lint:ts`, `pnpm test` (no production build, no Playwright).
+- **Full repo gate** — `pnpm verify` (matches the heavy local/CI pipeline: Knip, jscpd, build, E2E).
+
+Knip false positives, try/marker audit commands, and cleanup audit pointers: [`CODEBASE-HYGIENE.md`](./CODEBASE-HYGIENE.md).
 
 ## CI (`/.github/workflows/ci.yml`)
 
@@ -62,7 +69,7 @@ Machine-evaluable **release evidence** for production: runner `scripts/productio
 - **Variables (optional)**
   - **`AUTH_CANARY_REQUIRE_PROTECTED_ROUTE`** — Repository variable; aligns with the runner’s default (protected-route proof expected for deploy/scheduled triggers).
 
-- **External setup** — Vercel (or similar) **deployment protection** can gate promotion on this workflow’s check status; canary Better Auth users and one-time principal bootstrap are described in the [formal spec §10.3](../implementation/PRODUCTION-CONFIDENCE-FORMAL-SPEC.md#103-remaining-external-configuration).
+- **External setup** — Vercel (or similar) **deployment protection** can gate promotion on this workflow’s check status; canary Better Auth users and one-time principal bootstrap are described in the [formal spec §10.3](../product/production-confidence.md#103-remaining-external-configuration).
 
 ## Optional hardening (not in repo by default)
 
@@ -72,6 +79,7 @@ Machine-evaluable **release evidence** for production: runner `scripts/productio
 ## Related docs
 
 - `docs/product/authentication.md` — Regression coverage, scheduled auth smoke, and production verification (auth domain)
-- `docs/implementation/PRODUCTION-CONFIDENCE-FORMAL-SPEC.md` — Full contract, gates, and evidence map
+- `docs/product/production-confidence.md` — Full contract, gates, and evidence map
 - `docs/runbooks/PUBLIC-ENV-CHECKLIST.md` — CI `PUBLIC_SITE_URL` vs production
+- `docs/runbooks/CODEBASE-HYGIENE.md` — Local gates, Knip caveats, audit artifacts
 - `docs/product/observability.md` — Canary and verification file references

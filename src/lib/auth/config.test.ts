@@ -51,7 +51,6 @@ describe('auth config', () => {
 		).toContain('AUTH_GOOGLE_SECRET');
 	});
 
-	// TODO: Re-enable this test once Apple Sign-In credential requirements are restored in config.ts
 	it.skip('requires canonical apple provider credentials for https site urls', () => {
 		expect(
 			getMissingCanonicalAuthEnvKeys({
