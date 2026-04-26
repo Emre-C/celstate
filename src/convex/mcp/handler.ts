@@ -80,9 +80,10 @@ function buildResponseHeaders(
   headers.set("x-request-id", requestId);
 
   if (extraHeaders) {
-    for (const [key, value] of new Headers(extraHeaders).entries()) {
+    // Use forEach: Convex’s deploy-time `tsc` lib for `Headers` may omit `entries()`.
+    new Headers(extraHeaders).forEach((value, key) => {
       headers.set(key, value);
-    }
+    });
   }
 
   return headers;

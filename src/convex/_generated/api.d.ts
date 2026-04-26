@@ -31,6 +31,7 @@ import type * as lib_validation from "../lib/validation.js";
 import type * as lib_validators from "../lib/validators.js";
 import type * as lib_verificationRunnerSecret from "../lib/verificationRunnerSecret.js";
 import type * as mcp_constants from "../mcp/constants.js";
+import type * as mcp_context from "../mcp/context.js";
 import type * as mcp_handler from "../mcp/handler.js";
 import type * as mcp_keys from "../mcp/keys.js";
 import type * as mcp_toolResults from "../mcp/toolResults.js";
@@ -78,6 +79,7 @@ declare const fullApi: ApiFromModules<{
   "lib/validators": typeof lib_validators;
   "lib/verificationRunnerSecret": typeof lib_verificationRunnerSecret;
   "mcp/constants": typeof mcp_constants;
+  "mcp/context": typeof mcp_context;
   "mcp/handler": typeof mcp_handler;
   "mcp/keys": typeof mcp_keys;
   "mcp/toolResults": typeof mcp_toolResults;
