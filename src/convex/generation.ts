@@ -213,7 +213,8 @@ async function storeGeneratedImage(
   ctx: StageActionContext,
   image: GeminiImageResult,
 ): Promise<Id<"_storage">> {
-  const blob = new Blob([Buffer.from(image.imageBase64, "base64")], { type: image.mimeType });
+  const bytes = Buffer.from(image.imageBase64, "base64");
+  const blob = new Blob([new Uint8Array(bytes)], { type: image.mimeType });
   return await ctx.storage.store(blob);
 }
 
