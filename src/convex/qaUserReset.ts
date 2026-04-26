@@ -127,11 +127,18 @@ export const resetAllowlistedTestUser = internalMutation({
         .withIndex("email", (q) => q.eq("email", args.email.trim()))
         .first());
 
-    const baRecord = (await ctx.runQuery(components.betterAuth.adapter.findOne, {
+    const baFirst = (await ctx.runQuery(components.betterAuth.adapter.findOne, {
       model: "user",
       select: ["_id"],
-      where: [{ field: "email", operator: "eq", value: normalizedEmail, mode: "insensitive" }],
+      where: [{ field: "email", operator: "eq", value: normalizedEmail }],
     })) as { _id?: string } | null;
+    const baRecord =
+      baFirst ??
+      ((await ctx.runQuery(components.betterAuth.adapter.findOne, {
+        model: "user",
+        select: ["_id"],
+        where: [{ field: "email", operator: "eq", value: args.email.trim() }],
+      })) as { _id?: string } | null);
 
     const betterAuthUserId = typeof baRecord?._id === "string" ? baRecord._id : null;
 
