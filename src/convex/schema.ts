@@ -136,6 +136,15 @@ export default defineSchema({
     stripeCheckoutSessionId: v.optional(v.string()),
     error: v.optional(v.string()),
     createdAt: v.number(),
+    // Processing lease for the action that creates the Stripe Checkout
+    // Session. Set atomically by `claimCheckoutForProcessing`. A non-null
+    // value within the lease TTL means a `processCheckout` invocation is
+    // mid-flight and any concurrent replay must skip the Stripe side
+    // effect. `processingLeaseId` binds terminal transitions to the owner
+    // that acquired the lease, so an action whose lease was later reclaimed
+    // cannot mark the newer owner failed/ready.
+    processingStartedAt: v.optional(v.number()),
+    processingLeaseId: v.optional(v.string()),
   })
     .index("by_user_status", ["userId", "status"])
     .index("by_stripe_checkout_session", ["stripeCheckoutSessionId"]),

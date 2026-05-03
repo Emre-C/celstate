@@ -3,10 +3,6 @@ import type { Cookies } from '@sveltejs/kit';
 export const BETTER_AUTH_COOKIE_PREFIX = 'better-auth';
 export const BETTER_AUTH_CONVEX_JWT_COOKIE_NAME = 'convex_jwt';
 
-export type InitialAuthState = {
-	isAuthenticated: boolean;
-};
-
 export const getAuthCookieName = (prefix = BETTER_AUTH_COOKIE_PREFIX) =>
 	`${prefix}.${BETTER_AUTH_CONVEX_JWT_COOKIE_NAME}`;
 
@@ -31,14 +27,4 @@ export const getAuthTokenFromCookieGetter = (
 
 export const getConvexJwtToken = (cookies: Cookies) => {
 	return getAuthTokenFromCookieGetter((name) => cookies.get(name), BETTER_AUTH_COOKIE_PREFIX);
-};
-
-export const hasConvexJwtToken = (cookies: Cookies) => {
-	return getConvexJwtToken(cookies) !== undefined;
-};
-
-export const getInitialAuthState = (cookies: Cookies): InitialAuthState => {
-	return {
-		isAuthenticated: hasConvexJwtToken(cookies)
-	};
 };

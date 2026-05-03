@@ -9,14 +9,13 @@ import type { Id } from "./_generated/dataModel.js";
 import { registerRoutes } from "@convex-dev/stripe";
 import type Stripe from "stripe";
 import { authComponent, createAuth } from "./auth.js";
-import { assertStripeEnv } from "./lib/stripeEnv.js";
 import { posthog } from "./posthog.js";
 import {
   assertOkWebhookResponse,
   buildPurchaseAlertRequest,
   readOpsAlertRuntimeConfig,
 } from "./lib/ops.js";
-import { canGrantCreditsForCheckoutSession } from "./lib/stripeCheckout.js";
+import { getCreditPackSettlementCandidate } from "./lib/stripeCheckout.js";
 import { handleMcpRequest } from "./mcp/handler.js";
 
 const jsonResponse = (body: unknown, status = 200) =>
@@ -283,72 +282,45 @@ const handleCreditPackCheckout = async (
   ctx: CreditPackCheckoutEventContext,
   event: CreditPackCheckoutEvent,
 ) => {
-  const stripeEnv = assertStripeEnv();
-  const CREDIT_PACKS: Record<string, number> = {
-    [stripeEnv.stripePriceStarter]: 15,
-    [stripeEnv.stripePricePro]: 40,
-  };
-
   const session = event.data.object;
-  const grantEligibility = canGrantCreditsForCheckoutSession(session);
+  const settlementCandidate = getCreditPackSettlementCandidate(session);
 
-  if (!grantEligibility.ok) {
+  if (!settlementCandidate.ok) {
     console.log(
       "Skipping credit grant for checkout session",
       session.id,
       event.type,
-      grantEligibility.reason,
+      settlementCandidate.reason,
     );
     return;
   }
 
-  const paymentIntentId = typeof session.payment_intent === "string"
-    ? session.payment_intent
-    : session.payment_intent?.id;
-
-  if (!paymentIntentId) {
-    console.error("No payment_intent on checkout session", session.id);
-    return;
-  }
-
-  const priceId = session.metadata?.priceId;
-  const credits = priceId ? CREDIT_PACKS[priceId] : undefined;
-  if (credits === undefined) {
-    console.error("Unknown priceId or no credits mapping", priceId, session.id);
-    return;
-  }
-
-  const userId = session.metadata?.userId;
-  if (!userId) {
-    console.error("No userId metadata on checkout session", session.id);
-    return;
-  }
-
-  const amountUsd = (session.amount_total ?? 0) / 100;
-  const currency = session.currency ?? "usd";
+  const settlementData = settlementCandidate.settlement;
 
   const pendingCheckoutId = await ctx.runQuery(
     internal.pendingCheckouts.getByStripeCheckoutSessionId,
     { stripeCheckoutSessionId: session.id },
   );
 
-  const settlement = await ctx.runMutation(internal.creditGrants.recordPurchaseSettlement, {
-    userId: userId as Id<"users">,
-    creditsGranted: credits,
-    priceId: priceId!,
-    stripePaymentIntentId: paymentIntentId,
-    stripeCheckoutSessionId: session.id,
+  const settlementResult = await ctx.runMutation(internal.creditGrants.recordPurchaseSettlement, {
+    userId: settlementData.userId as Id<"users">,
+    priceId: settlementData.priceId,
+    stripePaymentIntentId: settlementData.stripePaymentIntentId,
+    stripeCheckoutSessionId: settlementData.stripeCheckoutSessionId,
     pendingCheckoutId: pendingCheckoutId ?? undefined,
-    amountUsd,
-    currency,
+    amountUsd: settlementData.amountUsd,
+    currency: settlementData.currency,
   });
 
-  if (settlement.alreadyRecorded) {
-    console.log("Purchase settlement already recorded (webhook dedup) for", paymentIntentId);
+  if (settlementResult.alreadyRecorded) {
+    console.log(
+      "Purchase settlement already recorded (webhook dedup) for",
+      settlementData.stripePaymentIntentId,
+    );
     return;
   }
 
-  if (!settlement.created) {
+  if (!settlementResult.created) {
     console.error("recordPurchaseSettlement did not create settlement row for", session.id);
     return;
   }
@@ -362,31 +334,31 @@ const handleCreditPackCheckout = async (
   }
 
   await posthog.capture(ctx, {
-    distinctId: String(userId),
+    distinctId: settlementData.userId,
     event: "credits_purchase_completed",
     properties: {
-      credits_added: credits,
-      amount_usd: amountUsd,
-      currency,
-      stripe_payment_intent_id: paymentIntentId,
-      user_id: String(userId),
+      credits_added: settlementData.creditsGranted,
+      amount_usd: settlementData.amountUsd,
+      currency: settlementData.currency,
+      stripe_payment_intent_id: settlementData.stripePaymentIntentId,
+      user_id: settlementData.userId,
     },
   });
 
   const opsConfig = readOpsAlertRuntimeConfig();
   if (opsConfig.webhookUrl) {
     const user = await ctx.runQuery(internal.users.getById, {
-      userId: userId as Id<"users">,
+      userId: settlementData.userId as Id<"users">,
     });
 
     try {
       const request = buildPurchaseAlertRequest(opsConfig, {
-        amountUsd,
-        creditsAdded: credits,
-        currency,
-        stripePaymentIntentId: paymentIntentId,
+        amountUsd: settlementData.amountUsd,
+        creditsAdded: settlementData.creditsGranted,
+        currency: settlementData.currency,
+        stripePaymentIntentId: settlementData.stripePaymentIntentId,
         userEmail: user?.email ?? undefined,
-        userId: String(userId),
+        userId: settlementData.userId,
       });
 
       const response = await fetch(request.url, {

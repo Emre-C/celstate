@@ -1,14 +1,19 @@
 import { redirect } from "@sveltejs/kit";
 import type { ServerLoadEvent } from "@sveltejs/kit";
-import { buildAuthRedirectTarget } from "$lib/auth/redirect.js";
-import { getInitialAuthState } from "$lib/server/auth.js";
+import { resolveProtectedSessionRequest } from "$lib/auth/protected-session.js";
 
-export const load = async ({ cookies, locals, url }: ServerLoadEvent) => {
-  if (!locals.token) {
-    throw redirect(303, buildAuthRedirectTarget(url.pathname, url.search));
-  }
+export const load = async ({ locals, url }: ServerLoadEvent) => {
+	const protectedSession = resolveProtectedSessionRequest({
+		pathname: url.pathname,
+		search: url.search,
+		token: locals.token
+	});
 
-  return {
-    authState: getInitialAuthState(cookies),
-  };
+	if (protectedSession.kind === 'redirect') {
+		throw redirect(303, protectedSession.location);
+	}
+
+	return {
+		protectedSession: protectedSession.bootstrap
+	};
 };

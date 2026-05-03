@@ -49,6 +49,7 @@ pnpm check
 - Vercel deployment: [`docs/runbooks/VERCEL-DEPLOYMENT.md`](docs/runbooks/VERCEL-DEPLOYMENT.md)
 - Convex vs Vercel env boundaries: [`docs/runbooks/CONVEX-VERCEL-ENVIRONMENTS.md`](docs/runbooks/CONVEX-VERCEL-ENVIRONMENTS.md)
 - Stripe + Convex environments: [`docs/runbooks/STRIPE-CONVEX-ENVIRONMENTS.md`](docs/runbooks/STRIPE-CONVEX-ENVIRONMENTS.md)
+- Secrets management & rotation (Doppler-first): [`docs/runbooks/SECRETS-MANAGEMENT.md`](docs/runbooks/SECRETS-MANAGEMENT.md)
 - CI, auth canaries, and production verification: [`docs/runbooks/CI-AND-CANARIES.md`](docs/runbooks/CI-AND-CANARIES.md)
 - Knip caveats, audit commands, cleanup briefs: [`docs/runbooks/CODEBASE-HYGIENE.md`](docs/runbooks/CODEBASE-HYGIENE.md)
 
@@ -89,6 +90,8 @@ pnpm reset-qa
 | [`docs/product/mcp-server.md`](docs/product/mcp-server.md) | Hosted MCP surface and optional proxy package |
 | [`docs/product/production-confidence.md`](docs/product/production-confidence.md) | Deploy gate, canaries, and verification evidence |
 | [`docs/runbooks/VERCEL-DEPLOYMENT.md`](docs/runbooks/VERCEL-DEPLOYMENT.md) | Frontend deployment checklist |
+| [`docs/runbooks/SECRETS-MANAGEMENT.md`](docs/runbooks/SECRETS-MANAGEMENT.md) | Doppler-first source of truth, scripts, and rotation cadence |
+| [`docs/runbooks/MANUAL-SECRET-ROTATION-GUIDE.md`](docs/runbooks/MANUAL-SECRET-ROTATION-GUIDE.md) | Click-paths for vendor-only rotations (Stripe, Google OAuth, Discord) |
 | [`docs/runbooks/CI-AND-CANARIES.md`](docs/runbooks/CI-AND-CANARIES.md) | CI, auth smoke, and production verification |
 | [`docs/runbooks/CODEBASE-HYGIENE.md`](docs/runbooks/CODEBASE-HYGIENE.md) | Local gates, Knip interpretation, audit artifacts |
 | [`docs/runbooks/QA-RESET.md`](docs/runbooks/QA-RESET.md) | Resetting the allowlisted QA account on prod |

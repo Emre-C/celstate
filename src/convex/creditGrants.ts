@@ -4,6 +4,7 @@ import type { Doc, Id } from "./_generated/dataModel.js";
 import { creditGrantReasonValidator } from "./lib/validators.js";
 import { assertVerificationRunnerSecret } from "./lib/verificationRunnerSecret.js";
 import { applyCreditsToUser } from "./users.js";
+import { recordCreditPackPurchaseSettlement } from "./lib/stripeCheckout.js";
 
 type PurchaseSettlement = Doc<"purchaseSettlements">;
 
@@ -132,7 +133,6 @@ export const recordGrant = internalMutation({
 export const recordPurchaseSettlement = internalMutation({
   args: {
     userId: v.id("users"),
-    creditsGranted: v.number(),
     priceId: v.string(),
     stripePaymentIntentId: v.string(),
     stripeCheckoutSessionId: v.string(),
@@ -146,84 +146,7 @@ export const recordPurchaseSettlement = internalMutation({
     creditApplied: v.boolean(),
   }),
   handler: async (ctx, args) => {
-    if (args.pendingCheckoutId) {
-      const existingCheckoutSettlement = await ctx.db
-        .query("purchaseSettlements")
-        .withIndex("by_pending_checkout", (q) => q.eq("pendingCheckoutId", args.pendingCheckoutId!))
-        .first();
-
-      if (existingCheckoutSettlement) {
-        return {
-          alreadyRecorded: true,
-          created: false,
-          creditApplied: false,
-        };
-      }
-    }
-
-    const existingSettlement = await ctx.db
-      .query("purchaseSettlements")
-      .withIndex("by_payment_intent", (q) => q.eq("stripePaymentIntentId", args.stripePaymentIntentId))
-      .first();
-
-    if (existingSettlement) {
-      return {
-        alreadyRecorded: true,
-        created: false,
-        creditApplied: false,
-      };
-    }
-
-    const existingGrant = await ctx.db
-      .query("creditGrants")
-      .withIndex("by_payment_intent", (q) => q.eq("stripePaymentIntentId", args.stripePaymentIntentId))
-      .first();
-
-    let creditApplied = false;
-    let creditGrantCreatedAt = existingGrant?.createdAt ?? Date.now();
-
-    if (!existingGrant) {
-      const applied = await applyCreditsToUser(ctx, args.userId, args.creditsGranted);
-      if (!applied) {
-        return {
-          alreadyRecorded: false,
-          created: false,
-          creditApplied: false,
-        };
-      }
-
-      creditApplied = true;
-      creditGrantCreatedAt = Date.now();
-
-      await ctx.db.insert("creditGrants", {
-        userId: args.userId,
-        amount: args.creditsGranted,
-        reason: "purchase",
-        stripePaymentIntentId: args.stripePaymentIntentId,
-        createdAt: creditGrantCreatedAt,
-      });
-    }
-
-    const now = Date.now();
-    await ctx.db.insert("purchaseSettlements", {
-      stripePaymentIntentId: args.stripePaymentIntentId,
-      stripeCheckoutSessionId: args.stripeCheckoutSessionId,
-      pendingCheckoutId: args.pendingCheckoutId ?? null,
-      userId: args.userId,
-      priceId: args.priceId,
-      creditsGranted: args.creditsGranted,
-      amountUsd: args.amountUsd,
-      currency: args.currency,
-      creditGrantCreatedAt,
-      revenueEventCreatedAt: now,
-      createdAt: now,
-    });
-
-    return {
-      alreadyRecorded: false,
-      created: true,
-      creditApplied,
-    };
+    return await recordCreditPackPurchaseSettlement(ctx, args);
   },
 });
 

@@ -2,10 +2,10 @@ import type { Cookies } from '@sveltejs/kit';
 import { describe, expect, it } from 'vitest';
 import {
 	BETTER_AUTH_COOKIE_PREFIX,
+	getConvexJwtToken,
 	getAuthCookieCandidates,
 	getAuthCookieName,
-	getAuthTokenFromCookieGetter,
-	getInitialAuthState
+	getAuthTokenFromCookieGetter
 } from './auth.js';
 
 const createCookies = (entries: Record<string, string | undefined>) =>
@@ -38,21 +38,17 @@ describe('server auth cookies', () => {
 		expect(token).toBe('secure-token');
 	});
 
-	it('derives an unauthenticated initial auth state when no token cookie exists', () => {
-		expect(getInitialAuthState(createCookies({}))).toEqual({
-			isAuthenticated: false
-		});
+	it('returns no token when no Better Auth cookie exists', () => {
+		expect(getConvexJwtToken(createCookies({}))).toBeUndefined();
 	});
 
-	it('derives an authenticated initial auth state when the token cookie exists', () => {
+	it('returns the token when the Better Auth cookie exists', () => {
 		expect(
-			getInitialAuthState(
+			getConvexJwtToken(
 				createCookies({
 					'better-auth.convex_jwt': 'token-123'
 				})
 			)
-		).toEqual({
-			isAuthenticated: true
-		});
+		).toBe('token-123');
 	});
 });

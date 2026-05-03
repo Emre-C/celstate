@@ -4,6 +4,7 @@ import {
 	buildAuthAlertRequest,
 	buildGenerationAlertRequest,
 	buildPurchaseAlertRequest,
+	buildSecretRotationReminderRequest,
 	buildSignupAlertRequest,
 	formatDurationMs,
 	readOpsAlertRuntimeConfig,
@@ -147,6 +148,48 @@ describe('ops helpers', () => {
 				requestId: 'req-123'
 			}
 		});
+	});
+
+	it('builds discord-formatted secret rotation reminder payloads', () => {
+		const request = buildSecretRotationReminderRequest(
+			{
+				webhookKind: 'discord',
+				webhookUrl: 'https://discord.com/api/webhooks/123/abc'
+			},
+			{
+				cadenceLabel: 'quarterly',
+				gcpProjectId: 'celstate-489304',
+				gcpServiceAccountEmail: 'vertex-express@celstate-489304.iam.gserviceaccount.com'
+			}
+		);
+
+		const body = JSON.parse(request.body) as { content: string };
+		expect(request.headers['content-type']).toBe('application/json');
+		expect(body.content).toContain('Celstate quarterly secret rotation reminder');
+		expect(body.content).toContain('pnpm secrets:rotate');
+		expect(body.content).toContain('pnpm secrets:sync:convex');
+		expect(body.content).toContain(
+			'pnpm secrets:rotate-gcp -- --service-account=vertex-express@celstate-489304.iam.gserviceaccount.com --project=celstate-489304 --old-key-id=<current>'
+		);
+		expect(body.content).toContain('Stripe Secret Key');
+		expect(body.content).toContain('Google OAuth Secret');
+		expect(body.content).toContain('rotation invalidates all active sessions');
+	});
+
+	it('omits gcp args from the rotation reminder when project metadata is missing', () => {
+		const request = buildSecretRotationReminderRequest(
+			{
+				webhookKind: 'generic',
+				webhookUrl: 'https://ops.example.com/webhook'
+			},
+			{ cadenceLabel: 'quarterly' }
+		);
+
+		const body = JSON.parse(request.body) as Record<string, unknown>;
+		expect(body.event).toBe('secret_rotation_reminder');
+		expect(body.cadence).toBe('quarterly');
+		expect(body.gcp_project_id).toBeUndefined();
+		expect(body.gcp_service_account_email).toBeUndefined();
 	});
 
 	it('summarizes generation ops metrics for AI-readable inspection', () => {

@@ -1,15 +1,23 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { PUBLIC_CONVEX_URL } from '$env/static/public';
 	import { createSvelteAuthClient, useAuth } from '@mmailaender/convex-better-auth-svelte/svelte';
 	import { useConvexClient } from '@mmailaender/convex-svelte';
 	import { authClient } from '$lib/auth-client';
 	import {
-		AUTH_SESSION_RECOVERY_GRACE_PERIOD_MS,
-		getProtectedAppRedirectStrategy,
-		getProtectedAppViewState
-	} from '$lib/auth/protected-app.js';
-	import { buildAuthRedirectTarget } from '$lib/auth/redirect.js';
+		beginUserSyncAttempt,
+		createInitialUserSyncStatus,
+		getProtectedSessionRedirectPlan,
+		getProtectedSessionViewState,
+		getUserSyncErrorMessage,
+		hasUserSyncError,
+		isUserSyncInFlight,
+		markUserSyncFailure,
+		markUserSyncSuccess,
+		shouldAutoRetryUserSync,
+		type UserSyncStatus
+	} from '$lib/auth/protected-session.js';
 	import { api } from '../../convex/_generated/api.js';
 
 	let { children, data } = $props();
@@ -17,33 +25,61 @@
 	createSvelteAuthClient({
 		authClient,
 		convexUrl: PUBLIC_CONVEX_URL,
-		getServerState: () => data.authState
+		getServerState: () => data.protectedSession
 	});
 
 	const auth = useAuth();
 	const client = useConvexClient();
 
-	let seededFromServer = $state(false);
 	let hasAuthenticatedSession = $state(false);
 	let redirectScheduled = $state(false);
-	let startedUserSync = $state(false);
-	let syncError = $state('');
+	let userSyncStatus = $state<UserSyncStatus>(createInitialUserSyncStatus());
 	const viewState = $derived(
-		getProtectedAppViewState({
+		getProtectedSessionViewState({
 			authIsAuthenticated: auth.isAuthenticated,
 			authIsLoading: auth.isLoading,
 			hasAuthenticatedSession,
-			hasSyncError: !!syncError,
+			hasSyncError: hasUserSyncError(userSyncStatus),
 			redirectScheduled
 		})
 	);
+	const redirectPlan = $derived(
+		getProtectedSessionRedirectPlan({
+			pathname: $page.url.pathname,
+			search: $page.url.search,
+			authIsAuthenticated: auth.isAuthenticated,
+			authIsLoading: auth.isLoading,
+			hasAuthenticatedSession
+		})
+	);
+
+	const runUserSync = async () => {
+		// Snapshot the previous status synchronously so the running transition
+		// records the correct attempt counter even under rapid re-entry.
+		const previous = userSyncStatus;
+		userSyncStatus = beginUserSyncAttempt(previous);
+		try {
+			await client.mutation(api.users.storeUser, {});
+			userSyncStatus = markUserSyncSuccess(userSyncStatus);
+		} catch (error) {
+			userSyncStatus = markUserSyncFailure({ prev: userSyncStatus, error });
+		}
+	};
+
+	const triggerManualUserSyncRetry = () => {
+		// Manual retry is only meaningful from the error state; gate to avoid
+		// cancelling a flight already in progress or re-running after success.
+		if (userSyncStatus.kind !== 'error') {
+			return;
+		}
+		void runUserSync();
+	};
 
 	$effect(() => {
-		if (seededFromServer || !data.authState?.isAuthenticated) {
+		if (!data.protectedSession.isAuthenticated) {
 			return;
 		}
 
-		seededFromServer = true;
 		hasAuthenticatedSession = true;
 	});
 
@@ -57,41 +93,47 @@
 	});
 
 	$effect(() => {
-		if (!auth.isAuthenticated || startedUserSync) {
+		if (!auth.isAuthenticated) {
+			return;
+		}
+		if (userSyncStatus.kind !== 'idle') {
 			return;
 		}
 
-		startedUserSync = true;
-
-		void client
-			.mutation(api.users.storeUser, {})
-			.then(() => {
-				syncError = '';
-			})
-			.catch((error) => {
-				syncError = error instanceof Error ? error.message : 'Unable to initialize your account.';
-			});
+		void runUserSync();
 	});
 
 	$effect(() => {
-		const redirectTarget = buildAuthRedirectTarget(window.location.pathname, window.location.search);
-		const redirectStrategy = getProtectedAppRedirectStrategy({
-			authIsAuthenticated: auth.isAuthenticated,
-			authIsLoading: auth.isLoading,
-			hasAuthenticatedSession
-		});
+		// Bounded auto-retry: schedule the next attempt with the policy-supplied
+		// backoff. The cleanup clears the pending timeout whenever the status
+		// transitions out of the retry window (success, manual retry, sign-out).
+		if (!auth.isAuthenticated) {
+			return;
+		}
+		if (userSyncStatus.kind !== 'error' || userSyncStatus.autoRetryDelayMs === null) {
+			return;
+		}
+		const delay = userSyncStatus.autoRetryDelayMs;
+		const timeoutId = window.setTimeout(() => {
+			void runUserSync();
+		}, delay);
+		return () => {
+			window.clearTimeout(timeoutId);
+		};
+	});
 
-		if (redirectStrategy === 'none') {
+	$effect(() => {
+		if (redirectPlan.kind === 'none') {
 			redirectScheduled = false;
 			return;
 		}
 
-		if (redirectStrategy === 'delayed') {
+		if (redirectPlan.kind === 'delayed') {
 			const timeoutId = window.setTimeout(() => {
 				hasAuthenticatedSession = false;
 				redirectScheduled = true;
-				void goto(redirectTarget, { replaceState: true });
-			}, AUTH_SESSION_RECOVERY_GRACE_PERIOD_MS);
+				void goto(redirectPlan.location, { replaceState: true });
+			}, redirectPlan.delayMs);
 
 			return () => {
 				window.clearTimeout(timeoutId);
@@ -99,18 +141,32 @@
 		}
 
 		redirectScheduled = true;
-		void goto(redirectTarget, { replaceState: true });
+		void goto(redirectPlan.location, { replaceState: true });
 	});
 </script>
 
 {#if viewState.shouldShowLoading}
 	<div class="flex min-h-dvh items-center justify-center">
-		<span class="font-mono text-xs tracking-[0.15em] uppercase text-dim">Loading workspace...</span>
+		<span class="text-xs font-medium tracking-[0.08em] uppercase text-dim">Loading workspace...</span>
 	</div>
 {:else if viewState.shouldShowSyncError}
 	<div class="flex min-h-dvh items-center justify-center px-6">
-		<div class="w-full max-w-md border border-red-900/40 bg-red-950/10 px-6 py-5">
-			<p class="text-sm text-red-400/80">{syncError}</p>
+		<div class="w-full max-w-md space-y-4 border border-red-300 bg-red-50 px-6 py-5">
+			<p class="text-sm text-red-700">{getUserSyncErrorMessage(userSyncStatus)}</p>
+			{#if shouldAutoRetryUserSync(userSyncStatus)}
+				<p class="text-[10px] font-medium tracking-[0.06em] uppercase text-dim">
+					Retrying automatically…
+				</p>
+			{:else}
+				<button
+					type="button"
+					class="text-[10px] font-medium tracking-[0.06em] uppercase text-red-700 underline-offset-4 hover:underline disabled:opacity-50"
+					disabled={isUserSyncInFlight(userSyncStatus)}
+					onclick={triggerManualUserSyncRetry}
+				>
+					Try again
+				</button>
+			{/if}
 		</div>
 	</div>
 {:else if viewState.shouldRenderChildren}

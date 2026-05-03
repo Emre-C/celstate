@@ -6,6 +6,7 @@ import { generationStageValidator } from "./lib/validators.js";
 import {
   assertOkWebhookResponse,
   buildGenerationAlertRequest,
+  buildSecretRotationReminderRequest,
   buildSignupAlertRequest,
   readOpsAlertRuntimeConfig,
   summarizeGenerationOpsEvents,
@@ -146,6 +147,71 @@ export const sendGenerationAlert = internalAction({
     return null;
   },
 });
+
+export const sendSecretRotationReminder = internalAction({
+  args: {
+    cadenceLabel: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (_ctx, args) => {
+    const opsConfig = readOpsAlertRuntimeConfig();
+    if (!opsConfig.webhookUrl) {
+      console.warn("Skipping secret rotation reminder: OPS_ALERT_WEBHOOK_URL not configured");
+      return null;
+    }
+
+    const cadenceLabel = args.cadenceLabel ?? "quarterly";
+    const gcpProjectId = process.env.VERTEX_AI_PROJECT_ID?.trim() || undefined;
+    const gcpServiceAccountEmail = readGcpServiceAccountEmail();
+
+    try {
+      const request = buildSecretRotationReminderRequest(opsConfig, {
+        cadenceLabel,
+        gcpProjectId,
+        gcpServiceAccountEmail,
+      });
+
+      const response = await fetch(request.url, {
+        body: request.body,
+        headers: request.headers,
+        method: "POST",
+      });
+
+      assertOkWebhookResponse(response);
+    } catch (error) {
+      console.error("Failed to post secret rotation reminder", error);
+    }
+
+    return null;
+  },
+});
+
+function readGcpServiceAccountEmail(): string | undefined {
+  const explicit = process.env.VERTEX_AI_CLIENT_EMAIL?.trim();
+  if (explicit) {
+    return explicit;
+  }
+
+  const json = process.env.VERTEX_AI_SERVICE_ACCOUNT_JSON?.trim();
+  if (!json) {
+    return undefined;
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(json);
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      "client_email" in parsed &&
+      typeof (parsed as { client_email: unknown }).client_email === "string"
+    ) {
+      return (parsed as { client_email: string }).client_email;
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
 
 export const sendSignupAlert = internalAction({
   args: {

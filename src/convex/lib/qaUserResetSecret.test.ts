@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CANARY_PRINCIPAL_CONFIG } from "../../lib/production-confidence.js";
 import {
   assertEmailAllowlistedForQaReset,
   assertQaUserResetSecret,
@@ -59,9 +60,13 @@ describe("assertEmailAllowlistedForQaReset", () => {
   });
 
   it("refuses canary principal emails", () => {
+    // Derive the canary email from the live config so the test stays correct
+    // even when CANARY_PRINCIPAL_CONFIG is repointed (e.g. all four principals
+    // sharing one Google QA account because production is Google-OAuth only).
+    const canaryEmail = CANARY_PRINCIPAL_CONFIG.CANARY_AUTH.email.toLowerCase();
     const prev = process.env.QA_USER_RESET_ALLOWED_EMAILS;
-    process.env.QA_USER_RESET_ALLOWED_EMAILS = "canary+auth@celstate.app";
-    expect(() => assertEmailAllowlistedForQaReset("canary+auth@celstate.app")).toThrow(
+    process.env.QA_USER_RESET_ALLOWED_EMAILS = canaryEmail;
+    expect(() => assertEmailAllowlistedForQaReset(canaryEmail)).toThrow(
       "canary principal",
     );
     process.env.QA_USER_RESET_ALLOWED_EMAILS = prev;

@@ -7,14 +7,16 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server.js";
-import { internal } from "./_generated/api.js";
-import type { Doc, Id } from "./_generated/dataModel.js";
+import type { Id } from "./_generated/dataModel.js";
 import { upsertCurrentUser, getCurrentAppUser } from "./users.js";
-import { assertStripeEnv } from "./lib/stripeEnv.js";
-import { isKnownCreditPackPriceId } from "./lib/stripeCheckout.js";
+import {
+  CREDIT_PACK_CHECKOUT_PROCESSING_LEASE_MS,
+  type CreditPackProcessingClaim,
+  getKnownCreditPackPriceIds,
+  requestCreditPackCheckout,
+  toCreditPackCheckoutStatus,
+} from "./lib/stripeCheckout.js";
 import { assertVerificationRunnerSecret } from "./lib/verificationRunnerSecret.js";
-
-type PendingCheckoutRecord = Doc<"pendingCheckouts">;
 
 const CHECKOUT_SESSION_EXPIRY_MS = 26 * 60 * 60 * 1000;
 
@@ -33,46 +35,6 @@ const canaryCheckoutStatusValidator = v.union(
   }),
   v.null(),
 );
-
-const getKnownCreditPackPriceIds = () => {
-  const stripeEnv = assertStripeEnv();
-
-  return {
-    starter: stripeEnv.stripePriceStarter,
-    pro: stripeEnv.stripePricePro,
-  };
-};
-
-async function requestCheckoutCore(
-  ctx: MutationCtx,
-  args: {
-    cachedStripeCustomerId?: string;
-    email?: string;
-    name?: string;
-    priceId: string;
-    requireExistingStripeCustomerId?: boolean;
-    userId: Id<"users">;
-  },
-) {
-  const checkoutId = await ctx.db.insert("pendingCheckouts", {
-    userId: args.userId,
-    priceId: args.priceId,
-    status: "pending",
-    createdAt: Date.now(),
-  });
-
-  await ctx.scheduler.runAfter(0, internal.stripe.processCheckout, {
-    checkoutId,
-    userId: args.userId,
-    priceId: args.priceId,
-    email: args.email,
-    name: args.name,
-    cachedStripeCustomerId: args.cachedStripeCustomerId,
-    requireExistingStripeCustomerId: args.requireExistingStripeCustomerId,
-  });
-
-  return checkoutId;
-}
 
 async function getProvisionedCanaryUser(
   ctx: Pick<QueryCtx, "db">,
@@ -135,22 +97,6 @@ async function assertNoActiveSettlementCanary(ctx: MutationCtx, userId: Id<"user
   }
 }
 
-function toCheckoutStatus(
-  checkout: Pick<PendingCheckoutRecord, "checkoutUrl" | "error" | "status" | "stripeCheckoutSessionId">,
-) {
-  if (checkout.status === "ready") {
-    return {
-      status: "ready" as const,
-      checkoutUrl: checkout.checkoutUrl ?? "",
-      stripeCheckoutSessionId: checkout.stripeCheckoutSessionId,
-    };
-  }
-  if (checkout.status === "failed") {
-    return { status: "failed" as const, error: checkout.error ?? "Unknown error" };
-  }
-  return { status: "pending" as const };
-}
-
 async function getCanaryCheckoutStatus(
   ctx: QueryCtx,
   args: {
@@ -167,20 +113,16 @@ async function getCanaryCheckoutStatus(
     return null;
   }
 
-  return toCheckoutStatus(checkout);
+  return toCreditPackCheckoutStatus(checkout);
 }
 
 export const requestCheckout = mutation({
   args: { priceId: v.string() },
   returns: v.id("pendingCheckouts"),
   handler: async (ctx, args) => {
-    if (!isKnownCreditPackPriceId(args.priceId, getKnownCreditPackPriceIds())) {
-      throw new ConvexError("Invalid credit pack");
-    }
-
     const user = await upsertCurrentUser(ctx);
 
-    return await requestCheckoutCore(ctx, {
+    return await requestCreditPackCheckout(ctx, {
       userId: user._id,
       priceId: args.priceId,
       email: user.email,
@@ -202,11 +144,8 @@ export const requestCheckoutForCanaryRunner = internalMutation({
 
     const known = getKnownCreditPackPriceIds();
     const priceId = args.priceId ?? known.starter;
-    if (!isKnownCreditPackPriceId(priceId, known)) {
-      throw new ConvexError("Invalid credit pack");
-    }
 
-    return await requestCheckoutCore(ctx, {
+    return await requestCreditPackCheckout(ctx, {
       userId: user._id,
       priceId,
       email: user.email,
@@ -229,9 +168,6 @@ export const requestSettlementCheckoutForCanaryRunner = internalMutation({
 
     const known = getKnownCreditPackPriceIds();
     const priceId = args.priceId ?? known.starter;
-    if (!isKnownCreditPackPriceId(priceId, known)) {
-      throw new ConvexError("Invalid credit pack");
-    }
 
     if (!user.stripeCustomerId) {
       throw new ConvexError(
@@ -239,7 +175,7 @@ export const requestSettlementCheckoutForCanaryRunner = internalMutation({
       );
     }
 
-    return await requestCheckoutCore(ctx, {
+    return await requestCreditPackCheckout(ctx, {
       userId: user._id,
       priceId,
       email: user.email,
@@ -295,13 +231,78 @@ export const getCheckoutStatus = query({
     const checkout = await ctx.db.get(args.checkoutId);
     if (!checkout || checkout.userId !== appUser._id) return null;
 
-    if (checkout.status === "ready") {
-      return { status: "ready" as const, checkoutUrl: checkout.checkoutUrl ?? "" };
+    const status = toCreditPackCheckoutStatus(checkout);
+
+    if (status.status === "ready") {
+      return { status: "ready" as const, checkoutUrl: status.checkoutUrl };
     }
-    if (checkout.status === "failed") {
-      return { status: "failed" as const, error: checkout.error ?? "Unknown error" };
+
+    if (status.status === "failed") {
+      return { status: "failed" as const, error: status.error };
     }
+
     return { status: "pending" as const };
+  },
+});
+
+/**
+ * Atomic compare-and-set claim that gates the side-effectful Stripe call in
+ * `processCheckout`. Returns `{ ok: true }` only when this caller now owns
+ * the processing lease for this pending checkout. Concurrent or replayed
+ * action invocations get `ok: false` with a structured reason and (when
+ * applicable) the already-stored Stripe session id so the caller can avoid
+ * creating a duplicate Stripe Checkout Session.
+ *
+ * The lease is bounded by `CREDIT_PACK_CHECKOUT_PROCESSING_LEASE_MS`, after
+ * which a stale lease (e.g. an action that was killed mid-flight) may be
+ * reclaimed. Successful and failed terminal mutations clear the lease.
+ */
+export const claimCheckoutForProcessing = internalMutation({
+  args: {
+    checkoutId: v.id("pendingCheckouts"),
+  },
+  returns: v.union(
+    v.object({ ok: v.literal(true), leaseId: v.string() }),
+    v.object({
+      ok: v.literal(false),
+      reason: v.union(
+        v.literal("not_pending"),
+        v.literal("lease_held"),
+        v.literal("missing"),
+      ),
+      existingSessionId: v.optional(v.string()),
+    }),
+  ),
+  handler: async (ctx, args): Promise<CreditPackProcessingClaim> => {
+    const checkout = await ctx.db.get(args.checkoutId);
+    if (!checkout) {
+      return { ok: false, reason: "missing" };
+    }
+
+    if (checkout.status !== "pending") {
+      return {
+        ok: false,
+        reason: "not_pending",
+        existingSessionId: checkout.stripeCheckoutSessionId ?? undefined,
+      };
+    }
+
+    const now = Date.now();
+    const leaseDeadline = (checkout.processingStartedAt ?? 0) + CREDIT_PACK_CHECKOUT_PROCESSING_LEASE_MS;
+    if (checkout.processingStartedAt && leaseDeadline > now) {
+      return {
+        ok: false,
+        reason: "lease_held",
+        existingSessionId: checkout.stripeCheckoutSessionId ?? undefined,
+      };
+    }
+
+    const leaseId = crypto.randomUUID();
+    await ctx.db.patch(args.checkoutId, {
+      processingLeaseId: leaseId,
+      processingStartedAt: now,
+    });
+    return { ok: true, leaseId };
   },
 });
 
@@ -309,14 +310,28 @@ export const markReady = internalMutation({
   args: {
     checkoutId: v.id("pendingCheckouts"),
     checkoutUrl: v.string(),
+    leaseId: v.string(),
     stripeCheckoutSessionId: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const checkout = await ctx.db.get(args.checkoutId);
+    // Only the still-pending row may be promoted to ready. A late or replayed
+    // success path must never clobber a row that has already been marked
+    // failed (or, defensively, already ready) — that would lose the canonical
+    // stripeCheckoutSessionId we use for refund/canary/audit correlation.
+    // The lease owner check prevents an action whose timed-out lease was
+    // reclaimed from promoting the row after a newer invocation took over.
+    if (!checkout || checkout.status !== "pending" || checkout.processingLeaseId !== args.leaseId) {
+      return null;
+    }
+
     await ctx.db.patch(args.checkoutId, {
       status: "ready",
       checkoutUrl: args.checkoutUrl,
       stripeCheckoutSessionId: args.stripeCheckoutSessionId,
+      processingLeaseId: undefined,
+      processingStartedAt: undefined,
     });
     return null;
   },
@@ -326,12 +341,52 @@ export const markFailed = internalMutation({
   args: {
     checkoutId: v.id("pendingCheckouts"),
     error: v.string(),
+    leaseId: v.string(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const checkout = await ctx.db.get(args.checkoutId);
+    // Only the still-pending row may be marked failed. A late failure (e.g.
+    // an exception from the Stripe call after another invocation already
+    // created the session and recorded it as ready) must not clobber a
+    // successful state — that is the bug the architectural review flagged.
+    // The lease owner check additionally prevents a timed-out action from
+    // failing the row after a newer invocation has reclaimed processing.
+    if (!checkout || checkout.status !== "pending" || checkout.processingLeaseId !== args.leaseId) {
+      return null;
+    }
+
     await ctx.db.patch(args.checkoutId, {
       status: "failed",
       error: args.error,
+      processingLeaseId: undefined,
+      processingStartedAt: undefined,
+    });
+    return null;
+  },
+});
+
+/**
+ * Releases a held lease without changing the row's status. Used by
+ * `processCheckout` when the action wants to bow out without recording a
+ * terminal state (e.g. it discovered another invocation already produced
+ * the Stripe session). Idempotent.
+ */
+export const releaseCheckoutProcessingLease = internalMutation({
+  args: {
+    checkoutId: v.id("pendingCheckouts"),
+    leaseId: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const checkout = await ctx.db.get(args.checkoutId);
+    if (!checkout || checkout.processingLeaseId !== args.leaseId) {
+      return null;
+    }
+
+    await ctx.db.patch(args.checkoutId, {
+      processingLeaseId: undefined,
+      processingStartedAt: undefined,
     });
     return null;
   },

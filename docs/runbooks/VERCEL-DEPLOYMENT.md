@@ -60,14 +60,22 @@ PUBLIC_CONVEX_URL=https://<prod-project>.convex.cloud
 - From repo root: `vercel link` — select existing Vercel project for `celstate` (or create one), confirm framework = SvelteKit.
 - **Verify**: `vercel inspect` shows correct project.
 
-### 3. Set environment variable
+### 3. Set environment variables (Doppler-first)
 
-- `vercel env add PUBLIC_CONVEX_URL production` — paste production Convex URL when prompted. Must be an **origin-only** value (e.g. `https://foo-bar-123.convex.cloud` — no trailing slash, no path).
-- `vercel env add PUBLIC_CONVEX_URL preview` — same value (preview deploys use prod Convex unless you add preview Convex later).
-- **Verify**: `vercel env ls` shows `PUBLIC_CONVEX_URL` for Production and Preview.
-- `PUBLIC_CONVEX_SITE_URL` is **optional** — only set it when `PUBLIC_CONVEX_URL` is not a standard `*.convex.cloud` URL; when `PUBLIC_CONVEX_URL` is a normal Convex cloud URL, the app derives the matching `*.convex.site` host automatically.
+Vercel env vars are managed in Doppler (`celstate/prd` config, names starting
+with `PUBLIC_`). To set or change them:
 
-No secrets (Stripe, Gemini) in Vercel; they stay in Convex.
+1. Edit the value in the [Doppler dashboard](https://dashboard.doppler.com/workplace/996778d64be8993d9993/projects/celstate/configs/prd) or via `doppler secrets set NAME=value`.
+2. Run `pnpm secrets:sync:vercel` to push all `PUBLIC_*` from Doppler `prd` into Vercel production.
+
+Required `PUBLIC_*` names (see [PUBLIC-ENV-CHECKLIST.md](./PUBLIC-ENV-CHECKLIST.md)):
+- `PUBLIC_CONVEX_URL` — origin-only Convex prod URL (e.g. `https://foo-bar-123.convex.cloud` — no trailing slash, no path).
+- `PUBLIC_CONVEX_SITE_URL` — **optional**, only when `PUBLIC_CONVEX_URL` is not a standard `*.convex.cloud` URL.
+- `PUBLIC_SITE_URL`, `PUBLIC_POSTHOG_KEY`, `PUBLIC_POSTHOG_HOST`.
+
+**Verify**: `vercel env ls` shows the expected names for Production. Initial onboarding may use `vercel env add NAME production` once if Doppler is empty; thereafter, Doppler is the source of truth.
+
+No backend secrets (Stripe, Gemini, Better Auth, JWT) in Vercel; they stay in Convex (synced from Doppler via `pnpm secrets:sync:convex`).
 
 ### 4. Add custom domain
 

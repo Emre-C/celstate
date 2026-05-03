@@ -2,6 +2,13 @@
 
 **Audience**: humans and CI/CD automation. **Goal**: never point paying customers at Stripe test mode or leak test secrets into production.
 
+> **Source of truth for Stripe secrets is Doppler**, not Convex. Edit Stripe
+> values (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_*`) in
+> Doppler, then run `pnpm secrets:sync:convex` to propagate. To rotate a
+> live Stripe key after a leak, follow
+> [`MANUAL-SECRET-ROTATION-GUIDE.md`](./MANUAL-SECRET-ROTATION-GUIDE.md).
+> Background: [`SECRETS-MANAGEMENT.md`](./SECRETS-MANAGEMENT.md).
+
 Broader Convex + Vercel deploy rules (prod-first): [CONVEX-VERCEL-ENVIRONMENTS.md](./CONVEX-VERCEL-ENVIRONMENTS.md).
 
 ---
@@ -13,7 +20,7 @@ Broader Convex + Vercel deploy rules (prod-first): [CONVEX-VERCEL-ENVIRONMENTS.m
 | **Two deployments** | Convex **development** and **production** are separate; each has its own env vars in the dashboard. |
 | **Prod = live Stripe** | On the **production** deployment only: `STRIPE_SECRET_KEY` must be `sk_live_…`, prices must be live `price_…` from the live Stripe account, `STRIPE_WEBHOOK_SECRET` from the **live** webhook endpoint. |
 | **Dev = test OK** | The dev deployment may use `sk_test_…`, test prices, and test `whsec_…`. |
-| **CLI targeting** | `npx convex env set …` without `--prod` affects the **dev** deployment. Use `--prod` when changing production secrets. |
+| **CLI targeting** | Edit values in Doppler (`celstate/dev` or `celstate/prd`), then run `pnpm secrets:sync:convex:dev` or `pnpm secrets:sync:convex` to push. Never use `convex env set` directly. |
 | **No blind sync** | Do not copy a `.env` or env dump from dev into prod. Do not “fix” prod by pasting `sk_test_` keys. |
 
 ---
@@ -32,11 +39,20 @@ Runtime validation in `src/convex/lib/stripeEnv.ts` checks **presence and format
 
 Before or when going live with real charges:
 
-1. In the Convex dashboard, select the **production** deployment.
-2. Set `STRIPE_SECRET_KEY` to a **live** secret key (`sk_live_…`).
-3. Set `STRIPE_PRICE_STARTER` / `STRIPE_PRICE_PRO` to **live** price IDs from the Stripe dashboard (same mode as the key).
-4. Create/configure the **live** webhook endpoint in Stripe; set `STRIPE_WEBHOOK_SECRET` to that endpoint’s signing secret (`whsec_…`).
-5. Set `SITE_URL` to your real public origin (e.g. `https://www.example.com`).
+1. In Doppler `prd`, set the following values (Doppler dashboard or
+   `doppler secrets set NAME=value`):
+   - `STRIPE_SECRET_KEY` — **live** secret key (`sk_live_…`).
+   - `STRIPE_PRICE_STARTER` / `STRIPE_PRICE_PRO` — **live** price IDs from
+     the Stripe dashboard (same mode as the key).
+   - `STRIPE_WEBHOOK_SECRET` — signing secret (`whsec_…`) of the **live**
+     webhook endpoint configured in Stripe to point at the Convex HTTP
+     action.
+   - `SITE_URL` / `HOSTING_URL` — your real public origin (e.g.
+     `https://www.celstate.com`).
+2. Run `pnpm secrets:sync:convex` to propagate to Convex prod atomically.
+3. In the Convex dashboard, confirm the **production** deployment shows
+   the expected names (use `pnpm secrets:diff` from a terminal — never
+   `convex env list`).
 
 Related: [Payments System](../product/payments-system.md), [Vercel Deployment](./VERCEL-DEPLOYMENT.md).
 
@@ -44,7 +60,9 @@ Related: [Payments System](../product/payments-system.md), [Vercel Deployment](.
 
 ## Common mistakes
 
-- **Setting prod secrets without `--prod`** — Updates only dev; prod still has old keys or is missing vars.
+- **Editing Convex env directly instead of Doppler** — Doppler immediately drifts from Convex. Always edit in Doppler, then sync.
+- **Forgetting to sync after a Doppler edit** — Doppler has the truth, Convex still has the old value. Run `pnpm secrets:sync:convex` after every Doppler edit.
+- **Running `convex env list` to "double-check"** — that's the original leak vector. Use `pnpm secrets:diff` for safe inspection (names only, never values).
 - **Using test webhook secret with live key** (or the reverse) — Webhooks fail or verify against the wrong endpoint.
 - **Assuming one global `SITE_URL`** proves prod — It does not; deployment + Stripe key mode does.
 

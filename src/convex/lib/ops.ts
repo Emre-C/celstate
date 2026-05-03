@@ -1,5 +1,5 @@
 import type { ResolvedAuthProvider } from '../../lib/auth/providers.js';
-import type { GenerationStage } from './generationWorkflow.js';
+import type { GenerationStage } from './generationRun.js';
 
 export const GENERATION_OPS_EVENT_TYPES = [
 	'generation_requested',
@@ -52,6 +52,12 @@ export interface SignupAlertContext {
 	name?: string;
 	authProvider: ResolvedAuthProvider;
 	initialCredits: number;
+}
+
+export interface SecretRotationReminderContext {
+	cadenceLabel: string;
+	gcpProjectId?: string;
+	gcpServiceAccountEmail?: string;
 }
 
 export interface AuthAlertContext {
@@ -492,6 +498,50 @@ export function buildSignupAlertRequest(config: OpsAlertRuntimeConfig, context: 
 			title: 'Celstate new user signup',
 			user_email: context.userEmail,
 			user_id: context.userId
+		}
+	});
+}
+
+export function buildSecretRotationReminderRequest(
+	config: OpsAlertRuntimeConfig,
+	context: SecretRotationReminderContext
+): {
+	body: string;
+	headers: Record<string, string>;
+	url: string;
+} {
+	const title = `Celstate ${context.cadenceLabel} secret rotation reminder`;
+	const gcpRotateLine =
+		context.gcpServiceAccountEmail && context.gcpProjectId
+			? `pnpm secrets:rotate-gcp -- --service-account=${context.gcpServiceAccountEmail} --project=${context.gcpProjectId} --old-key-id=<current>`
+			: 'pnpm secrets:rotate-gcp -- --service-account=<email> --project=<gcp-project> --old-key-id=<current>';
+
+	const facts = [
+		'Run from repo root:',
+		'• pnpm secrets:rotate',
+		`• ${gcpRotateLine}`,
+		'• pnpm secrets:sync:convex',
+		'• pnpm secrets:sync:gh',
+		'',
+		'Manual (vendor dashboards, see MANUAL-SECRET-ROTATION-GUIDE.md):',
+		'• Stripe Secret Key — dashboard.stripe.com/apikeys',
+		'• Stripe Webhook Secret — dashboard.stripe.com/webhooks',
+		'• Google OAuth Secret — console.developers.google.com/auth/clients',
+		'',
+		'Heads up: rotation invalidates all active sessions.'
+	];
+
+	return buildWebhookRequest(config, {
+		summaryLine: `🔐 ${title}`,
+		headerEmoji: '🔐',
+		headerText: title,
+		facts,
+		genericBody: {
+			event: 'secret_rotation_reminder',
+			title,
+			cadence: context.cadenceLabel,
+			gcp_project_id: context.gcpProjectId,
+			gcp_service_account_email: context.gcpServiceAccountEmail
 		}
 	});
 }

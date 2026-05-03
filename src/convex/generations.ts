@@ -15,22 +15,24 @@ import { GENERATION_CONFIG, isValidAspectRatio } from "./lib/config.js";
 import { insertGenerationOpsEventRow } from "./lib/generationOpsEvents.js";
 import {
   generationStageValidator,
-  transparentQaDecisionValidator,
-  transparentQaReasonCodeValidator,
   transparentQaValidator,
 } from "./lib/validators.js";
 import {
-  TRANSPARENT_QA_NUMERIC_METRIC_KEYS,
-  type TransparentQaNumericMetricKey,
-  type TransparentQaReasonCode,
-} from "./lib/transparentQa.js";
-import {
+  buildGenerationRunCompletionPatch,
+  buildGenerationRunFailurePatch,
+  buildGenerationRunRetry,
+  buildGenerationRunStageAttemptPatch,
+  buildGenerationRunStageSuccess,
+  buildGenerationRunStatusPatch,
+  createGenerationRun,
   type GenerationStage,
-  getGenerationLastProgressAt,
-  getGenerationRetryDelayMs,
-  getGenerationRetryStatusMessage,
-  getGenerationStageStatusMessage,
-} from "./lib/generationWorkflow.js";
+  getGenerationRunAttemptDurationMs,
+  getGenerationRunDurationMs,
+  getGenerationRunLastProgressAt,
+  getGenerationRunStageRetryCount,
+  isGenerationRunInStage,
+  isGenerationRunInFlight,
+} from "./lib/generationRun.js";
 import {
   classifyGenerationFailureKind,
   normalizeGenerationFailureStage,
@@ -114,41 +116,6 @@ async function scheduleGenerationStage(
   }
 }
 
-function getGenerationDurationMs(generation: { createdAt: number }, now: number): number {
-  return Math.max(0, now - generation.createdAt);
-}
-
-function getGenerationAttemptDurationMs(
-  generation: {
-    createdAt: number;
-    lastProgressAt?: number;
-    stageStartedAt?: number;
-  },
-  now: number,
-): number {
-  return Math.max(0, now - (generation.stageStartedAt ?? generation.lastProgressAt ?? generation.createdAt));
-}
-
-function getStageRetryCount(
-  generation: {
-    blackBgRetryCount?: number;
-    finalizeRetryCount?: number;
-    whiteBgRetryCount?: number;
-  },
-  stage: GenerationStage | undefined,
-): number | undefined {
-  switch (stage) {
-    case "white_background":
-      return generation.whiteBgRetryCount ?? 0;
-    case "black_background":
-      return generation.blackBgRetryCount ?? 0;
-    case "finalizing":
-      return generation.finalizeRetryCount ?? 0;
-    default:
-      return undefined;
-  }
-}
-
 async function scheduleGenerationAlert(
   ctx: { scheduler: { runAfter: (...args: any[]) => Promise<unknown> } },
   args: {
@@ -195,170 +162,6 @@ const generationStatusFilterValidator = v.union(
   v.literal("generating"),
   v.literal("failed"),
 );
-
-interface TransparentQaMetricDistributionSummary {
-  count: number;
-  min: number | null;
-  max: number | null;
-  avg: number | null;
-  p10: number | null;
-  p50: number | null;
-  p90: number | null;
-  p95: number | null;
-}
-
-const transparentQaMetricDistributionValidator = v.object({
-  count: v.number(),
-  min: v.union(v.number(), v.null()),
-  max: v.union(v.number(), v.null()),
-  avg: v.union(v.number(), v.null()),
-  p10: v.union(v.number(), v.null()),
-  p50: v.union(v.number(), v.null()),
-  p90: v.union(v.number(), v.null()),
-  p95: v.union(v.number(), v.null()),
-});
-
-const transparentQaMetricDistributionFields = Object.fromEntries(
-  TRANSPARENT_QA_NUMERIC_METRIC_KEYS.map((key) => [key, transparentQaMetricDistributionValidator]),
-) as Record<TransparentQaNumericMetricKey, typeof transparentQaMetricDistributionValidator>;
-
-const transparentQaMetricsReportValidator = v.object({
-  filters: v.object({
-    statuses: v.array(generationStatusFilterValidator),
-    decision: v.union(transparentQaDecisionValidator, v.null()),
-    reasonCode: v.union(transparentQaReasonCodeValidator, v.null()),
-  }),
-  totals: v.object({
-    scannedGenerations: v.number(),
-    matchingGenerations: v.number(),
-    returnedSamples: v.number(),
-    scanLimit: v.number(),
-    sampleLimit: v.number(),
-    scanLimitReached: v.boolean(),
-  }),
-  statusCounts: v.object({
-    complete: v.number(),
-    generating: v.number(),
-    failed: v.number(),
-  }),
-  decisionCounts: v.object({
-    pass: v.number(),
-    retry_black: v.number(),
-    retry_white_and_black: v.number(),
-    review: v.number(),
-  }),
-  reasonCodeCounts: v.array(v.object({
-    reasonCode: transparentQaReasonCodeValidator,
-    count: v.number(),
-  })),
-  metricDistributions: v.object(transparentQaMetricDistributionFields),
-  recentSamples: v.array(v.object({
-    generationId: v.id("generations"),
-    createdAt: v.number(),
-    completedAt: v.optional(v.number()),
-    status: generationStatusFilterValidator,
-    decision: transparentQaDecisionValidator,
-    reasonCodes: v.array(transparentQaReasonCodeValidator),
-    alphaPresence: v.number(),
-    borderTransparencyRatio: v.number(),
-    recompositionResidual: v.number(),
-    channelDisagreement: v.number(),
-    alphaResidual: v.number(),
-    boundaryErrorRate: v.number(),
-    externalSpill: v.number(),
-    haloTail: v.number(),
-    topologyVolatility: v.number(),
-    fragmentNoise: v.number(),
-    persistentHoleCount: v.number(),
-    fragileHoleCount: v.number(),
-  })),
-  window: v.object({
-    hoursWindow: v.number(),
-    now: v.number(),
-    since: v.number(),
-  }),
-});
-
-function clampTransparentQaReportHoursWindow(hoursWindow: number | undefined): number {
-  if (hoursWindow === undefined || !Number.isFinite(hoursWindow)) {
-    return 24 * 7;
-  }
-
-  return Math.min(Math.max(Math.floor(hoursWindow), 1), 24 * 30);
-}
-
-function clampTransparentQaReportScanLimit(scanLimit: number | undefined): number {
-  if (scanLimit === undefined || !Number.isFinite(scanLimit)) {
-    return 200;
-  }
-
-  return Math.min(Math.max(Math.floor(scanLimit), 10), 1000);
-}
-
-function clampTransparentQaReportSampleLimit(
-  sampleLimit: number | undefined,
-  scanLimit: number,
-): number {
-  if (sampleLimit === undefined || !Number.isFinite(sampleLimit)) {
-    return Math.min(scanLimit, 25);
-  }
-
-  return Math.min(Math.max(Math.floor(sampleLimit), 1), Math.min(scanLimit, 100));
-}
-
-function createEmptyTransparentQaMetricBuckets(): Record<TransparentQaNumericMetricKey, number[]> {
-  return Object.fromEntries(
-    TRANSPARENT_QA_NUMERIC_METRIC_KEYS.map((key) => [key, [] as number[]]),
-  ) as Record<TransparentQaNumericMetricKey, number[]>;
-}
-
-function getPercentile(sortedValues: number[], percentile: number): number | null {
-  if (sortedValues.length === 0) {
-    return null;
-  }
-
-  const boundedPercentile = Math.max(0, Math.min(1, percentile));
-  const index = (sortedValues.length - 1) * boundedPercentile;
-  const lowerIndex = Math.floor(index);
-  const upperIndex = Math.ceil(index);
-  const lowerValue = sortedValues[lowerIndex]!;
-  const upperValue = sortedValues[upperIndex]!;
-
-  if (lowerIndex === upperIndex) {
-    return lowerValue;
-  }
-
-  return lowerValue + (upperValue - lowerValue) * (index - lowerIndex);
-}
-
-function summarizeTransparentQaMetricValues(values: number[]): TransparentQaMetricDistributionSummary {
-  if (values.length === 0) {
-    return {
-      count: 0,
-      min: null,
-      max: null,
-      avg: null,
-      p10: null,
-      p50: null,
-      p90: null,
-      p95: null,
-    };
-  }
-
-  const sortedValues = [...values].sort((left, right) => left - right);
-  const total = values.reduce((sum, value) => sum + value, 0);
-
-  return {
-    count: values.length,
-    min: sortedValues[0] ?? null,
-    max: sortedValues.at(-1) ?? null,
-    avg: total / values.length,
-    p10: getPercentile(sortedValues, 0.1),
-    p50: getPercentile(sortedValues, 0.5),
-    p90: getPercentile(sortedValues, 0.9),
-    p95: getPercentile(sortedValues, 0.95),
-  };
-}
 
 async function resolveGenerationWithUrls(
   ctx: Pick<QueryCtx, "storage">,
@@ -422,22 +225,15 @@ async function requestGenerationCore(
   });
 
   const now = Date.now();
-  const generationId = await ctx.db.insert("generations", {
-    userId,
-    prompt,
-    status: "generating" as const,
-    stage: "white_background" as const,
-    statusMessage: getGenerationStageStatusMessage("white_background"),
-    referenceStorageIds: referenceStorageIds.length > 0 ? referenceStorageIds : undefined,
-    creditsCost,
+  const generationRun = createGenerationRun({
     aspectRatio,
     createdAt: now,
-    lastProgressAt: now,
-    retryCount: 0,
-    whiteBgRetryCount: 0,
-    blackBgRetryCount: 0,
-    finalizeRetryCount: 0,
+    creditsCost,
+    prompt,
+    referenceStorageIds,
+    userId,
   });
+  const generationId = await ctx.db.insert("generations", generationRun);
 
   await insertGenerationOpsEventRow(ctx, {
     eventType: "generation_requested",
@@ -445,8 +241,8 @@ async function requestGenerationCore(
     generationId,
     retryCount: 0,
     severity: "info",
-    stage: "white_background",
-    statusMessage: getGenerationStageStatusMessage("white_background"),
+    stage: generationRun.stage,
+    statusMessage: generationRun.statusMessage,
     totalRetryCount: 0,
     userEmail: appUser.email,
     userId,
@@ -636,7 +432,11 @@ async function failGenerationRecord(
   internalError?: string,
 ): Promise<void> {
   const generation = await ctx.db.get(generationId);
-  if (!generation || generation.status !== "generating") {
+  // Failures may originate at any stage (timeout sweeper, provider error in
+  // any of white/black/finalize), so we only require that the run is still
+  // in flight. A second failure attempt against an already-failed or
+  // completed run becomes a no-op.
+  if (!isGenerationRunInFlight(generation)) {
     return;
   }
 
@@ -648,29 +448,24 @@ async function failGenerationRecord(
   });
   const failureStage = normalizeGenerationFailureStage(generation.stage);
 
-  await ctx.db.patch(generationId, {
+  await ctx.db.patch(generationId, buildGenerationRunFailurePatch({
     completedAt: now,
     error,
     failureKind,
     failureStage,
-    lastProgressAt: now,
-    stage: undefined,
-    stageStartedAt: undefined,
-    status: "failed",
-    statusMessage: undefined,
     transparentQa,
-  });
+  }));
 
   const user = await ctx.db.get(generation.userId);
   const alertError = internalError ?? error;
 
   await insertGenerationOpsEventRow(ctx, {
-    attemptDurationMs: getGenerationAttemptDurationMs(generation, now),
+    attemptDurationMs: getGenerationRunAttemptDurationMs(generation, now),
     error: alertError,
     eventType: "generation_failed",
-    generationDurationMs: getGenerationDurationMs(generation, now),
+    generationDurationMs: getGenerationRunDurationMs(generation, now),
     generationId,
-    retryCount: getStageRetryCount(generation, generation.stage),
+    retryCount: generation.stage ? getGenerationRunStageRetryCount(generation, generation.stage) : undefined,
     severity: "critical",
     stage: generation.stage,
     statusMessage: generation.statusMessage,
@@ -682,9 +477,9 @@ async function failGenerationRecord(
   await scheduleGenerationAlert(ctx, {
     alertType: "generation_failed",
     error: alertError,
-    generationDurationMs: getGenerationDurationMs(generation, now),
+    generationDurationMs: getGenerationRunDurationMs(generation, now),
     generationId,
-    retryCount: getStageRetryCount(generation, generation.stage),
+    retryCount: generation.stage ? getGenerationRunStageRetryCount(generation, generation.stage) : undefined,
     severity: "critical",
     stage: generation.stage,
     statusMessage: generation.statusMessage,
@@ -726,35 +521,33 @@ export const completeGeneration = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const generation = await ctx.db.get(args.generationId);
-    if (!generation || generation.status !== "generating") {
+    // Compare-and-set: completion is only valid from the finalizing stage.
+    // A stale finalize replay must not be able to mark a run that already
+    // failed, completed, or is still working on an earlier stage.
+    if (!isGenerationRunInStage(generation, "finalizing")) {
       return null;
     }
 
     const now = Date.now();
     const user = await ctx.db.get(generation.userId);
-    await ctx.db.patch(args.generationId, {
+    await ctx.db.patch(args.generationId, buildGenerationRunCompletionPatch({
       blackBgStorageId: args.blackBgStorageId,
       completedAt: now,
       dimensionMismatch: args.dimensionMismatch,
       generationTimeMs: args.generationTimeMs,
-      lastProgressAt: now,
       optimizedStorageId: args.optimizedStorageId,
       resultStorageId: args.resultStorageId,
       retryCount: args.retryCount,
-      stage: undefined,
-      stageStartedAt: undefined,
-      status: "complete",
-      statusMessage: undefined,
       transparentQa: args.transparentQa,
       whiteBgStorageId: args.whiteBgStorageId,
-    });
+    }));
 
     await insertGenerationOpsEventRow(ctx, {
-      attemptDurationMs: getGenerationAttemptDurationMs(generation, now),
+      attemptDurationMs: getGenerationRunAttemptDurationMs(generation, now),
       eventType: "generation_completed",
       generationDurationMs: args.generationTimeMs,
       generationId: args.generationId,
-      retryCount: getStageRetryCount(generation, generation.stage),
+      retryCount: getGenerationRunStageRetryCount(generation, generation.stage),
       severity: "info",
       stage: generation.stage,
       statusMessage: generation.statusMessage,
@@ -774,15 +567,12 @@ export const markStageAttemptStarted = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const generation = await ctx.db.get(args.generationId);
-    if (!generation || generation.status !== "generating" || generation.stage !== args.stage) {
+    const patch = buildGenerationRunStageAttemptPatch(generation, args.stage, Date.now());
+    if (!patch) {
       return null;
     }
 
-    const now = Date.now();
-    await ctx.db.patch(args.generationId, {
-      lastProgressAt: now,
-      stageStartedAt: now,
-    });
+    await ctx.db.patch(args.generationId, patch);
     return null;
   },
 });
@@ -796,24 +586,27 @@ export const recordWhiteBackgroundSuccess = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const generation = await ctx.db.get(args.generationId);
-    if (!generation || generation.status !== "generating") {
+    // Compare-and-set: a white-background success patch must only land while
+    // the run is still in the white_background stage. A late or replayed
+    // success must not advance a run that has already moved on (e.g. is
+    // already in black_background or finalizing) or been failed.
+    if (!isGenerationRunInStage(generation, "white_background")) {
       return null;
     }
 
     const now = Date.now();
-    await ctx.db.patch(args.generationId, {
-      lastProgressAt: now,
-      stage: "black_background",
-      stageStartedAt: undefined,
-      statusMessage: getGenerationStageStatusMessage("black_background"),
-      whiteBgRetryCount: args.retryCount,
+    const transition = buildGenerationRunStageSuccess({
+      now,
+      retryCount: args.retryCount,
+      stage: "white_background",
       whiteBgStorageId: args.whiteBgStorageId,
     });
+    await ctx.db.patch(args.generationId, transition.patch);
 
     await insertGenerationOpsEventRow(ctx, {
-      attemptDurationMs: getGenerationAttemptDurationMs(generation, now),
+      attemptDurationMs: getGenerationRunAttemptDurationMs(generation, now),
       eventType: "stage_succeeded",
-      generationDurationMs: getGenerationDurationMs(generation, now),
+      generationDurationMs: getGenerationRunDurationMs(generation, now),
       generationId: args.generationId,
       retryCount: args.retryCount,
       severity: "info",
@@ -822,7 +615,7 @@ export const recordWhiteBackgroundSuccess = internalMutation({
       userId: generation.userId,
     });
 
-    await scheduleGenerationStage(ctx, args.generationId, "black_background");
+    await scheduleGenerationStage(ctx, args.generationId, transition.nextStage);
     return null;
   },
 });
@@ -836,24 +629,27 @@ export const recordBlackBackgroundSuccess = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const generation = await ctx.db.get(args.generationId);
-    if (!generation || generation.status !== "generating") {
+    // Compare-and-set: a black-background success must only land while the
+    // run is in the black_background stage. Without this guard a stale
+    // black-background action could rewind a run that has already advanced
+    // to finalizing, or resurrect one that has been failed.
+    if (!isGenerationRunInStage(generation, "black_background")) {
       return null;
     }
 
     const now = Date.now();
-    await ctx.db.patch(args.generationId, {
-      blackBgRetryCount: args.retryCount,
+    const transition = buildGenerationRunStageSuccess({
       blackBgStorageId: args.blackBgStorageId,
-      lastProgressAt: now,
-      stage: "finalizing",
-      stageStartedAt: undefined,
-      statusMessage: getGenerationStageStatusMessage("finalizing"),
+      now,
+      retryCount: args.retryCount,
+      stage: "black_background",
     });
+    await ctx.db.patch(args.generationId, transition.patch);
 
     await insertGenerationOpsEventRow(ctx, {
-      attemptDurationMs: getGenerationAttemptDurationMs(generation, now),
+      attemptDurationMs: getGenerationRunAttemptDurationMs(generation, now),
       eventType: "stage_succeeded",
-      generationDurationMs: getGenerationDurationMs(generation, now),
+      generationDurationMs: getGenerationRunDurationMs(generation, now),
       generationId: args.generationId,
       retryCount: args.retryCount,
       severity: "info",
@@ -862,7 +658,7 @@ export const recordBlackBackgroundSuccess = internalMutation({
       userId: generation.userId,
     });
 
-    await scheduleGenerationStage(ctx, args.generationId, "finalizing");
+    await scheduleGenerationStage(ctx, args.generationId, transition.nextStage);
     return null;
   },
 });
@@ -870,6 +666,7 @@ export const recordBlackBackgroundSuccess = internalMutation({
 export const scheduleStageRetry = internalMutation({
   args: {
     generationId: v.id("generations"),
+    expectedStage: v.optional(generationStageValidator),
     retryCount: v.number(),
     retryInstruction: v.optional(v.string()),
     downstreamRetryInstruction: v.optional(v.string()),
@@ -879,63 +676,41 @@ export const scheduleStageRetry = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const generation = await ctx.db.get(args.generationId);
-    if (!generation || generation.status !== "generating") {
+    const expectedStage = args.expectedStage ?? args.stage;
+    // Compare-and-set: a retry patch may target the same stage or deliberately
+    // roll back from finalizing to an earlier stage after QA. In both cases it
+    // must only land if the row is still in the stage observed by the action
+    // that made the retry decision; a stale replay must not overwrite a run
+    // that has since advanced, completed, or failed.
+    if (!isGenerationRunInStage(generation, expectedStage)) {
       return null;
     }
 
     const now = Date.now();
-    const totalRetryCount = (generation.retryCount ?? 0) + 1;
-    const statusMessage = getGenerationRetryStatusMessage(args.stage, args.retryCount);
-    await ctx.db.patch(args.generationId, {
-      blackBgRetryCount:
-        args.stage === "black_background"
-          ? args.retryCount
-          : generation.blackBgRetryCount,
-      blackBgRetryInstruction:
-        args.stage === "black_background"
-          ? args.retryInstruction
-          : args.stage === "white_background"
-            ? args.downstreamRetryInstruction
-          : generation.blackBgRetryInstruction,
-      finalizeRetryCount:
-        args.stage === "finalizing"
-          ? args.retryCount
-          : generation.finalizeRetryCount,
-      lastProgressAt: now,
-      retryCount: totalRetryCount,
+    const retry = buildGenerationRunRetry(generation, {
+      downstreamRetryInstruction: args.downstreamRetryInstruction,
+      now,
+      retryCount: args.retryCount,
+      retryInstruction: args.retryInstruction,
       stage: args.stage,
-      stageStartedAt: undefined,
-      statusMessage,
       transparentQa: args.transparentQa,
-      whiteBgRetryCount:
-        args.stage === "white_background"
-          ? args.retryCount
-          : generation.whiteBgRetryCount,
-      whiteBgRetryInstruction:
-        args.stage === "white_background"
-          ? args.retryInstruction
-          : generation.whiteBgRetryInstruction,
     });
+    await ctx.db.patch(args.generationId, retry.patch);
 
     await insertGenerationOpsEventRow(ctx, {
-      attemptDurationMs: getGenerationAttemptDurationMs(generation, now),
+      attemptDurationMs: getGenerationRunAttemptDurationMs(generation, now),
       eventType: "stage_retry_scheduled",
-      generationDurationMs: getGenerationDurationMs(generation, now),
+      generationDurationMs: getGenerationRunDurationMs(generation, now),
       generationId: args.generationId,
       retryCount: args.retryCount,
       severity: "warning",
       stage: args.stage,
-      statusMessage,
-      totalRetryCount,
+      statusMessage: retry.statusMessage,
+      totalRetryCount: retry.totalRetryCount,
       userId: generation.userId,
     });
 
-    await scheduleGenerationStage(
-      ctx,
-      args.generationId,
-      args.stage,
-      getGenerationRetryDelayMs(Math.max(args.retryCount - 1, 0)),
-    );
+    await scheduleGenerationStage(ctx, args.generationId, args.stage, retry.delayMs);
 
     return null;
   },
@@ -1015,138 +790,6 @@ export const getById = internalQuery({
   },
 });
 
-export const getTransparentQaMetricsReport = internalQuery({
-  args: {
-    now: v.number(),
-    hoursWindow: v.optional(v.number()),
-    scanLimit: v.optional(v.number()),
-    sampleLimit: v.optional(v.number()),
-    status: v.optional(generationStatusFilterValidator),
-    decision: v.optional(transparentQaDecisionValidator),
-    reasonCode: v.optional(transparentQaReasonCodeValidator),
-  },
-  returns: transparentQaMetricsReportValidator,
-  handler: async (ctx, args) => {
-    const hoursWindow = clampTransparentQaReportHoursWindow(args.hoursWindow);
-    const scanLimit = clampTransparentQaReportScanLimit(args.scanLimit);
-    const sampleLimit = clampTransparentQaReportSampleLimit(args.sampleLimit, scanLimit);
-    const since = args.now - hoursWindow * 60 * 60 * 1000;
-    const statuses: Array<Doc<"generations">["status"]> = args.status
-      ? [args.status]
-      : ["complete", "failed"];
-
-    const scannedGenerations = await ctx.db
-      .query("generations")
-      .withIndex("by_createdAt", (q) => q.gte("createdAt", since).lte("createdAt", args.now))
-      .order("desc")
-      .take(scanLimit);
-
-    const matchingGenerations = scannedGenerations.filter((generation) => {
-      const transparentQa = generation.transparentQa;
-      if (!transparentQa) {
-        return false;
-      }
-      if (!statuses.includes(generation.status)) {
-        return false;
-      }
-      if (args.decision && transparentQa.decision !== args.decision) {
-        return false;
-      }
-      if (args.reasonCode && !transparentQa.reasonCodes.includes(args.reasonCode)) {
-        return false;
-      }
-      return true;
-    });
-
-    const statusCounts = {
-      complete: 0,
-      generating: 0,
-      failed: 0,
-    };
-    const decisionCounts = {
-      pass: 0,
-      retry_black: 0,
-      retry_white_and_black: 0,
-      review: 0,
-    };
-    const reasonCodeCounts = new Map<TransparentQaReasonCode, number>();
-    const metricBuckets = createEmptyTransparentQaMetricBuckets();
-
-    for (const generation of matchingGenerations) {
-      const transparentQa = generation.transparentQa!;
-      statusCounts[generation.status] += 1;
-      decisionCounts[transparentQa.decision] += 1;
-
-      for (const reasonCode of transparentQa.reasonCodes) {
-        reasonCodeCounts.set(reasonCode, (reasonCodeCounts.get(reasonCode) ?? 0) + 1);
-      }
-
-      for (const metricKey of TRANSPARENT_QA_NUMERIC_METRIC_KEYS) {
-        metricBuckets[metricKey].push(transparentQa.metrics[metricKey]);
-      }
-    }
-
-    const metricDistributions = Object.fromEntries(
-      TRANSPARENT_QA_NUMERIC_METRIC_KEYS.map((metricKey) => [
-        metricKey,
-        summarizeTransparentQaMetricValues(metricBuckets[metricKey]),
-      ]),
-    ) as Record<TransparentQaNumericMetricKey, TransparentQaMetricDistributionSummary>;
-
-    const recentSamples = matchingGenerations.slice(0, sampleLimit).map((generation) => {
-      const transparentQa = generation.transparentQa!;
-      return {
-        generationId: generation._id,
-        createdAt: generation.createdAt,
-        completedAt: generation.completedAt,
-        status: generation.status,
-        decision: transparentQa.decision,
-        reasonCodes: transparentQa.reasonCodes,
-        alphaPresence: transparentQa.metrics.alphaPresence,
-        borderTransparencyRatio: transparentQa.metrics.borderTransparencyRatio,
-        recompositionResidual: transparentQa.metrics.recompositionResidual,
-        channelDisagreement: transparentQa.metrics.channelDisagreement,
-        alphaResidual: transparentQa.metrics.alphaResidual,
-        boundaryErrorRate: transparentQa.metrics.boundaryErrorRate,
-        externalSpill: transparentQa.metrics.externalSpill,
-        haloTail: transparentQa.metrics.haloTail,
-        topologyVolatility: transparentQa.metrics.topologyVolatility,
-        fragmentNoise: transparentQa.metrics.fragmentNoise,
-        persistentHoleCount: transparentQa.metrics.persistentHoleCount,
-        fragileHoleCount: transparentQa.metrics.fragileHoleCount,
-      };
-    });
-
-    return {
-      filters: {
-        statuses,
-        decision: args.decision ?? null,
-        reasonCode: args.reasonCode ?? null,
-      },
-      totals: {
-        scannedGenerations: scannedGenerations.length,
-        matchingGenerations: matchingGenerations.length,
-        returnedSamples: recentSamples.length,
-        scanLimit,
-        sampleLimit,
-        scanLimitReached: scannedGenerations.length === scanLimit,
-      },
-      statusCounts,
-      decisionCounts,
-      reasonCodeCounts: Array.from(reasonCodeCounts.entries())
-        .map(([reasonCode, count]) => ({ reasonCode, count }))
-        .sort((left, right) => right.count - left.count || left.reasonCode.localeCompare(right.reasonCode)),
-      metricDistributions,
-      recentSamples,
-      window: {
-        hoursWindow,
-        now: args.now,
-        since,
-      },
-    };
-  },
-});
-
 export const getByUserWithUrls = query({
   args: {},
   returns: v.array(generationWithUrlsValidator),
@@ -1223,15 +866,20 @@ export const getByUserAndIdWithUrls = query({
 export const updateStatusMessage = internalMutation({
   args: {
     generationId: v.id("generations"),
+    stage: generationStageValidator,
     statusMessage: v.string(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.generationId, {
-      lastProgressAt: Date.now(),
-      stalledAlertedAt: undefined,
-      statusMessage: args.statusMessage,
-    });
+    const generation = await ctx.db.get(args.generationId);
+    // Compare-and-set: status text is progress for a specific in-flight stage.
+    // A slow replay must not mutate lastProgressAt/statusMessage after another
+    // action has completed, failed, or moved the run to a different stage.
+    if (!isGenerationRunInStage(generation, args.stage)) {
+      return null;
+    }
+
+    await ctx.db.patch(args.generationId, buildGenerationRunStatusPatch(args.statusMessage, Date.now()));
     return null;
   },
 });
@@ -1442,7 +1090,7 @@ export const cleanupStaleGenerations = internalMutation({
       .collect();
 
     for (const gen of stale) {
-      const lastProgressAt = getGenerationLastProgressAt(gen);
+      const lastProgressAt = getGenerationRunLastProgressAt(gen);
 
       if (lastProgressAt < staleThreshold) {
         await failGenerationRecord(
@@ -1463,12 +1111,12 @@ export const cleanupStaleGenerations = internalMutation({
         });
 
         await insertGenerationOpsEventRow(ctx, {
-          attemptDurationMs: getGenerationAttemptDurationMs(gen, now),
+          attemptDurationMs: getGenerationRunAttemptDurationMs(gen, now),
           error: stallError,
           eventType: "generation_stalled",
-          generationDurationMs: getGenerationDurationMs(gen, now),
+          generationDurationMs: getGenerationRunDurationMs(gen, now),
           generationId: gen._id,
-          retryCount: getStageRetryCount(gen, gen.stage),
+          retryCount: gen.stage ? getGenerationRunStageRetryCount(gen, gen.stage) : undefined,
           severity: "warning",
           stage: gen.stage,
           statusMessage: gen.statusMessage,
@@ -1479,9 +1127,9 @@ export const cleanupStaleGenerations = internalMutation({
         await scheduleGenerationAlert(ctx, {
           alertType: "generation_stalled",
           error: stallError,
-          generationDurationMs: getGenerationDurationMs(gen, now),
+          generationDurationMs: getGenerationRunDurationMs(gen, now),
           generationId: gen._id,
-          retryCount: getStageRetryCount(gen, gen.stage),
+          retryCount: gen.stage ? getGenerationRunStageRetryCount(gen, gen.stage) : undefined,
           severity: "warning",
           stage: gen.stage,
           statusMessage: gen.statusMessage,

@@ -104,7 +104,7 @@ export function assertStripeEnv(): StripeEnv {
       .join("\n");
     throw new Error(
       `Stripe environment validation failed:\n${summary}\n\n` +
-        `Check your Convex environment variables (npx convex env list).`,
+        `Check Doppler and use pnpm secrets:diff for safe name-only inspection.`,
     );
   }
 

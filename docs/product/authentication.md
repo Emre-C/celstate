@@ -32,16 +32,15 @@ Celstate does not want to own password storage, reset flows, breach handling, or
 - `src/lib/auth/config.ts` — Canonical auth env contract: reads, validates, exports structured env values; builds social provider config, trusted origins, and provider availability. Apple credential requirements are temporarily relaxed (see Apple section).
 - `src/lib/auth/providers.ts` — UI provider descriptors for `google` and `apple`. Apple is currently forced to `comingSoon: true`.
 - `src/lib/auth/redirect.ts` — Shared redirect-target builder for server and client auth guards.
-- `src/lib/auth/protected-app.ts` — Pure helper for protected-app auth-state UX (including grace-period behavior to reduce tab-return flicker).
-- `src/lib/server/auth.ts` — Cookie helpers for SSR auth bootstrap; detects the Better Auth Convex JWT cookie; seeds initial client auth snapshot from cookie presence only.
-- `src/lib/server/auth-guard.ts` — Server helpers such as `buildAuthRedirectTarget` used by the `(app)` layout guard.
+- `src/lib/auth/protected-session.ts` — Protected app-shell session module. Owns the server bootstrap snapshot, route-entry redirect outcome, and client shell-entry policy (including grace-period behavior to reduce tab-return flicker).
+- `src/lib/server/auth.ts` — Low-level Better Auth Convex JWT cookie helpers used by `hooks.server.ts` to populate `locals.token`.
 - `src/lib/server/canonical-site.ts` — Resolves canonical-host redirects from `PUBLIC_SITE_URL`.
 - `src/lib/server/response.ts` — Safely adds headers to immutable `Response` objects by cloning first.
-- `src/routes/+layout.server.ts` — Feeds initial auth state from cookies into the root layout.
+- `src/routes/+layout.server.ts` — Feeds the minimal auth bootstrap snapshot into the root layout from `locals.token`.
 - `src/routes/+layout.svelte` — Root layout owns global app chrome and the SSR auth snapshot; does not initialize the Convex Better Auth client globally.
 - `src/hooks.server.ts` — Reads Convex JWT from Better Auth cookies into `event.locals.token`; enforces canonical host; emits request-scoped auth logs for `/auth` and `/api/auth/*`.
-- `src/routes/(app)/+layout.server.ts` — **Authoritative route guard**: redirects unauthenticated users to `/auth?redirectTo=...` (via `buildAuthRedirectTarget` from `auth-guard.ts`).
-- `src/routes/(app)/+layout.svelte` — Protected-app client UX after hydration; initializes `createSvelteAuthClient(...)` with `PUBLIC_CONVEX_URL` from `$env/static/public`; runs `users.storeUser` bootstrap without blocking first paint; tolerates brief auth revalidation churn before redirecting.
+- `src/routes/(app)/+layout.server.ts` — Protected-session server adapter. Uses the protected-session module as the **authoritative route guard** and returns the app-shell bootstrap snapshot.
+- `src/routes/(app)/+layout.svelte` — Protected-session client adapter. Initializes `createSvelteAuthClient(...)` with `PUBLIC_CONVEX_URL` from `$env/static/public`; runs `users.storeUser` bootstrap without blocking first paint; defers shell-entry/redirect policy to the protected-session module.
 - `src/routes/auth/+page.svelte` — Social-only sign-in surface (Google active, Apple “Coming soon”).
 
 ## Dependencies
@@ -71,8 +70,8 @@ Celstate does not want to own password storage, reset flows, breach handling, or
 
 1. User requests a route under `(app)` (e.g. `/app`).
 2. `hooks.server.ts` exposes the JWT from cookies as `locals.token`.
-3. `(app)/+layout.server.ts` redirects unauthenticated users to `/auth?redirectTo=...`.
-4. `(app)/+layout.svelte` manages post-hydration UX and must not eagerly override the server guard during transient client revalidation.
+3. `(app)/+layout.server.ts` resolves the protected-session request and redirects unauthenticated users to `/auth?redirectTo=...`.
+4. `(app)/+layout.svelte` manages post-hydration UX through the protected-session module and must not eagerly override the server guard during transient client revalidation.
 5. The shell renders when the user is effectively authenticated; `users.storeUser` continues in the background.
 6. After sign-in, the user returns to the original route.
 
@@ -83,7 +82,7 @@ Server-side bootstrap depends on Better Auth’s Convex JWT cookie contract. Coo
 - `better-auth.convex_jwt`
 - `__Secure-better-auth.convex_jwt`
 
-SSR uses **cookie presence only** to derive the initial snapshot. Full validation remains with Better Auth + Convex after hydration.
+`hooks.server.ts` reads these cookies into `locals.token`, and the protected-session module derives the SSR bootstrap snapshot from that minimal server contract. Full validation remains with Better Auth + Convex after hydration.
 
 ## Enduring lessons
 
@@ -130,7 +129,7 @@ Relevant tests:
 
 - `src/lib/auth-client.test.ts`
 - `src/lib/auth/config.test.ts`
-- `src/lib/auth/protected-app.test.ts`
+- `src/lib/auth/protected-session.test.ts`
 - `src/lib/server/auth-alerts.test.ts`
 - `src/lib/server/auth-guard.test.ts`
 - `src/lib/server/auth-proxy.test.ts`
@@ -191,7 +190,7 @@ Legacy names such as `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` are intentional
 
 **Do not disable auth in dev** — cookies, redirects, and Convex identity should always be exercised. Use the development Convex deployment and test OAuth credentials.
 
-**Dev vs prod isolation** — Separate Convex deployments and env stores; `pnpm exec convex env set` defaults to dev (`--prod` for production). Local `.env` uses dev URLs; production builds use prod URLs. Google Cloud Console can list both localhost and production origins on the same OAuth client.
+**Dev vs prod isolation** — Separate Convex deployments and env stores. Auth secrets (`JWT_PRIVATE_KEY`, `JWKS`, `BETTER_AUTH_SECRET`, `AUTH_GOOGLE_*`) live in Doppler (`celstate/dev` and `celstate/prd`); push to Convex with `pnpm secrets:sync:convex:dev` or `pnpm secrets:sync:convex`. Local `.env` uses dev URLs; production builds use prod URLs. Google Cloud Console can list both localhost and production origins on the same OAuth client. See [`docs/runbooks/SECRETS-MANAGEMENT.md`](../runbooks/SECRETS-MANAGEMENT.md).
 
 See also: [`docs/runbooks/STRIPE-CONVEX-ENVIRONMENTS.md`](../runbooks/STRIPE-CONVEX-ENVIRONMENTS.md) (same dev/prod split pattern for Stripe).
 
@@ -233,12 +232,12 @@ Locations are marked with `TODO:` in:
 - Convex: `pnpm exec convex deploy --yes` (non-interactive; adjust for your pipeline).
 - Vercel: `pnpm exec vercel --prod`.
 
-Convex env: `pnpm exec convex env set KEY VALUE` (add `--prod` for production). Vercel env: `pnpm exec vercel env add KEY production --value VALUE --yes`.
+Env var changes go through Doppler. Edit in the Doppler dashboard (or `doppler secrets set NAME=VALUE`), then run `pnpm secrets:sync:convex` for backend or `pnpm secrets:sync:vercel` for `PUBLIC_*` browser config. See [`docs/runbooks/SECRETS-MANAGEMENT.md`](../runbooks/SECRETS-MANAGEMENT.md).
 
 ## Future hardening (non-blocking)
 
 1. E2E auth automation: full sign-in, callback, sign-out, tab-return in CI (production verification already proves **protected-route entry** with a stored session; it does not drive OAuth end-to-end).
-2. Optional structured client metrics for protected-app churn and `users.storeUser` latency when debugging.
+2. Optional structured client metrics for protected-session churn and `users.storeUser` latency when debugging.
 3. Explicit tests for non-blocking user bootstrap (render before `users.storeUser` completes; graceful degradation until user row exists).
 4. Revisit local Convex on Windows after upstream fixes.
 5. Release checklist: canonical origin, same-origin `/api/auth`, protected routes, callbacks, no redirect loops on apex vs `www` if aliases exist.

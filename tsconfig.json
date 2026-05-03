@@ -22,7 +22,6 @@
 		"src/**/*.ts",
 		"src/**/*.svelte",
 		"scripts/**/*.ts",
-		"scripts/**/*.mjs",
 		"e2e/**/*.ts",
 		"playwright.config.ts"
 	]

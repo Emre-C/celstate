@@ -1,6 +1,23 @@
 # Vertex AI + Convex (Celstate)
 
-This app calls **Vertex AI** (not the Gemini Developer API key flow) from Convex **Node** actions using `@google/genai` with `vertexai: true`. Secrets live **only in Convex**; Vercel only needs `PUBLIC_CONVEX_URL` and other public vars.
+This app calls **Vertex AI** (not the Gemini Developer API key flow) from Convex **Node** actions using `@google/genai` with `vertexai: true`. Secrets live in **Doppler** (project `celstate`, config `prd`) and are synced into Convex on demand; Vercel only needs `PUBLIC_CONVEX_URL` and other public vars.
+
+> **Routine rotation is automated.** To rotate the service-account key after
+> a leak (or every 90 days), run:
+>
+> ```pwsh
+> pnpm secrets:rotate-gcp -- `
+>   --service-account=vertex-express@celstate-489304.iam.gserviceaccount.com `
+>   --project=celstate-489304 `
+>   --old-key-id=<CURRENT_KEY_ID>
+> pnpm secrets:sync:convex
+> ```
+>
+> The rotate script creates a new key via `gcloud`, validates the JSON,
+> uploads it to Doppler as `VERTEX_AI_SERVICE_ACCOUNT_JSON`, and only then
+> deletes the old key. See [`SECRETS-MANAGEMENT.md`](./SECRETS-MANAGEMENT.md).
+> The manual setup steps below apply only to **first-time onboarding** of a
+> new service account; routine operation does not touch the GCP console.
 
 ## Official references
 
@@ -31,23 +48,31 @@ Implemented in `src/convex/lib/gemini.ts` (`readGeminiRuntimeConfigFromEnv`).
 
 Do **not** set `GEMINI_API_KEY` for this pipeline — generation uses Vertex only.
 
-## CLI: set from the JSON file (recommended)
+## First-time onboarding (new service account)
 
-Convex supports piping the key file as the value (avoids shell escaping):
+Use Doppler as the destination for the JSON key, then sync into Convex:
 
-```bash
-npx convex env set VERTEX_AI_SERVICE_ACCOUNT_JSON --from-file ./path-to-your-key.json
-npx convex env set VERTEX_AI_PROJECT_ID "your-gcp-project-id"
-npx convex env set VERTEX_AI_LOCATION "global"
+```pwsh
+# 1. Create the key locally (gcloud writes JSON to a file).
+gcloud iam service-accounts keys create .\vertex-key.json `
+  --iam-account=vertex-express@celstate-489304.iam.gserviceaccount.com `
+  --project=celstate-489304
+
+# 2. Upload the JSON contents to Doppler `prd` as a single secret.
+$json = Get-Content .\vertex-key.json -Raw
+doppler secrets set VERTEX_AI_SERVICE_ACCOUNT_JSON="$json"
+doppler secrets set VERTEX_AI_PROJECT_ID="celstate-489304"
+doppler secrets set VERTEX_AI_LOCATION="global"
+
+# 3. Shred the local key file (do not commit, do not leave on disk).
+Remove-Item .\vertex-key.json -Force
+
+# 4. Sync Doppler -> Convex prod.
+pnpm secrets:sync:convex
 ```
 
-Use `--prod` for production when appropriate:
-
-```bash
-npx convex env set VERTEX_AI_SERVICE_ACCOUNT_JSON --from-file ./path-to-your-key.json --prod
-```
-
-Bulk `.env` files: `npx convex env set --from-file .env.convex` (see Convex docs).
+For routine **rotation** (not initial setup), prefer the automated script
+documented at the top of this file — it never writes the key JSON to disk.
 
 ## Repo hygiene
 

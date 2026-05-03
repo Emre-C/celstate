@@ -9,6 +9,10 @@ packages/*/node_modules/
 /.svelte-kit
 /build
 packages/*/dist/
+!packages/mcp-server/dist/
+packages/mcp-server/dist/*
+!packages/mcp-server/dist/proxy.d.ts
+!packages/mcp-server/dist/proxy.js
 
 # OS
 .DS_Store
@@ -30,8 +34,18 @@ celstate-*-*.json
 /playwright-report/
 /blob-report/
 
+# Local secrets / canary artifacts (storageState JSON for ycoklar@gmail.com,
+# ad-hoc run logs). Never commit — these contain live session cookies.
+/secrets-local/
+
 # Growth tooling artifacts
 .growth/
+
+# Cursor — local agent logs / transcripts (never commit)
+.amp/
+
+# Personal local notes
+/manual_steps_for_emre.md
 
 # Bulky generated output — never commit (was bloating git history)
 /jobs/
@@ -51,8 +65,6 @@ src/convex/**/*.js
 src/convex/**/*.js.map
 !src/convex/_generated/**/*.d.ts
 !src/convex/_generated/**/*.js
-
-.vercel
 
 # Sentry Config File
 .env.sentry-build-plugin

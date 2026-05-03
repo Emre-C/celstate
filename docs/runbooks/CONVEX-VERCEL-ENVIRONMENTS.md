@@ -2,6 +2,13 @@
 
 **Audience:** anyone changing deploys or secrets. **Rule:** production is priority #1 — verify the **deployment** before every change.
 
+> **Doppler is the source of truth for all secrets.** Do not edit Convex env
+> vars directly with `convex env set` — instead, edit in Doppler and run
+> `pnpm secrets:sync:convex` to propagate. Do not run `convex env list`
+> (it leaks plaintext into terminal history and any AI-assistant context
+> capturing the session). Use `pnpm secrets:diff` for safe inspection. Full
+> details: [`SECRETS-MANAGEMENT.md`](./SECRETS-MANAGEMENT.md).
+
 Official references (Convex Developer Hub):
 
 | Topic | Documentation |
@@ -31,16 +38,15 @@ Stripe, Vertex, Better Auth secrets, and `SITE_URL` are **per deployment**. See 
 |--------|-------------------|
 | Push code to **dev** only | `pnpm exec convex dev` (or `convex dev --once`) |
 | Push code to **production** | `pnpm exec convex deploy` (from a clean tree; see [CLI deploy](https://docs.convex.dev/cli#deploy-convex-functions-to-production)) |
-| List env vars on **dev** | `pnpm exec convex env list` |
-| List env vars on **production** | `pnpm exec convex env list --prod` |
-| Set env on **dev** | `pnpm exec convex env set NAME value` (no `--prod`) |
-| Set env on **production** | `pnpm exec convex env set NAME value --prod` |
+| Compare env vars (names only, safe) | `pnpm secrets:diff` |
+| Update env vars on **dev** | Edit in Doppler `dev`, then `pnpm secrets:sync:convex:dev` |
+| Update env vars on **production** | Edit in Doppler `prd`, then `pnpm secrets:sync:convex` |
 | Tail logs — dev | `pnpm exec convex logs` |
 | Tail logs — prod | `pnpm exec convex logs --prod` |
 
-**Before any `env set` or destructive action:** confirm in the [Convex dashboard](https://dashboard.convex.dev/) which deployment is selected (dev vs production).
+**Before any prod sync or destructive action:** confirm in the [Convex dashboard](https://dashboard.convex.dev/) which deployment is selected (dev vs production), and verify the diff with `pnpm secrets:diff`.
 
-**Do not** paste a dev `.env` dump into production. **Do not** use `sk_test_` Stripe keys on the production deployment.
+**Do not** run `convex env list` (any flag) — see the warning at the top of this doc. **Do not** paste a dev `.env` dump into production. **Do not** use `sk_test_` Stripe keys on the production deployment.
 
 ---
 

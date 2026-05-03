@@ -14,10 +14,12 @@ import {
   readGeminiRuntimeConfigFromEnv,
 } from "./lib/gemini.js";
 import {
-  getGenerationRetryStatusMessage,
-  hasRemainingStageRetries,
+  getGenerationRunRetryStatusMessage,
+  getGenerationRunStageRetryCount,
+  hasGenerationRunStageRetryCapacity,
+  isGenerationRunStageRunnable,
   type GenerationStage,
-} from "./lib/generationWorkflow.js";
+} from "./lib/generationRun.js";
 import {
   buildWhiteBgPrompt,
   buildBlackBgPrompt,
@@ -157,20 +159,15 @@ interface PipelineResult {
   dimensionMismatch: boolean;
 }
 
-function isRunnableGenerationStage(
-  generation: Doc<"generations"> | null,
-  stage: Doc<"generations">["stage"],
-): generation is Doc<"generations"> {
-  return !!generation && generation.status === "generating" && generation.stage === stage;
-}
-
 async function updateStatus(
   ctx: StageActionContext,
   generationId: Id<"generations">,
+  stage: GenerationStage,
   statusMessage: string,
 ): Promise<void> {
   await ctx.runMutation(internal.generations.updateStatusMessage, {
     generationId,
+    stage,
     statusMessage,
   });
 }
@@ -245,7 +242,7 @@ async function handleStageFailure(
   const rawError = error instanceof Error ? error.message : String(error);
   console.error(`[${stage}] generationId=${generationId} error=${rawError}`);
 
-  if (hasRemainingStageRetries(stage, retryCount)) {
+  if (hasGenerationRunStageRetryCapacity(stage, retryCount)) {
     await ctx.runMutation(internal.generations.scheduleStageRetry, {
       generationId,
       retryCount: retryCount + 1,
@@ -272,8 +269,8 @@ async function scheduleFullRerenderOrFail(
     userFacingError?: string;
   },
 ): Promise<void> {
-  const retryCount = generation.whiteBgRetryCount ?? 0;
-  if (!hasRemainingStageRetries("white_background", retryCount)) {
+  const retryCount = getGenerationRunStageRetryCount(generation, "white_background");
+  if (!hasGenerationRunStageRetryCapacity("white_background", retryCount)) {
     await ctx.runMutation(internal.generations.failGeneration, {
       generationId: generation._id,
       error: options.userFacingError ?? createUserFacingFailureMessage(),
@@ -286,6 +283,7 @@ async function scheduleFullRerenderOrFail(
   const retryPlan = buildTransparentQaRetryPlan("retry_white_and_black", options.reasonCodes);
   await ctx.runMutation(internal.generations.scheduleStageRetry, {
     generationId: generation._id,
+    expectedStage: "finalizing",
     retryCount: retryCount + 1,
     retryInstruction: retryPlan.retryInstruction,
     downstreamRetryInstruction: retryPlan.downstreamRetryInstruction,
@@ -311,15 +309,6 @@ function buildTransparentQaInternalError(result: TransparentQaResult): string {
   ].join(" ");
   const reasonCodes = result.reasonCodes.length > 0 ? result.reasonCodes.join(",") : "none";
   return `Transparent background QA failed (${reasonCodes}) ${summary}`;
-}
-
-function getStageRetryCount(
-  generation: Doc<"generations">,
-  stage: "white_background" | "black_background",
-): number {
-  return stage === "white_background"
-    ? generation.whiteBgRetryCount ?? 0
-    : generation.blackBgRetryCount ?? 0;
 }
 
 async function handleTransparentQaFailure(
@@ -354,11 +343,12 @@ async function handleTransparentQaFailure(
   }
 
   const retryStage: "black_background" = "black_background";
-  const retryCount = getStageRetryCount(generation, retryStage);
-  if (hasRemainingStageRetries(retryStage, retryCount)) {
+  const retryCount = getGenerationRunStageRetryCount(generation, retryStage);
+  if (hasGenerationRunStageRetryCapacity(retryStage, retryCount)) {
     const retryPlan = buildTransparentQaRetryPlan("retry_black", qa.reasonCodes);
     await ctx.runMutation(internal.generations.scheduleStageRetry, {
       generationId: generation._id,
+      expectedStage: "finalizing",
       retryCount: retryCount + 1,
       retryInstruction: retryPlan.retryInstruction,
       stage: retryStage,
@@ -382,7 +372,7 @@ async function finalizePipeline(
   ctx: StageActionContext,
   generation: Doc<"generations">,
 ): Promise<PipelineResult> {
-  await updateStatus(ctx, generation._id, "Extracting transparency…");
+  await updateStatus(ctx, generation._id, "finalizing", "Extracting transparency…");
   // Both storage IDs are written by the preceding pipeline stages; assert non-null.
   let white = await loadStoredImage(ctx, generation.whiteBgStorageId!);
   let black = await loadStoredImage(ctx, generation.blackBgStorageId!);
@@ -466,7 +456,7 @@ export const generateWhiteBackground = internalAction({
   returns: v.null(),
   handler: async (ctx, args) => {
     const generation = await getGeneration(ctx, args.generationId);
-    if (!isRunnableGenerationStage(generation, "white_background")) {
+    if (!isGenerationRunStageRunnable(generation, "white_background")) {
       return null;
     }
 
@@ -475,7 +465,7 @@ export const generateWhiteBackground = internalAction({
       generationId: args.generationId,
       stage: "white_background",
     });
-    await updateStatus(ctx, args.generationId, getGenerationRetryStatusMessage("white_background", retryCount));
+    await updateStatus(ctx, args.generationId, "white_background", getGenerationRunRetryStatusMessage("white_background", retryCount));
 
     try {
       const runtimeConfig = readGeminiRuntimeConfigFromEnv();
@@ -525,7 +515,7 @@ export const generateBlackBackground = internalAction({
   returns: v.null(),
   handler: async (ctx, args) => {
     const generation = await getGeneration(ctx, args.generationId);
-    if (!isRunnableGenerationStage(generation, "black_background")) {
+    if (!isGenerationRunStageRunnable(generation, "black_background")) {
       return null;
     }
 
@@ -543,7 +533,7 @@ export const generateBlackBackground = internalAction({
       generationId: args.generationId,
       stage: "black_background",
     });
-    await updateStatus(ctx, args.generationId, getGenerationRetryStatusMessage("black_background", retryCount));
+    await updateStatus(ctx, args.generationId, "black_background", getGenerationRunRetryStatusMessage("black_background", retryCount));
 
     try {
       const runtimeConfig = readGeminiRuntimeConfigFromEnv();
@@ -589,7 +579,7 @@ export const finalizeGeneration = internalAction({
   returns: v.null(),
   handler: async (ctx, args) => {
     const generation = await getGeneration(ctx, args.generationId);
-    if (!isRunnableGenerationStage(generation, "finalizing")) {
+    if (!isGenerationRunStageRunnable(generation, "finalizing")) {
       return null;
     }
 
@@ -607,11 +597,11 @@ export const finalizeGeneration = internalAction({
       generationId: args.generationId,
       stage: "finalizing",
     });
-    await updateStatus(ctx, args.generationId, getGenerationRetryStatusMessage("finalizing", retryCount));
+    await updateStatus(ctx, args.generationId, "finalizing", getGenerationRunRetryStatusMessage("finalizing", retryCount));
 
     try {
       const result = await finalizePipeline(ctx, generation);
-      await updateStatus(ctx, args.generationId, "Verifying transparency…");
+      await updateStatus(ctx, args.generationId, "finalizing", "Verifying transparency…");
       const transparentQa = analyzeTransparentOutput({
         whiteBg: result.whiteDecoded.pixels,
         blackBg: result.blackDecoded.pixels,
@@ -627,7 +617,7 @@ export const finalizeGeneration = internalAction({
         return null;
       }
 
-      await updateStatus(ctx, args.generationId, "Preparing final image…");
+      await updateStatus(ctx, args.generationId, "finalizing", "Preparing final image…");
       const [finalPng, whiteBgPng, blackBgPng] = await Promise.all([
         encodePng(result.matteOutput.pixels, result.matteOutput.width, result.matteOutput.height),
         encodePng(result.whiteDecoded.pixels, result.whiteDecoded.width, result.whiteDecoded.height),
@@ -641,7 +631,7 @@ export const finalizeGeneration = internalAction({
       const resultBlob = new Blob([new Uint8Array(finalPng)], { type: "image/png" });
       const resultStorageId = await ctx.storage.store(resultBlob);
 
-      await updateStatus(ctx, args.generationId, "Optimizing for download…");
+      await updateStatus(ctx, args.generationId, "finalizing", "Optimizing for download…");
       const optimizedPng = await optimizeForWeb(finalPng);
       const optimizedBlob = new Blob([new Uint8Array(optimizedPng)], { type: "image/png" });
       const optimizedStorageId = await ctx.storage.store(optimizedBlob);

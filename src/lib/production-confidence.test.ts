@@ -554,9 +554,18 @@ describe("canary principal config invariants", () => {
 		}
 	});
 
-	it("all canary emails use the @celstate.app domain", () => {
+	it("all canary principals share one canonical QA identity", () => {
+		// Production is Google-OAuth only — there is no email+password path —
+		// so plus-addressed canary inboxes cannot be created. All four
+		// principals must therefore bind to the same shared QA Google account.
+		// Distinct canary identities would silently fail upsertCanaryPrincipal
+		// in src/convex/verification.ts ("Canonical Better Auth user not found").
+		const emails = new Set(
+			Object.values(CANARY_PRINCIPAL_CONFIG).map((c) => c.email.toLowerCase()),
+		);
+		expect(emails.size).toBe(1);
 		for (const config of Object.values(CANARY_PRINCIPAL_CONFIG)) {
-			expect(config.email).toMatch(/@celstate\.app$/);
+			expect(config.email).toMatch(/^[^\s@]+@[^\s@]+\.[^\s@]+$/);
 		}
 	});
 

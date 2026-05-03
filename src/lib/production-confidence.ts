@@ -139,13 +139,22 @@ export interface CanaryPrincipalDefinition extends CanaryPrincipal {
 	readonly minimumCredits: number;
 }
 
+// All four canary principals bind to the same shared QA identity
+// (ycoklar@gmail.com). Production only accepts Google OAuth — there is no
+// email+password path — so plus-addressed inboxes like canary+auth@celstate.app
+// cannot be created. The shared QA Google account is the canonical canary user
+// for every domain. canaryPrincipals rows remain distinct by principalId; they
+// just share betterAuthUserId / appUserId. See docs/runbooks/QA-RESET.md and
+// docs/runbooks/CI-AND-CANARIES.md.
+const CANARY_SHARED_QA_EMAIL = "ycoklar@gmail.com" as const;
+
 export const CANARY_PRINCIPAL_CONFIG: Record<CanaryPrincipalId, CanaryPrincipalDefinition> = {
 	CANARY_AUTH: {
 		id: "CANARY_AUTH",
 		proves: "AUTH",
 		destructive: false,
 		fundingClass: "NONE",
-		email: "canary+auth@celstate.app",
+		email: CANARY_SHARED_QA_EMAIL,
 		name: "Celstate Canary Auth",
 		minimumCredits: 0,
 	},
@@ -154,7 +163,7 @@ export const CANARY_PRINCIPAL_CONFIG: Record<CanaryPrincipalId, CanaryPrincipalD
 		proves: "GENERATION",
 		destructive: false,
 		fundingClass: "PRE_FUNDED_CREDITS",
-		email: "canary+generation@celstate.app",
+		email: CANARY_SHARED_QA_EMAIL,
 		name: "Celstate Canary Generation",
 		minimumCredits: 1,
 	},
@@ -163,7 +172,7 @@ export const CANARY_PRINCIPAL_CONFIG: Record<CanaryPrincipalId, CanaryPrincipalD
 		proves: "CHECKOUT_SESSION",
 		destructive: false,
 		fundingClass: "NONE",
-		email: "canary+checkout@celstate.app",
+		email: CANARY_SHARED_QA_EMAIL,
 		name: "Celstate Canary Checkout",
 		minimumCredits: 0,
 	},
@@ -172,7 +181,7 @@ export const CANARY_PRINCIPAL_CONFIG: Record<CanaryPrincipalId, CanaryPrincipalD
 		proves: "LIVE_SETTLEMENT",
 		destructive: true,
 		fundingClass: "LIVE_PAYMENT",
-		email: "canary+settlement@celstate.app",
+		email: CANARY_SHARED_QA_EMAIL,
 		name: "Celstate Canary Settlement",
 		minimumCredits: 0,
 	},

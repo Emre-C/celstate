@@ -167,7 +167,7 @@ INVARIANT: creditRefundedAt set once on refund; failGeneration paths check befor
 
 - `requestGeneration` schedules `internal.generation.generateWhiteBackground`
 - Each stage completion schedules the next: `white_background` → `black_background` → `finalizing`
-- Implementation: `src/convex/generations.ts` (`scheduleGenerationStage`), `src/convex/lib/generationWorkflow.ts`, actions in `src/convex/generation.ts` (`"use node"`)
+- Implementation: `src/convex/generations.ts` (scheduling adapter), `src/convex/lib/generationRun.ts` (stage transitions, retry policy, progress semantics), actions in `src/convex/generation.ts` (`"use node"`)
 
 ### Step 4: Dual-pass Vertex inference (stages `white_background` / `black_background`)
 
@@ -358,12 +358,13 @@ maxPromptLength: 20_000,
 ## Components
 
 - `src/convex/lib/gemini.ts` — Vertex AI via `@google/genai` (`vertexai: true`); `createChatSession`, `readGeminiRuntimeConfigFromEnv`
-- `src/convex/lib/generationWorkflow.ts` — Stage scheduling helpers, retry policy wiring
+- `src/convex/lib/generationRun.ts` — Generation run module for stage transitions, retry policy, and progress semantics
 - `src/convex/lib/prompts.ts` — Prompt templates (white/black bg, text-only and reference variants)
 - `src/convex/lib/validation.ts` — Background purity validation
 - `src/convex/lib/matte.ts` — Difference matte engine
 - `src/convex/generation.ts` — Node actions per stage (`referenceStorageIds`, Vertex chat session, matte, optimize)
 - `src/convex/generations.ts` — Mutations (`requestGeneration`, `generateUploadUrl`), queries (`getByUserWithUrls`)
+- `src/convex/generationReports.ts` — QA/reporting seam for transparent background summary queries
 - `src/lib/components/PromptInput.svelte` — Terminal-style input with optional reference image upload
 - `src/lib/components/GenerationCard.svelte` — Result display with reference badge
 - `src/lib/components/GeneratingIndicator.svelte` — Animation during generation

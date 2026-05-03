@@ -1,6 +1,6 @@
 import type { Doc, Id } from "../_generated/dataModel.js";
 import type { MutationCtx } from "../_generated/server.js";
-import type { GenerationStage } from "./generationWorkflow.js";
+import type { GenerationStage } from "./generationRun.js";
 
 export type GenerationOpsEventInsert = {
   attemptDurationMs?: number;

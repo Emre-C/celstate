@@ -1,8 +1,8 @@
-import type { Cookies } from "@sveltejs/kit";
-import { getInitialAuthState } from "$lib/server/auth.js";
+import type { ServerLoadEvent } from "@sveltejs/kit";
+import { getProtectedSessionBootstrap } from "$lib/auth/protected-session.js";
 
-export const load = async ({ cookies }: { cookies: Cookies }) => {
+export const load = async ({ locals }: ServerLoadEvent) => {
   return {
-    authState: getInitialAuthState(cookies),
+    authState: getProtectedSessionBootstrap(locals.token),
   };
 };

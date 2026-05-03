@@ -26,13 +26,15 @@ type SignalChannel =
 
 ```pseudo
 ROUTE(signal):
-  IF signal.requires_immediate_human_action AND signal.type IN (
+  IF signal.type IN (
     "purchase_settled",
+    "signup_new",
     "generation_failed",
     "generation_stalled",
     "auth_proxy_failure",
     "auth_endpoint_5xx",
-    "better_auth_api_error"
+    "better_auth_api_error",
+    "secret_rotation_reminder"  // quarterly cron — see docs/runbooks/SECRETS-MANAGEMENT.md
   ) THEN HUMAN_OPS_WEBHOOK  // early-stage: low volume; revisit ~50+ users
   ELIF signal.supports_growth_or_product_analysis THEN LLM_ANALYTICS
   ELIF signal.is_exception THEN SENTRY
@@ -65,7 +67,8 @@ PUBLIC_POSTHOG_HOST:
     vercel_note: "After DNS is live, set PUBLIC_POSTHOG_HOST to https://<subdomain>.<apex> and redeploy"
   not_equal_to_convex_host: "Server ingest URL stays us.i.posthog.com — see POSTHOG_HOST below"
 
-# Convex deployment — `pnpm exec convex env set` (NOT .env)
+# Convex deployment — managed via Doppler (`celstate/prd`), pushed by `pnpm secrets:sync:convex`
+# Background: docs/runbooks/SECRETS-MANAGEMENT.md. NEVER run `convex env list` (leak vector).
 POSTHOG_API_KEY:
   equals: "PUBLIC_POSTHOG_KEY"
   used_by: "@posthog/convex server capture"
