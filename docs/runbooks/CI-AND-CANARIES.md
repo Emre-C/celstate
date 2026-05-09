@@ -72,7 +72,7 @@ Machine-evaluable **release evidence** for production: runner `scripts/productio
 
 - **Secrets (repo → Settings → Actions → Secrets and variables)**
   - **`VERIFICATION_RUNNER_SECRET`** — Shared secret for Convex HTTP verification routes.
-  - **`CONVEX_URL`** — Production Convex deployment URL for the runner.
+  - **`CONVEX_URL`** — Production Convex deployment URL for the runner (origin-only `https://<deployment>.convex.cloud`). If unset, the workflow falls back to **`PUBLIC_CONVEX_URL`** (same value as Vercel/Doppler).
   - **`AUTH_CANARY_BASE_URL`** — Canonical HTTPS origin (same role as the auth canary; overridable per run via `site_url` input).
   - **`AUTH_CANARY_STORAGE_JSON`** — Playwright storage state JSON for an authenticated session (protected-route auth proof). Required for **POST_DEPLOY** / **SCHEDULED** unless you explicitly disable protected-route requirement (see runner env `AUTH_CANARY_REQUIRE_PROTECTED_ROUTE`).
 
