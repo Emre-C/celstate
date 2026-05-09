@@ -44,9 +44,7 @@ jobs:
        github.event.deployment.environment == 'Production')
     env:
       VERIFICATION_RUNNER_SECRET: ${{ secrets.VERIFICATION_RUNNER_SECRET }}
-      # Runner expects CONVEX_URL (scripts/production-verification.ts). Allow the same
-      # origin-only prod URL under PUBLIC_CONVEX_URL so GitHub matches Doppler/Vercel naming.
-      CONVEX_URL: ${{ secrets.CONVEX_URL || secrets.PUBLIC_CONVEX_URL }}
+      CONVEX_URL: ${{ secrets.CONVEX_URL }}
       AUTH_CANARY_BASE_URL: ${{ inputs.site_url || secrets.AUTH_CANARY_BASE_URL }}
       PUBLIC_SITE_URL: ${{ inputs.site_url || secrets.AUTH_CANARY_BASE_URL }}
       VERIFICATION_TRIGGER: ${{ github.event_name == 'schedule' && 'SCHEDULED' || 'POST_DEPLOY' }}
