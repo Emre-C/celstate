@@ -18,7 +18,7 @@
 	let pendingCheckoutId = $state<Id<'pendingCheckouts'> | null>(null);
 
 	const checkoutStatus = useQuery(
-		api.pendingCheckouts.getCheckoutStatus,
+		api.creditPackPurchase.getCheckoutStatus,
 		() => (pendingCheckoutId ? { checkoutId: pendingCheckoutId } : 'skip')
 	);
 
@@ -47,10 +47,9 @@
 		error = '';
 
 		try {
-			pendingCheckoutId = await client.mutation(
-				api.pendingCheckouts.requestCheckout,
-				{ priceId }
-			);
+			pendingCheckoutId = await client.mutation(api.creditPackPurchase.requestCheckout, {
+				priceId
+			});
 			initPostHog();
 			posthog.capture('credits_purchase_initiated', { price_id: priceId });
 		} catch (e) {

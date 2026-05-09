@@ -70,6 +70,8 @@ export interface AuthAlertContext {
 	referer?: string;
 	requestId?: string;
 	status?: number;
+	upstreamCfRay?: string;
+	upstreamStatus?: number;
 	attempts?: number;
 	count?: number;
 	windowMs?: number;
@@ -317,6 +319,14 @@ function buildAuthAlertFacts(context: AuthAlertContext): string[] {
 
 	if (context.status !== undefined) {
 		facts.push(`Status: ${context.status}`);
+	}
+
+	if (context.upstreamStatus !== undefined) {
+		facts.push(`Upstream status: ${context.upstreamStatus}`);
+	}
+
+	if (context.upstreamCfRay) {
+		facts.push(`Upstream cf-ray: ${context.upstreamCfRay}`);
 	}
 
 	if (context.host) {

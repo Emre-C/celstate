@@ -1,32 +1,30 @@
-# Credit-Pack Checkout Refactor — Canary / Smoke-Pass Gameplan
+# Credit-Pack Checkout Canary / Smoke-Pass Gameplan
 
-**Status:** Draft for user review (no live actions taken yet)
+**Status:** Current operational runbook
 **Scope:** Validate the credit-pack checkout/settlement refactor end-to-end against live Stripe via the existing `verify:production` runner. Do **not** redesign the flow.
 **Author:** Background agent
-**Last updated:** 2026-04-27
+**Last updated:** 2026-05-09
 
 ---
 
 ## 1. Background context
 
-### 1.1 The refactor under test
+### 1.1 The lifecycle under test
 
-The previous change consolidated the credit-pack purchase lifecycle into a single deeper seam at [src/convex/lib/stripeCheckout.ts](file:///c%3A/Users/emrec/codebase/active-projects/celstate/src/convex/lib/stripeCheckout.ts). The four entry points around it became thin adapters.
+The credit-pack purchase lifecycle is owned by `src/convex/creditPackPurchase.ts`, `src/convex/creditPackPurchaseActions.ts`, and `src/convex/lib/creditPackPurchase/lifecycle.ts`.
 
 Module owns:
 
 - **Catalog**: `CREDIT_PACK_CATALOG` (Starter = 15 credits, Pro = 40 credits) and the priceId resolution via `getKnownCreditPackPriceIds`, `getCreditPackCatalog`, `getCreditPackByPriceId`, `assertKnownCreditPackPriceId`.
-- **Checkout initiation**: `requestCreditPackCheckout` (writes pendingCheckouts row + schedules `internal.stripe.processCheckout`).
-- **Stripe Checkout Session args**: `buildCreditPackCheckoutSessionArgs` (mode, success/cancel URLs, metadata, paymentIntentMetadata).
+- **Checkout initiation**: `creditPackPurchase.requestCheckout` (writes a `pendingCheckouts` row and schedules `internal.creditPackPurchaseActions.processCheckout`).
+- **Stripe Checkout Session args**: `buildStripeCheckoutSessionCreateParams` (mode, success/cancel URLs, metadata, payment intent metadata).
 - **Webhook eligibility & extraction**: `canGrantCreditsForCheckoutSession`, `getCreditPackSettlementCandidate`. The candidate is the single source of truth for credits granted, payment intent, amount, currency, and userId; rejects unknown priceIds.
-- **Settlement recording**: `recordCreditPackPurchaseSettlement` — idempotent across `pendingCheckoutId`, `stripePaymentIntentId`, and `creditGrants.by_payment_intent`. Returns `{ alreadyRecorded, created, creditApplied }`.
+- **Settlement recording**: `recordPurchaseSettlementHelper` — idempotent across `pendingCheckoutId`, `stripePaymentIntentId`, and `creditGrants.by_payment_intent`. Returns `{ alreadyRecorded, settled, skipped }` with the settlement summary.
+- **Refund recording**: `recordRefundForPaymentIntentHelper` handles `refund.created`; unmatched refunds are persisted in `pendingPurchaseRefunds` by payment intent and consumed during later settlement.
 
-Adapter thinning:
+Compatibility adapter:
 
-- [src/convex/pendingCheckouts.ts](file:///c%3A/Users/emrec/codebase/active-projects/celstate/src/convex/pendingCheckouts.ts) — `requestCheckout`, `requestCheckoutForCanaryRunner`, `requestSettlementCheckoutForCanaryRunner` all delegate to `requestCreditPackCheckout`. `getCheckoutStatus` and the canary status queries use `toCreditPackCheckoutStatus`.
-- [src/convex/stripe.ts](file:///c%3A/Users/emrec/codebase/active-projects/celstate/src/convex/stripe.ts) — `processCheckout` now calls `buildCreditPackCheckoutSessionArgs(...)` instead of inlining the session shape.
-- [src/convex/http.ts](file:///c%3A/Users/emrec/codebase/active-projects/celstate/src/convex/http.ts) — webhook handler `handleCreditPackCheckout` calls `getCreditPackSettlementCandidate(session)` instead of carrying its own price→credits map and hand-rolled extraction.
-- [src/convex/creditGrants.ts](file:///c%3A/Users/emrec/codebase/active-projects/celstate/src/convex/creditGrants.ts) — `recordPurchaseSettlement` is a one-line delegate to `recordCreditPackPurchaseSettlement`.
+- `src/convex/stripe.ts` still forwards `internal.stripe.processCheckout` to `internal.creditPackPurchaseActions.processCheckout` for older scheduled jobs.
 
 ### 1.2 Behavior we must preserve
 
@@ -41,7 +39,7 @@ User-facing flow stays identical:
 ```
 client requestCheckout
   → pendingCheckouts row (status=pending)
-  → scheduler runs internal.stripe.processCheckout
+  → scheduler runs internal.creditPackPurchaseActions.processCheckout
   → Stripe Checkout Session created
   → markReady writes checkoutUrl
   → frontend polls getCheckoutStatus
@@ -49,7 +47,8 @@ client requestCheckout
   → user pays
   → checkout.session.completed | async_payment_succeeded webhook
   → handleCreditPackCheckout
-  → recordPurchaseSettlement → applyCreditsToUser + creditGrants + purchaseSettlements
+  → creditPackPurchase.onStripeCheckoutCompleted
+  → recordPurchaseSettlementHelper → applyCreditsToUser + creditGrants + purchaseSettlements
   → posthog credits_purchase_completed (+ Discord ops alert if configured)
 ```
 
@@ -63,11 +62,11 @@ client requestCheckout
 
 ### 2.1 What looks correct
 
-- **Single catalog source.** Both checkout-session creation (`buildCreditPackCheckoutSessionArgs`) and webhook settlement (`getCreditPackSettlementCandidate`) resolve credits via `assertKnownCreditPackPriceId` / `getCreditPackByPriceId`. There is no longer a parallel price→credits map in [http.ts](file:///c%3A/Users/emrec/codebase/active-projects/celstate/src/convex/http.ts).
-- **Idempotency is centralized.** `recordCreditPackPurchaseSettlement` checks `purchaseSettlements.by_pending_checkout` *and* `purchaseSettlements.by_payment_intent` *and* `creditGrants.by_payment_intent` before applying credits. Convex mutation ACID/OCC keeps check-then-insert race-free, matching the convention in [docs/conventions/convex.md](file:///c%3A/Users/emrec/codebase/active-projects/celstate/docs/conventions/convex.md).
-- **Canary-runner path is untouched at the seam.** `requestCheckoutForCanaryRunner` and `requestSettlementCheckoutForCanaryRunner` use the same `requestCreditPackCheckout` as user-facing `requestCheckout`. The canary therefore exercises the production code path, not a parallel test-only one.
-- **Refund canary still works.** [stripeRefundVerification.ts](file:///c%3A/Users/emrec/codebase/active-projects/celstate/src/convex/stripeRefundVerification.ts) reads `getSettlementByPendingCheckoutForCanaryRunner` (still in `creditGrants.ts`) and calls Stripe with an idempotency key derived from `pendingCheckoutId`. Untouched by the refactor — good.
-- **Unknown priceIds are rejected.** `getCreditPackSettlementCandidate` returns `{ ok: false, reason: "Unknown credit pack priceId: …" }` for prices outside the catalog. Covered by [stripeCheckout.test.ts](file:///c%3A/Users/emrec/codebase/active-projects/celstate/src/convex/lib/stripeCheckout.test.ts).
+- **Single catalog source.** Both checkout-session creation (`buildStripeCheckoutSessionCreateParams`) and webhook settlement (`getCreditPackSettlementCandidate`) resolve credits via `assertKnownCreditPackPriceId` / `getCreditPackByPriceId`. There is no longer a parallel price-to-credits map in `src/convex/http.ts`.
+- **Idempotency is centralized.** `recordPurchaseSettlementHelper` checks `purchaseSettlements.by_pending_checkout` *and* `purchaseSettlements.by_payment_intent` *and* `creditGrants.by_payment_intent` before applying credits. Convex mutation ACID/OCC keeps check-then-insert race-free, matching the convention in `docs/conventions/convex.md`.
+- **Canary-runner path uses production lifecycle code.** `requestCheckoutForCanaryRunner` and `requestSettlementCheckoutForCanaryRunner` use the same helper as user-facing `requestCheckout`. The canary therefore exercises the production code path, not a parallel test-only one.
+- **Refund canary still works.** `creditPackPurchaseActions.refundCheckoutForCanary` reads `getSettlementByPendingCheckoutForCanaryRunner`, calls Stripe with an idempotency key derived from `pendingCheckoutId`, and records the refund through `creditPackPurchase.recordRefundForCanary`.
+- **Unknown priceIds are rejected.** `getCreditPackSettlementCandidate` returns `{ ok: false, reason: "Unknown credit pack priceId: ..." }` for prices outside the catalog. Covered by `src/convex/lib/creditPackPurchase/lifecycle.test.ts`.
 - **Local gates were green** prior to the canary request: `pnpm check`, `pnpm typecheck:tsc`, `pnpm lint:ts`, `pnpm test`.
 
 ### 2.2 What only the live canary can prove
@@ -85,7 +84,7 @@ These are the properties unit tests cannot exercise — they are the **purpose**
 
 ### 2.3 Risk register / things to watch
 
-- **Webhook signature secret unchanged.** The refactor does not touch `registerRoutes(http, components.stripe, …)` registration in [http.ts](file:///c%3A/Users/emrec/codebase/active-projects/celstate/src/convex/http.ts), so existing `STRIPE_WEBHOOK_SECRET` config in Convex prod is still authoritative. If F3 fails, suspect environment, not the refactor.
+- **Webhook signature secret unchanged.** The refactor does not touch `registerRoutes(http, components.stripe, ...)` registration in `src/convex/http.ts`, so existing `STRIPE_WEBHOOK_SECRET` config in Convex prod is still authoritative. If F3 fails, suspect environment, not the lifecycle module.
 - **PostHog and ops alerts are best-effort.** Failures in PostHog capture or Discord webhook delivery only `console.error`; they do not block credit grants. Canary will not fail on those alone, but logs should still be checked post-run.
 - **POSTHOG_API_KEY warning.** The webhook handler logs a hard error if `POSTHOG_API_KEY` is unset on the deployment. If this fires during the canary run, treat it as an environment drift, not a refactor regression.
 - **Catalog drift is now caught at runtime, not at the webhook adapter.** If a new price ID is added to Stripe without updating the module, `getCreditPackSettlementCandidate` rejects the webhook with "Unknown credit pack priceId" — credits will not be granted. This is the intended fail-closed behavior.
@@ -100,7 +99,7 @@ The repo-supported live entry point is `pnpm verify:production`, which runs [scr
 
 1. **AUTH** — `/auth` page healthy, `/api/auth/get-session` returns sane status, optionally protected `/app` route reachable with stored session.
 2. **GENERATION** — exercises image generation via `internal.generations.requestGenerationForCanaryRunner`. Not part of our refactor scope but runs anyway.
-3. **CHECKOUT_SESSION** — exercises **checkout initiation** through the refactored seam (`internal.pendingCheckouts.requestCheckoutForCanaryRunner` → `requestCreditPackCheckout` → `processCheckout` → `buildCreditPackCheckoutSessionArgs` → Stripe → `markReady`). Asserts `pendingObserved`, `readyObserved`, `hostedCheckoutUrlPresent`.
+3. **CHECKOUT_SESSION** — exercises **checkout initiation** through the production seam (`internal.creditPackPurchase.requestCheckoutForCanaryRunner` -> `requestCreditPackCheckoutHelper` -> `creditPackPurchaseActions.processCheckout` -> `buildStripeCheckoutSessionCreateParams` -> Stripe -> `markReady`). Asserts `pendingObserved`, `readyObserved`, `hostedCheckoutUrlPresent`.
 4. **LIVE_SETTLEMENT** *(SCHEDULED trigger only)* — full end-to-end: creates a settlement checkout, **drives Stripe hosted checkout via Playwright with the canary's saved payment method**, polls `settlement-by-checkout` until `GRANTED_ONCE` (or fault), then **refunds idempotently**. This is the path that proves F1–F6.
 
 ### 3.2 Required environment
@@ -141,7 +140,7 @@ Pass criteria:
 - No `Unknown credit pack priceId` lines in Convex logs for canary checkout sessions.
 - Release decision is not `DENY`.
 
-If this fails, **do not proceed to Phase 2.** A `CHECKOUT_SESSION` failure most likely points at `processCheckout` or `buildCreditPackCheckoutSessionArgs` regression.
+If this fails, **do not proceed to Phase 2.** A `CHECKOUT_SESSION` failure most likely points at `creditPackPurchaseActions.processCheckout` or `buildStripeCheckoutSessionCreateParams`.
 
 **Phase 2 — Full settlement canary (`SCHEDULED`)**
 
@@ -154,7 +153,7 @@ pnpm verify:production
 Pass criteria (the refactor invariants in section 2.2):
 - `LIVE_SETTLEMENT` verdict `PASS` with `paidWebhookObserved=true`, `creditGrantCount=1`, `authoritativeRevenueCount=1`, `refundObserved=true`.
 - The pre-refund settlement classification reaches `GRANTED_ONCE`.
-- Convex logs show no `recordPurchaseSettlement did not create settlement row` errors and no duplicate-grant short-circuits beyond the expected idempotent webhook redelivery.
+- Convex logs show no unexpected `creditPackPurchase.onStripeCheckoutCompleted` skipped outcomes and no duplicate-grant short-circuits beyond the expected idempotent webhook redelivery.
 - Balance delta on the canary user during the run is exactly +15 then −15 (clawback) for Starter.
 
 ### 3.4 Abort / rollback criteria
@@ -162,7 +161,7 @@ Pass criteria (the refactor invariants in section 2.2):
 Stop the canary and escalate if any of these occur:
 
 - `LIVE_SETTLEMENT` outcome `DUPLICATE_GRANT` or `FAILED` (the runner already short-circuits on these — they imply ledger integrity breakage).
-- Refund step (`/verification/canary/refund-settlement`) returns non-200 — leaves a paid canary settlement on prod. Manual refund via Stripe dashboard required, then call `internal.creditGrants.recordRefundForPendingCheckout` to reconcile the ledger.
+- Refund step (`/verification/canary/refund-settlement`) returns non-200 — leaves a paid canary settlement on prod. Manual refund via Stripe dashboard required, then call `internal.creditPackPurchase.recordRefundForCanary` (or let the `refund.created` webhook reconcile by payment intent) to reconcile the ledger.
 - Webhook signature errors on `checkout.session.completed` in Convex logs. This points at env, not refactor — verify `STRIPE_WEBHOOK_SECRET`.
 - Any verdict logged as `Unknown credit pack priceId: …` for the canary's own checkout. This implies the catalog and the live price IDs disagree.
 

@@ -15,7 +15,7 @@
 		}
 	},
 	"ignoreExportsUsedInFile": true,
-	"ignoreDependencies": ["tailwindcss"],
+	"ignoreDependencies": ["tailwindcss", "vercel"],
 	"svelte": true,
 	"vitest": true,
 	"vite": true

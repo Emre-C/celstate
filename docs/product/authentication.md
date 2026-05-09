@@ -96,6 +96,7 @@ Server-side bootstrap depends on Better Auth’s Convex JWT cookie contract. Coo
 8. **Scope bootstrap** — Avoid initializing the Convex Better Auth bridge globally on public pages; keep it explicit in `(app)`.
 9. **Explicit Convex URL** — Pass `PUBLIC_CONVEX_URL` into `createSvelteAuthClient(...)` explicitly via `$env/static/public`.
 10. **Dev vs prod Convex** — `PUBLIC_CONVEX_URL` is the realtime target; `PUBLIC_CONVEX_SITE_URL` is the Better Auth HTTP actions target when realtime is local. The two may differ by hostname class (`convex.cloud` vs `convex.site` or loopback vs `convex.site`), but they must always refer to the **same logical deployment**.
+11. **Proxy failure ownership** — `/api/auth/*` must not leak raw Convex-site / edge failures to clients. The SvelteKit proxy retries safe upstream failures and normalizes exhausted upstream failures to the stable `503` JSON contract (`auth_backend_unavailable`) while preserving upstream diagnostics only in server-side alert context.
 
 ## Observability
 
@@ -111,7 +112,7 @@ Rate-limited alerting fires through both **Sentry** and the **ops webhook** (`OP
 
 | Signal | Trigger | Sentry | Webhook |
 |--------|---------|--------|---------|
-| `auth_proxy_failure` | Auth proxy exhausts retries | ✓ | ✓ (5m cooldown per path) |
+| `auth_proxy_failure` | Auth proxy exhausts retries or normalizes upstream 5xx | ✓ | ✓ (5m cooldown per path) |
 | `auth_endpoint_5xx` | ≥3 auth 5xx in 60s | ✓ | ✓ (5m cooldown per path+status) |
 | `better_auth_api_error` | Better Auth `onAPIError` fires | — | ✓ (5m cooldown, Convex-side) |
 

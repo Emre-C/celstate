@@ -28,6 +28,8 @@ type AuthEndpoint5xxInput = AuthRequestMetadata & {
 type AuthProxyFailureInput = AuthRequestMetadata & {
 	attempts: number;
 	error?: string;
+	upstreamHeaders?: Record<string, string>;
+	upstreamStatus?: number;
 };
 
 const AUTH_5XX_THRESHOLD = 3;
@@ -127,7 +129,9 @@ export const reportAuthProxyFailure = async (input: AuthProxyFailureInput) => {
 			origin: input.origin,
 			pathname: input.pathname,
 			referer: input.referer,
-			requestId: input.requestId
+			requestId: input.requestId,
+			upstreamHeaders: input.upstreamHeaders,
+			upstreamStatus: input.upstreamStatus
 		},
 		fingerprint: ['auth', 'proxy-failure', input.pathname]
 	});
@@ -142,7 +146,9 @@ export const reportAuthProxyFailure = async (input: AuthProxyFailureInput) => {
 		origin: input.origin,
 		pathname: input.pathname,
 		referer: input.referer,
-		requestId: input.requestId
+		requestId: input.requestId,
+		upstreamCfRay: input.upstreamHeaders?.['cf-ray'],
+		upstreamStatus: input.upstreamStatus
 	});
 };
 

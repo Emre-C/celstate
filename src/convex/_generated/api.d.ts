@@ -9,13 +9,19 @@
  */
 
 import type * as auth from "../auth.js";
-import type * as creditGrants from "../creditGrants.js";
+import type * as creditPackPurchase from "../creditPackPurchase.js";
+import type * as creditPackPurchaseActions from "../creditPackPurchaseActions.js";
 import type * as crons from "../crons.js";
 import type * as generation from "../generation.js";
 import type * as generationReports from "../generationReports.js";
 import type * as generations from "../generations.js";
 import type * as http from "../http.js";
 import type * as lib_config from "../lib/config.js";
+import type * as lib_creditPackPurchase_catalog from "../lib/creditPackPurchase/catalog.js";
+import type * as lib_creditPackPurchase_inMemoryStripeAdapter from "../lib/creditPackPurchase/inMemoryStripeAdapter.js";
+import type * as lib_creditPackPurchase_lifecycle from "../lib/creditPackPurchase/lifecycle.js";
+import type * as lib_creditPackPurchase_productionStripeAdapter from "../lib/creditPackPurchase/productionStripeAdapter.js";
+import type * as lib_creditPackPurchase_stripePort from "../lib/creditPackPurchase/stripePort.js";
 import type * as lib_gemini from "../lib/gemini.js";
 import type * as lib_generationOpsEvents from "../lib/generationOpsEvents.js";
 import type * as lib_generationRun from "../lib/generationRun.js";
@@ -25,7 +31,6 @@ import type * as lib_optimize from "../lib/optimize.js";
 import type * as lib_prompts from "../lib/prompts.js";
 import type * as lib_qaUserResetSecret from "../lib/qaUserResetSecret.js";
 import type * as lib_referenceStorageIds from "../lib/referenceStorageIds.js";
-import type * as lib_stripeCheckout from "../lib/stripeCheckout.js";
 import type * as lib_stripeEnv from "../lib/stripeEnv.js";
 import type * as lib_transparentQa from "../lib/transparentQa.js";
 import type * as lib_validation from "../lib/validation.js";
@@ -41,11 +46,9 @@ import type * as mcp_tools_generate from "../mcp/tools/generate.js";
 import type * as mcp_tools_getImage from "../mcp/tools/getImage.js";
 import type * as mcp_tools_listImages from "../mcp/tools/listImages.js";
 import type * as ops from "../ops.js";
-import type * as pendingCheckouts from "../pendingCheckouts.js";
 import type * as posthog from "../posthog.js";
 import type * as qaUserReset from "../qaUserReset.js";
 import type * as stripe from "../stripe.js";
-import type * as stripeRefundVerification from "../stripeRefundVerification.js";
 import type * as users from "../users.js";
 import type * as verification from "../verification.js";
 import type * as verificationRuns from "../verificationRuns.js";
@@ -58,13 +61,19 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
-  creditGrants: typeof creditGrants;
+  creditPackPurchase: typeof creditPackPurchase;
+  creditPackPurchaseActions: typeof creditPackPurchaseActions;
   crons: typeof crons;
   generation: typeof generation;
   generationReports: typeof generationReports;
   generations: typeof generations;
   http: typeof http;
   "lib/config": typeof lib_config;
+  "lib/creditPackPurchase/catalog": typeof lib_creditPackPurchase_catalog;
+  "lib/creditPackPurchase/inMemoryStripeAdapter": typeof lib_creditPackPurchase_inMemoryStripeAdapter;
+  "lib/creditPackPurchase/lifecycle": typeof lib_creditPackPurchase_lifecycle;
+  "lib/creditPackPurchase/productionStripeAdapter": typeof lib_creditPackPurchase_productionStripeAdapter;
+  "lib/creditPackPurchase/stripePort": typeof lib_creditPackPurchase_stripePort;
   "lib/gemini": typeof lib_gemini;
   "lib/generationOpsEvents": typeof lib_generationOpsEvents;
   "lib/generationRun": typeof lib_generationRun;
@@ -74,7 +83,6 @@ declare const fullApi: ApiFromModules<{
   "lib/prompts": typeof lib_prompts;
   "lib/qaUserResetSecret": typeof lib_qaUserResetSecret;
   "lib/referenceStorageIds": typeof lib_referenceStorageIds;
-  "lib/stripeCheckout": typeof lib_stripeCheckout;
   "lib/stripeEnv": typeof lib_stripeEnv;
   "lib/transparentQa": typeof lib_transparentQa;
   "lib/validation": typeof lib_validation;
@@ -90,11 +98,9 @@ declare const fullApi: ApiFromModules<{
   "mcp/tools/getImage": typeof mcp_tools_getImage;
   "mcp/tools/listImages": typeof mcp_tools_listImages;
   ops: typeof ops;
-  pendingCheckouts: typeof pendingCheckouts;
   posthog: typeof posthog;
   qaUserReset: typeof qaUserReset;
   stripe: typeof stripe;
-  stripeRefundVerification: typeof stripeRefundVerification;
   users: typeof users;
   verification: typeof verification;
   verificationRuns: typeof verificationRuns;

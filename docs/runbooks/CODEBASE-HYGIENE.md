@@ -1,6 +1,6 @@
-# Codebase hygiene, static analysis, and audits
+# Codebase hygiene and static analysis
 
-Operator reference for **local quality gates**, **Knip**, and **periodic codebase audits**. Complements [`CI-AND-CANARIES.md`](./CI-AND-CANARIES.md) (what CI runs) and [`PUBLIC-ENV-CHECKLIST.md`](./PUBLIC-ENV-CHECKLIST.md).
+Operator reference for **local quality gates**, **Knip**, jscpd, and targeted audit commands. Complements [`CI-AND-CANARIES.md`](./CI-AND-CANARIES.md) (what CI runs), [`PUBLIC-ENV-CHECKLIST.md`](./PUBLIC-ENV-CHECKLIST.md), and the documentation retention rules in [`docs/README.md`](../README.md).
 
 ## Local verification tiers
 
@@ -29,6 +29,14 @@ pnpm knip --production
 
 Do not treat either stricter mode as a bulk-delete checklist without proving live references (grep generated usage, Convex dashboard, or runtime).
 
+## jscpd (copy-paste detection)
+
+`pnpm dupcheck` is part of `pnpm verify`. Treat its report as a prompt to read the repeated code, not as an automatic abstraction mandate.
+
+- Prefer shared helpers for repeated policy, security, billing, and state-transition logic.
+- Keep structural repetition when it preserves clearer Convex validators, schema declarations, or public function contracts.
+- After a real deduplication change, lower `.jscpd.json` only to the observed duplicated-lines percentage plus a small buffer. Do not keep a standing markdown backlog of clone groups; rerun the tool when you need the current truth.
+
 ## Try/catch and legacy-marker sweeps
 
 Useful for audit passes or refactors; rerun the same commands to compare over time.
@@ -48,19 +56,9 @@ git grep -nE '@deprecated|TODO|FIXME|HACK|XXX|legacy|fallback' -- src/
 
 Treat remaining hits as **evidence to read**, not automatic debt: some markers describe **paused product behavior** (for example Apple Sign-In) rather than dead code.
 
-## Cleanup audit artifacts
-
-Point-in-time cleanup reviews and handoff evidence may live under:
-
-```text
-docs/audits/
-```
-
-Example: [`docs/audits/2026-04-24-cleanup-audit.md`](../audits/2026-04-24-cleanup-audit.md) (2026-04-24 cleanup integration on `main`, plus remediation notes on the branch that fixed handoff gaps).
-
 ## HTTP helper modules vs verification routes
 
-`src/convex/lib/httpResponses.ts` was removed in favor of **inlining** small JSON/Bearer helpers in `src/convex/http.ts` for `/verification/*` routes. **Do not reintroduce a shared `httpResponses` module** for cosmetic DRY without revisiting typing and error-classifier decisions documented in that audit brief.
+`src/convex/lib/httpResponses.ts` was removed in favor of **inlining** small JSON/Bearer helpers in `src/convex/http.ts` for `/verification/*` routes. **Do not reintroduce a shared `httpResponses` module** for cosmetic DRY without revisiting the typing and error-classifier tradeoff.
 
 **Bearer parsing** intentionally differs between verification routes and MCP; see [`docs/conventions/convex.md`](../conventions/convex.md) and [`docs/product/mcp-server.md`](../product/mcp-server.md).
 

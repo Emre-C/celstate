@@ -15,7 +15,6 @@ import {
   buildPurchaseAlertRequest,
   readOpsAlertRuntimeConfig,
 } from "./lib/ops.js";
-import { getCreditPackSettlementCandidate } from "./lib/stripeCheckout.js";
 import { handleMcpRequest } from "./mcp/handler.js";
 
 const jsonResponse = (body: unknown, status = 200) =>
@@ -157,7 +156,7 @@ http.route({
     const token = parseBearer(request);
     return jsonRouteHandler(async () => {
       const body = (await request.json()) as { priceId?: string };
-      const checkoutId = await ctx.runMutation(internal.pendingCheckouts.requestCheckoutForCanaryRunner, {
+      const checkoutId = await ctx.runMutation(internal.creditPackPurchase.requestCheckoutForCanaryRunner, {
         runnerSecret: token,
         priceId: body.priceId,
       });
@@ -176,7 +175,7 @@ http.route({
       return jsonResponse({ error: "checkoutId required" }, 400);
     }
     return jsonRouteHandler(async () => {
-      const status = await ctx.runQuery(internal.pendingCheckouts.getCheckoutStatusForCanaryRunner, {
+      const status = await ctx.runQuery(internal.creditPackPurchase.getCheckoutStatusForCanaryRunner, {
         runnerSecret: token,
         checkoutId: checkoutId as Id<"pendingCheckouts">,
       });
@@ -195,7 +194,7 @@ http.route({
       return jsonResponse({ error: "checkoutId required" }, 400);
     }
     return jsonRouteHandler(async () => {
-      const settlement = await ctx.runQuery(internal.creditGrants.getSettlementByPendingCheckoutForCanaryRunner, {
+      const settlement = await ctx.runQuery(internal.creditPackPurchase.getSettlementByPendingCheckoutForCanaryRunner, {
         runnerSecret: token,
         pendingCheckoutId: checkoutId as Id<"pendingCheckouts">,
       });
@@ -214,7 +213,7 @@ http.route({
       return jsonResponse({ error: "pendingCheckoutId required" }, 400);
     }
     return jsonRouteHandler(async () => {
-      return await ctx.runAction(internal.stripeRefundVerification.refundSettlementByPendingCheckoutForCanary, {
+      return await ctx.runAction(internal.creditPackPurchaseActions.refundCheckoutForCanary, {
         runnerSecret: token,
         pendingCheckoutId: body.pendingCheckoutId as Id<"pendingCheckouts">,
       });
@@ -250,7 +249,7 @@ http.route({
     const token = parseBearer(request);
     return jsonRouteHandler(async () => {
       const body = (await request.json()) as { priceId?: string };
-      const checkoutId = await ctx.runMutation(internal.pendingCheckouts.requestSettlementCheckoutForCanaryRunner, {
+      const checkoutId = await ctx.runMutation(internal.creditPackPurchase.requestSettlementCheckoutForCanaryRunner, {
         runnerSecret: token,
         priceId: body.priceId,
       });
@@ -269,7 +268,7 @@ http.route({
       return jsonResponse({ error: "checkoutId required" }, 400);
     }
     return jsonRouteHandler(async () => {
-      const status = await ctx.runQuery(internal.pendingCheckouts.getSettlementCheckoutStatusForCanaryRunner, {
+      const status = await ctx.runQuery(internal.creditPackPurchase.getSettlementCheckoutStatusForCanaryRunner, {
         runnerSecret: token,
         checkoutId: checkoutId as Id<"pendingCheckouts">,
       });
@@ -283,47 +282,29 @@ const handleCreditPackCheckout = async (
   event: CreditPackCheckoutEvent,
 ) => {
   const session = event.data.object;
-  const settlementCandidate = getCreditPackSettlementCandidate(session);
+  const result = await ctx.runMutation(internal.creditPackPurchase.onStripeCheckoutCompleted, {
+    session,
+  });
 
-  if (!settlementCandidate.ok) {
+  if (result.outcome === "skipped") {
     console.log(
       "Skipping credit grant for checkout session",
       session.id,
       event.type,
-      settlementCandidate.reason,
+      result.reason,
     );
     return;
   }
 
-  const settlementData = settlementCandidate.settlement;
-
-  const pendingCheckoutId = await ctx.runQuery(
-    internal.pendingCheckouts.getByStripeCheckoutSessionId,
-    { stripeCheckoutSessionId: session.id },
-  );
-
-  const settlementResult = await ctx.runMutation(internal.creditGrants.recordPurchaseSettlement, {
-    userId: settlementData.userId as Id<"users">,
-    priceId: settlementData.priceId,
-    stripePaymentIntentId: settlementData.stripePaymentIntentId,
-    stripeCheckoutSessionId: settlementData.stripeCheckoutSessionId,
-    pendingCheckoutId: pendingCheckoutId ?? undefined,
-    amountUsd: settlementData.amountUsd,
-    currency: settlementData.currency,
-  });
-
-  if (settlementResult.alreadyRecorded) {
+  if (result.outcome === "alreadyRecorded") {
     console.log(
       "Purchase settlement already recorded (webhook dedup) for",
-      settlementData.stripePaymentIntentId,
+      result.settlement.stripePaymentIntentId,
     );
     return;
   }
 
-  if (!settlementResult.created) {
-    console.error("recordPurchaseSettlement did not create settlement row for", session.id);
-    return;
-  }
+  const settlementData = result.settlement;
 
   if (!process.env.POSTHOG_API_KEY?.trim()) {
     console.error(
@@ -348,7 +329,7 @@ const handleCreditPackCheckout = async (
   const opsConfig = readOpsAlertRuntimeConfig();
   if (opsConfig.webhookUrl) {
     const user = await ctx.runQuery(internal.users.getById, {
-      userId: settlementData.userId as Id<"users">,
+      userId: settlementData.userId,
     });
 
     try {
@@ -374,10 +355,20 @@ const handleCreditPackCheckout = async (
   }
 };
 
+const handleCreditPackRefundCreated = async (
+  ctx: CreditPackCheckoutEventContext,
+  event: Stripe.RefundCreatedEvent,
+) => {
+  await ctx.runMutation(internal.creditPackPurchase.onStripeRefundCreated, {
+    refund: event.data.object,
+  });
+};
+
 registerRoutes(http, components.stripe, {
   events: {
     "checkout.session.async_payment_succeeded": handleCreditPackCheckout,
     "checkout.session.completed": handleCreditPackCheckout,
+    "refund.created": handleCreditPackRefundCreated,
   },
 });
 

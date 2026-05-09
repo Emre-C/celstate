@@ -38,7 +38,7 @@ The weekly drip no longer depends on a single mutation scanning the whole `users
 - `src/convex/crons.ts` — weekly cron registration.
 - `src/convex/users.ts` — `grantWeeklyCredit` action and `grantWeeklyCreditBatch` mutation.
 - `src/convex/lib/config.ts` — `GENERATION_CONFIG.weeklyDripCap`.
-- `src/convex/schema.ts` and `src/convex/creditGrants.ts` — audit storage and related credit-grant flows.
+- `src/convex/schema.ts` and `src/convex/users.ts` — audit storage and the weekly grant mutation that writes `creditGrants` rows.
 
 ## Operational Notes
 

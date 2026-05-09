@@ -75,12 +75,13 @@ Additional hourly crons:
 ### 5. Purchase (Stripe)
 
 1. User opens **Credits** (`/app/credits`), sees balance and Starter/Pro tiers.
-2. Clicks "Buy Starter" or "Buy Pro" → frontend calls `pendingCheckouts.requestCheckout({ priceId })`. The mutation validates `priceId` against known credit-pack price IDs (`isKnownCreditPackPriceId`) before proceeding.
-3. Convex schedules `stripe.processCheckout` (internal action): get-or-create Stripe customer, create Checkout Session (mode `"payment"`), store the checkout URL on the `pendingCheckouts` row; the client polls `getCheckoutStatus` (scoped to the owning user) then redirects to Stripe Checkout.
-4. User completes Stripe-hosted Checkout, then redirected back to `/app?success=true` or `/app?canceled=true` (see `src/convex/stripe.ts`).
+2. Clicks "Buy Starter" or "Buy Pro" -> frontend calls `creditPackPurchase.requestCheckout({ priceId })`. The mutation validates `priceId` against known credit-pack price IDs (`isKnownCreditPackPriceId`) before proceeding.
+3. Convex schedules `creditPackPurchaseActions.processCheckout` (internal action): get-or-create Stripe customer, create Checkout Session (mode `"payment"`), store the checkout URL on the `pendingCheckouts` row; the client polls `creditPackPurchase.getCheckoutStatus` (scoped to the owning user) then redirects to Stripe Checkout.
+4. User completes Stripe-hosted Checkout, then redirected back to `/app?success=true` or `/app?canceled=true` (see `src/convex/lib/creditPackPurchase/lifecycle.ts`).
 5. Stripe sends `checkout.session.completed` (or `checkout.session.async_payment_succeeded` for delayed payment methods) to Convex HTTP webhook (`src/convex/http.ts`). Credits are only granted when `mode === "payment"` and `payment_status === "paid"` (`canGrantCreditsForCheckoutSession`).
-6. Custom handler: reads `userId` and `priceId` from session metadata, maps price to credits using the `CREDIT_PACKS` map in `src/convex/http.ts` (keys match `stripePriceStarter` / `stripePricePro` from env), checks idempotency by `stripePaymentIntentId`, then runs `creditGrants.recordPurchaseSettlement` (which applies credits via `users.applyCreditsToUser`, inserts a `creditGrants` audit row, and inserts a `purchaseSettlements` revenue record). After a successful grant, server-side PostHog emits `credits_purchase_completed` and an optional ops webhook alert runs (see Observability below).
-7. Balance updates reactively via `getMe`; no polling.
+6. Custom handler: forwards the raw session to `creditPackPurchase.onStripeCheckoutCompleted`. The module reads `userId` and `priceId` from session metadata, maps price to credits through the credit-pack catalog, checks idempotency by `stripePaymentIntentId`, applies credits via `users.applyCreditsToUser`, inserts a `creditGrants` audit row, and inserts a `purchaseSettlements` revenue row. After a successful grant, server-side PostHog emits `credits_purchase_completed` and an optional ops webhook alert runs (see Observability below).
+7. Refund webhook ordering is handled inside the same module: `refund.created` can arrive before checkout settlement, in which case the refund is persisted in `pendingPurchaseRefunds` by payment intent and consumed when settlement is later recorded.
+8. Balance updates reactively via `getMe`; no polling.
 
 Credits are granted **only** from the webhook, not from the success redirect.
 
@@ -106,19 +107,20 @@ Stripe component tables (customers, payments, checkout_sessions, etc.) live in t
 ## UI
 
 - **App nav**: Credit balance shown (e.g. “X credits”) via `getMe` in the app layout.
-- **Credits page** (`/app/credits`): Current balance, Starter ($5 / 15 credits) and Pro ($10 / 40 credits) cards, “Buy” buttons that call `pendingCheckouts.requestCheckout` and redirect to Stripe when the checkout URL is ready. App home (`/app`) handles `?success=true` / `?canceled=true`; balance updates when the webhook has run.
+- **Credits page** (`/app/credits`): Current balance, Starter ($5 / 15 credits) and Pro ($10 / 40 credits) cards, “Buy” buttons that call `creditPackPurchase.requestCheckout` and redirect to Stripe when the checkout URL is ready. App home (`/app`) handles `?success=true` / `?canceled=true`; balance updates when the webhook has run.
 
 ---
 
 ## Security (Summary)
 
 - Stripe secret and webhook secret live only in Convex env; frontend never sees them.
-- Client only sends `priceId`; amounts are fixed in Stripe Dashboard and Convex `CREDIT_PACKS` map.
+- Client only sends `priceId`; amounts are fixed in Stripe Dashboard and the Convex credit-pack catalog.
 - `requestCheckout` validates `priceId` against known credit-pack price IDs (`isKnownCreditPackPriceId`) before creating a checkout session.
-- Webhook handler verifies events via `@convex-dev/stripe`; our handler checks idempotency before granting credits. Both `checkout.session.completed` and `checkout.session.async_payment_succeeded` are handled.
+- Webhook handler verifies events via `@convex-dev/stripe`; `creditPackPurchase.onStripeCheckoutCompleted` checks idempotency before granting credits. Both `checkout.session.completed` and `checkout.session.async_payment_succeeded` are handled.
+- `refund.created` is idempotent by Stripe refund ID and payment intent. If the refund arrives before settlement, `pendingPurchaseRefunds` stores it until settlement can claw credits back.
 - Credits are only granted for sessions with `mode === "payment"` and `payment_status === "paid"` (`canGrantCreditsForCheckoutSession`).
 - `getCheckoutStatus` is scoped to the owning user (cannot read other users' checkout state).
-- `pendingCheckouts.requestCheckout` runs `upsertCurrentUser` and requires an authenticated session.
+- `creditPackPurchase.requestCheckout` runs `upsertCurrentUser` and requires an authenticated session.
 
 ---
 

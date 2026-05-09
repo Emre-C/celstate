@@ -6,6 +6,7 @@ import {
   assertEmailAllowlistedForQaReset,
   assertQaUserResetSecret,
 } from "./lib/qaUserResetSecret.js";
+import { purgeUserPurchaseStateHelper } from "./lib/creditPackPurchase/lifecycle.js";
 
 const GENERATION_BATCH = 80;
 const AUTH_DELETE_PAGE = 200;
@@ -161,23 +162,11 @@ export const resetAllowlistedTestUser = internalMutation({
 
       generationsRemoved = await deleteGenerationsAndOpsForUser(ctx, userId);
 
+      await purgeUserPurchaseStateHelper(ctx, userId);
+
       for (const row of await ctx.db
         .query("creditGrants")
         .withIndex("by_user", (q) => q.eq("userId", userId))
-        .collect()) {
-        await ctx.db.delete(row._id);
-      }
-
-      for (const row of await ctx.db
-        .query("pendingCheckouts")
-        .withIndex("by_user_status", (q) => q.eq("userId", userId))
-        .collect()) {
-        await ctx.db.delete(row._id);
-      }
-
-      for (const row of await ctx.db
-        .query("purchaseSettlements")
-        .filter((q) => q.eq(q.field("userId"), userId))
         .collect()) {
         await ctx.db.delete(row._id);
       }

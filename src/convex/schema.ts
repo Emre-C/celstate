@@ -169,6 +169,18 @@ export default defineSchema({
     .index("by_payment_intent", ["stripePaymentIntentId"])
     .index("by_checkout_session", ["stripeCheckoutSessionId"])
     .index("by_pending_checkout", ["pendingCheckoutId"])
+    .index("by_user", ["userId"])
+    .index("by_createdAt", ["createdAt"]),
+
+  pendingPurchaseRefunds: defineTable({
+    stripePaymentIntentId: v.string(),
+    stripeRefundId: v.string(),
+    refundAmountUsd: v.number(),
+    refundedAt: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_payment_intent", ["stripePaymentIntentId"])
+    .index("by_refund", ["stripeRefundId"])
     .index("by_createdAt", ["createdAt"]),
 
   canaryPrincipals: defineTable({

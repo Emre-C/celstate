@@ -10,6 +10,8 @@ vi.mock('@sentry/sveltekit', () => ({
 	captureMessage: vi.fn()
 }));
 
+import * as Sentry from '@sentry/sveltekit';
+
 describe('isRetryableUpstreamFetchError', () => {
 	it('treats TypeError fetch failed as retryable', () => {
 		expect(isRetryableUpstreamFetchError(new TypeError('fetch failed'))).toBe(true);
@@ -17,6 +19,10 @@ describe('isRetryableUpstreamFetchError', () => {
 
 	it('does not treat AbortError as retryable', () => {
 		expect(isRetryableUpstreamFetchError(new DOMException('aborted', 'AbortError'))).toBe(false);
+	});
+
+	it('treats internal upstream timeouts as retryable', () => {
+		expect(isRetryableUpstreamFetchError(new DOMException('timed out', 'TimeoutError'))).toBe(true);
 	});
 
 	it('treats ConnectTimeoutError in cause as retryable', () => {
@@ -81,6 +87,18 @@ describe('proxyAuthRequest', () => {
 		expect(fetch).toHaveBeenCalledTimes(2);
 	});
 
+	it('retries safe upstream 5xx responses before returning success', async () => {
+		vi.mocked(fetch)
+			.mockResolvedValueOnce(new Response('edge error', { status: 520 }))
+			.mockResolvedValueOnce(new Response('ok', { status: 200 }));
+		const req = new Request('http://localhost/api/auth/get-session', { method: 'GET' });
+		const res = await proxyAuthRequest(req, convexUrl);
+
+		expect(res.status).toBe(200);
+		expect(await res.text()).toBe('ok');
+		expect(fetch).toHaveBeenCalledTimes(2);
+	});
+
 	it('returns 503 JSON after exhausting retries', async () => {
 		vi.mocked(fetch).mockRejectedValue(new TypeError('fetch failed'));
 		const req = new Request('http://localhost/api/auth/convex/token', { method: 'GET' });
@@ -88,6 +106,44 @@ describe('proxyAuthRequest', () => {
 		expect(res.status).toBe(503);
 		expect(await res.json()).toMatchObject({ error: 'auth_backend_unavailable' });
 		expect(fetch).toHaveBeenCalledTimes(3);
+	});
+
+	it('normalizes upstream 520 to 503 after exhausting safe retries', async () => {
+		vi.mocked(fetch).mockResolvedValue(
+			new Response('<html>Cloudflare 520</html>', {
+				status: 520,
+				headers: {
+					'cf-ray': 'ray-123-IAD',
+					'convex-usher': 'usher',
+					server: 'cloudflare',
+					via: '1.1 Caddy'
+				}
+			})
+		);
+		const req = new Request('http://localhost/api/auth/get-session', { method: 'GET' });
+
+		const res = await proxyAuthRequest(req, convexUrl);
+
+		expect(res.status).toBe(503);
+		expect(res.headers.get('x-auth-upstream-attempts')).toBe('3');
+		expect(res.headers.get('x-auth-upstream-status')).toBe('520');
+		expect(res.headers.get('cf-ray')).toBeNull();
+		expect(await res.json()).toMatchObject({ error: 'auth_backend_unavailable' });
+		expect(fetch).toHaveBeenCalledTimes(3);
+		expect(vi.mocked(Sentry.captureMessage)).toHaveBeenCalledWith(
+			'Auth proxy failure',
+			expect.objectContaining({
+				extra: expect.objectContaining({
+					upstreamHeaders: expect.objectContaining({
+						'cf-ray': 'ray-123-IAD',
+						'convex-usher': 'usher',
+						server: 'cloudflare',
+						via: '1.1 Caddy'
+					}),
+					upstreamStatus: 520
+				})
+			})
+		);
 	});
 
 	it('does not retry POST', async () => {
@@ -98,6 +154,19 @@ describe('proxyAuthRequest', () => {
 			headers: { 'content-type': 'application/json' }
 		});
 		const res = await proxyAuthRequest(req, convexUrl);
+		expect(res.status).toBe(503);
+		expect(fetch).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not retry POST upstream 5xx responses', async () => {
+		vi.mocked(fetch).mockResolvedValue(new Response('edge error', { status: 520 }));
+		const req = new Request('http://localhost/api/auth/sign-in', {
+			method: 'POST',
+			body: '{}',
+			headers: { 'content-type': 'application/json' }
+		});
+		const res = await proxyAuthRequest(req, convexUrl);
+
 		expect(res.status).toBe(503);
 		expect(fetch).toHaveBeenCalledTimes(1);
 	});
@@ -125,6 +194,30 @@ describe('proxyAuthRequest', () => {
 
 		await assertion;
 		expect(fetch).toHaveBeenCalledTimes(1);
+	});
+
+	it('returns 503 before the platform timeout when upstream hangs', async () => {
+		vi.useFakeTimers();
+		vi.mocked(fetch).mockImplementation(
+			(_input: RequestInfo | URL, init?: RequestInit) =>
+				new Promise<Response>((_resolve, reject) => {
+					init?.signal?.addEventListener(
+						'abort',
+						() => reject(init.signal?.reason ?? new DOMException('aborted', 'AbortError')),
+						{ once: true }
+					);
+				})
+		);
+
+		const req = new Request('http://localhost/api/auth/get-session', { method: 'GET' });
+		const promise = proxyAuthRequest(req, convexUrl, { upstreamTimeoutMs: 10 });
+
+		await vi.runAllTimersAsync();
+		const res = await promise;
+
+		expect(res.status).toBe(503);
+		expect(res.headers.get('x-auth-upstream-attempts')).toBe('3');
+		expect(fetch).toHaveBeenCalledTimes(3);
 	});
 });
 

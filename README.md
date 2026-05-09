@@ -2,7 +2,7 @@
 
 A focused tool for **transparent-background PNGs** from a text prompt—no background-removal step after the fact. The app is a **SvelteKit** frontend on **Convex** (realtime data, storage, scheduled work) with **Stripe** credit packs and product analytics.
 
-Primary product docs live in [`docs/product/`](docs/product/); deployment and operations runbooks live in [`docs/runbooks/`](docs/runbooks/).
+Primary product docs live in [`docs/product/`](docs/product/); deployment and operations runbooks live in [`docs/runbooks/`](docs/runbooks/). Documentation retention rules live in [`docs/README.md`](docs/README.md).
 
 ## What it does today
 
@@ -51,7 +51,7 @@ pnpm check
 - Stripe + Convex environments: [`docs/runbooks/STRIPE-CONVEX-ENVIRONMENTS.md`](docs/runbooks/STRIPE-CONVEX-ENVIRONMENTS.md)
 - Secrets management & rotation (Doppler-first): [`docs/runbooks/SECRETS-MANAGEMENT.md`](docs/runbooks/SECRETS-MANAGEMENT.md)
 - CI, auth canaries, and production verification: [`docs/runbooks/CI-AND-CANARIES.md`](docs/runbooks/CI-AND-CANARIES.md)
-- Knip caveats, audit commands, cleanup briefs: [`docs/runbooks/CODEBASE-HYGIENE.md`](docs/runbooks/CODEBASE-HYGIENE.md)
+- Knip caveats and audit commands: [`docs/runbooks/CODEBASE-HYGIENE.md`](docs/runbooks/CODEBASE-HYGIENE.md)
 
 ## Project structure
 
@@ -61,7 +61,6 @@ pnpm check
 - `scripts/` — Utility scripts
 - `docs/product/` — Shipped product behavior and architecture
 - `docs/runbooks/` — Setup, deployment, verification, and operator workflows
-- `docs/audits/` — Point-in-time codebase audit briefs and handoff evidence
 - `docs/implementation/` — Time-bound implementation specs (prefer promoting durable material into product/runbooks/conventions)
 
 ## Useful Commands
@@ -80,6 +79,7 @@ pnpm reset-qa
 
 | Doc | Purpose |
 |-----|---------|
+| [`docs/README.md`](docs/README.md) | Documentation retention rules and folder roles |
 | [`docs/product/authentication.md`](docs/product/authentication.md) | Sign-in, sessions, protected routes |
 | [`docs/product/image-generation.md`](docs/product/image-generation.md) | Pipeline, Vertex, matting, history |
 | [`docs/product/payments-system.md`](docs/product/payments-system.md) | Credits, Stripe, pricing tiers |

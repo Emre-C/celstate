@@ -14,7 +14,7 @@ DOCUMENT_ROLE
            screenshot_diffs, payment_processor_internal_implementation_not_observable_by_repo
 ```
 
-**Status (2026-04):** The system is end-to-end operational. The contract library, gate evaluation, JSON Schema, unit tests, webhook settlement ledger, Convex persistence (`verificationRuns`, `verificationEvidence`, `canaryPrincipals`), production runner (`scripts/production-verification.ts`), auth/generation/checkout/settlement canaries, deploy-triggered verification via `deployment_status`, automated canary principal provisioning, and Stripe refund automation (`src/convex/stripeRefundVerification.ts`) are all in-repo. The deploy gate fires automatically on Vercel production deployments (via GitHub `deployment_status` events), with the runner exiting non-zero on DENY. Protected-route auth proof is required by default for `POST_DEPLOY` and `SCHEDULED` triggers. **Remaining external configuration:** Vercel deployment protection rules referencing the verification check status (not in-repo).
+**Status (2026-04):** The system is end-to-end operational. The contract library, gate evaluation, JSON Schema, unit tests, webhook settlement ledger, Convex persistence (`verificationRuns`, `verificationEvidence`, `canaryPrincipals`), production runner (`scripts/production-verification.ts`), auth/generation/checkout/settlement canaries, deploy-triggered verification via `deployment_status`, automated canary principal provisioning, and Stripe refund automation (`src/convex/creditPackPurchaseActions.ts`) are all in-repo. The deploy gate fires automatically on Vercel production deployments (via GitHub `deployment_status` events), with the runner exiting non-zero on DENY. Protected-route auth proof is required by default for `POST_DEPLOY` and `SCHEDULED` triggers. **Remaining external configuration:** Vercel deployment protection rules referencing the verification check status (not in-repo).
 
 ---
 
@@ -77,21 +77,22 @@ CF7  docs/product/authentication.md and docs/runbooks/CI-AND-CANARIES.md charact
 ### 3.3 Existing checkout and settlement mechanisms
 
 ```text
-CF8   src/convex/pendingCheckouts.ts inserts checkout requests with status = pending and schedules internal.stripe.processCheckout.
-CF9   src/convex/pendingCheckouts.ts exposes owner-visible checkout states {pending, ready, failed}.
-CF10  src/convex/stripe.ts creates Stripe checkout sessions server-side with mode = payment,
+CF8   src/convex/creditPackPurchase.ts inserts checkout requests with status = pending and schedules internal.creditPackPurchaseActions.processCheckout.
+CF9   src/convex/creditPackPurchase.ts exposes owner-visible checkout states {pending, ready, failed}.
+CF10  src/convex/creditPackPurchaseActions.ts creates Stripe checkout sessions server-side with mode = payment,
       successUrl = ${siteUrl}/app?success=true, cancelUrl = ${siteUrl}/app?canceled=true,
       and metadata carrying {priceId, userId}.
-CF11  src/convex/stripe.ts patches pending checkouts to ready with checkoutUrl = result.url ?? "" or to failed with an error string.
-CF12  src/convex/lib/stripeCheckout.ts grants settlement eligibility only when session.mode = payment and session.payment_status = paid.
+CF11  src/convex/creditPackPurchase.ts patches pending checkouts to ready with checkoutUrl = result.url ?? "" or to failed with an error string.
+CF12  src/convex/lib/creditPackPurchase/lifecycle.ts grants settlement eligibility only when session.mode = payment and session.payment_status = paid.
 CF13  src/convex/http.ts handles Stripe webhook events {checkout.session.completed, checkout.session.async_payment_succeeded}
       through one shared credit-pack settlement path.
-CF14  src/convex/http.ts grants credits through internal.creditGrants.recordGrant keyed by stripe payment intent,
+CF14  src/convex/http.ts grants credits through internal.creditPackPurchase.onStripeCheckoutCompleted keyed by stripe payment intent,
       then emits server-side event credits_purchase_completed.
-CF15  src/convex/creditGrants.ts enforces payment-intent deduplication inside recordGrant before credit mutation and audit insert.
-CF16  src/convex/creditGrants.ts implements recordPurchaseSettlement (credit grant + purchaseSettlements row + revenue timestamp);
-      src/convex/http.ts invokes recordPurchaseSettlement on eligible checkout.session webhook events (not recordGrant alone).
-CF16a src/convex/creditGrants.ts exposes getSettlementByPaymentIntentId and getSettlementByPendingCheckoutId for audit-style reads.
+CF15  src/convex/lib/creditPackPurchase/lifecycle.ts enforces payment-intent deduplication before credit mutation and audit insert.
+CF16  src/convex/lib/creditPackPurchase/lifecycle.ts implements recordPurchaseSettlementHelper
+      (credit grant + purchaseSettlements row + revenue timestamp + pending refund reconciliation);
+      src/convex/http.ts invokes creditPackPurchase.onStripeCheckoutCompleted on eligible checkout.session webhook events.
+CF16a src/convex/creditPackPurchase.ts exposes getSettlementByPaymentIntentId and getSettlementByPendingCheckoutId for audit-style reads.
 ```
 
 ### 3.4 Existing generation mechanisms
@@ -120,7 +121,7 @@ CF29  scripts/production-verification.ts auto-provisions required canary princip
       and CANARY_SETTLEMENT for scheduled triggers) before running probes via /verification/canary/upsert-principal.
 CF30  Protected-route auth proof (AuthCanaryEvidence.protectedRouteReachable) is required by default for POST_DEPLOY
       and SCHEDULED triggers; opt-out requires explicit AUTH_CANARY_REQUIRE_PROTECTED_ROUTE=false.
-CF31  src/convex/stripeRefundVerification.ts provides automated Stripe refund for destructive settlement canaries,
+CF31  src/convex/creditPackPurchaseActions.ts provides automated Stripe refund for destructive settlement canaries,
       invoked by the runner via /verification/canary/refund-settlement.
 ```
 
@@ -809,7 +810,7 @@ I1   COMPLETE — Library contract: src/lib/production-confidence.ts implements 
      classifySettlementOutcome / classifyGenerationOutcome, and CANARY_PRINCIPAL_CONFIG (canonical emails and roles per BO2 shape).
 I2   COMPLETE — Unit tests: src/lib/production-confidence.test.ts runs under pnpm test (vite.config.ts include pattern).
 I3   COMPLETE — JSON Schema: src/lib/production-confidence-gate-config.schema.json matches GateConfig (requiredOnDeploy max 3 domains).
-I4   COMPLETE — Settlement ledger on authoritative webhook: src/convex/http.ts calls internal.creditGrants.recordPurchaseSettlement;
+I4   COMPLETE — Settlement ledger on authoritative webhook: src/convex/http.ts calls internal.creditPackPurchase.onStripeCheckoutCompleted;
      purchaseSettlements + creditGrants rows; addresses former G9 / BO9 ledger gap for the production webhook path.
 I5   COMPLETE — Persistence: src/convex/verification.ts implements ingestVerificationRun (writes verificationRuns + verificationEvidence)
      and upsertCanaryPrincipal (writes canaryPrincipals); production runner ingests results on every run.
@@ -819,7 +820,7 @@ I7   COMPLETE — Authenticated auth canary: scripts/production-verification.ts 
      with pre-loaded storage state; required by default for POST_DEPLOY and SCHEDULED triggers.
 I8   COMPLETE — Production canaries: scripts/production-verification.ts exercises AUTH, GENERATION, CHECKOUT_SESSION,
      and LIVE_SETTLEMENT (scheduled) canaries end-to-end against live infrastructure.
-I9   COMPLETE — Refund automation: src/convex/stripeRefundVerification.ts issues Stripe refunds for destructive settlement canaries;
+I9   COMPLETE — Refund automation: src/convex/creditPackPurchaseActions.ts issues Stripe refunds for destructive settlement canaries;
      runner calls /verification/canary/refund-settlement after settlement observation.
 I10  COMPLETE — Canary principal provisioning: runner auto-provisions required canary principals via
      /verification/canary/upsert-principal before running probes (CF29).
@@ -837,7 +838,7 @@ G5   CLOSED — Scheduled live-settlement canary exercises full pay → settle �
 G6   CLOSED — ingestVerificationRun persists verificationRuns and verificationEvidence on every runner invocation (CF27).
 G7   CLOSED — Runner exits non-zero on DENY; deployment_status trigger makes this a GitHub check on the deployment (CF26).
 G8   CLOSED — Runner auto-provisions canary principals before probes via upsert-principal endpoint (CF29).
-G9   CLOSED — stripeRefundVerification.ts provides automated Stripe refunds for settlement canaries (CF31).
+G9   CLOSED — creditPackPurchaseActions.refundCheckoutForCanary provides automated Stripe refunds for settlement canaries (CF31).
 ```
 
 ### 10.3 Remaining external configuration
@@ -868,7 +869,7 @@ BO7  DONE — Deploy gate: evaluateReleaseDecision invoked by runner; runner exi
      deployment_status trigger on production-verification.yml creates a GitHub check on the deployment.
 BO8  DONE — Evidence persistence: createEvidenceRef + verificationEvidence table; runner persists evidence payloads
      with evidenceRef on every terminal verdict via ingestVerificationRun.
-BO9  DONE — recordPurchaseSettlement on webhook path (see CF16); purchaseSettlements is first-class on settlement.
+BO9  DONE — recordPurchaseSettlementHelper on webhook path (see CF16); purchaseSettlements is first-class on settlement.
 BO10 DONE — Release predicate enforced: evaluateReleaseDecision returns DENY → runner exits non-zero → workflow fails.
 ```
 
@@ -892,7 +893,7 @@ VO2  ModelCheck(PaymentIdempotency, TypeOK ∧ Safety_AtMostOneGrant ∧ Safety_
 VO3  ModelCheck(GenerationCompensation, TypeOK ∧ Safety_NoArtifactAndRefund ∧ Safety_RefundRequiresFailureOrTimeout) — not automated in repo.
 VO4  PARTIAL — Unit tests exercise transitionCoordinator, transitionDomainVerdict, lifecycle transitions, and gate evaluation
       (src/lib/production-confidence.test.ts); full totality proofs for every OTHER branch are not enumerated in tests.
-VO5  Not covered by automated proof; recordPurchaseSettlement dedups by payment intent at the data layer.
+VO5  Not covered by automated proof; recordPurchaseSettlementHelper dedups by payment intent at the data layer.
 ```
 
 ### 12.2 Runtime obligations
@@ -904,7 +905,7 @@ VO8   DONE — Auth canary collects protectedRouteReachable via Playwright; requ
 VO9   DONE — Generation canary exercises start → poll → terminal status against live Convex + provider.
 VO10  DONE — Checkout-session canary exercises start → poll → ready with hosted URL against live Stripe.
 VO11  DONE — Live-settlement canary exercises pay → settle → grant → refund against live Stripe (scheduled trigger).
-VO12  PARTIAL — Duplicate-delivery behavior enforced in settlement mutation (recordPurchaseSettlement dedup by payment intent);
+VO12  PARTIAL — Duplicate-delivery behavior enforced in settlement mutation (recordPurchaseSettlementHelper dedup by payment intent);
       no canary specifically asserts idempotency under synthetic duplicate webhook delivery end-to-end.
 ```
 
@@ -922,12 +923,12 @@ EVIDENCE.AUTH_CANARY_CONTRACT           = scripts/auth-canary-probe.mjs
 EVIDENCE.AUTH_CANARY_CONTRACT_TEST      = scripts/auth-canary-probe.test.ts
 EVIDENCE.AUTH_PRODUCT_DOC               = docs/product/authentication.md
 EVIDENCE.CI_AND_CANARIES_RUNBOOK        = docs/runbooks/CI-AND-CANARIES.md
-EVIDENCE.PENDING_CHECKOUT_MODEL         = src/convex/pendingCheckouts.ts
-EVIDENCE.CHECKOUT_SESSION_CREATION      = src/convex/stripe.ts
-EVIDENCE.CHECKOUT_SETTLEMENT_GUARD      = src/convex/lib/stripeCheckout.ts
+EVIDENCE.PENDING_CHECKOUT_MODEL         = src/convex/creditPackPurchase.ts
+EVIDENCE.CHECKOUT_SESSION_CREATION      = src/convex/creditPackPurchaseActions.ts
+EVIDENCE.CHECKOUT_SETTLEMENT_GUARD      = src/convex/lib/creditPackPurchase/lifecycle.ts
 EVIDENCE.WEBHOOK_SETTLEMENT_PATH        = src/convex/http.ts (Stripe webhooks + verification canary HTTP routes)
-EVIDENCE.CREDIT_GRANT_IDEMPOTENCY       = src/convex/creditGrants.ts
-EVIDENCE.PURCHASE_SETTLEMENT_LEDGER     = src/convex/creditGrants.ts (recordPurchaseSettlement, getSettlementBy*)
+EVIDENCE.CREDIT_GRANT_IDEMPOTENCY       = src/convex/lib/creditPackPurchase/lifecycle.ts
+EVIDENCE.PURCHASE_SETTLEMENT_LEDGER     = src/convex/creditPackPurchase.ts + src/convex/lib/creditPackPurchase/lifecycle.ts
 EVIDENCE.GENERATION_WORKFLOW            = src/convex/generations.ts
 EVIDENCE.OBSERVABILITY_PRODUCT_DOC      = docs/product/observability.md
 EVIDENCE.PRODUCTION_CONFIDENCE_LIB      = src/lib/production-confidence.ts
@@ -935,7 +936,7 @@ EVIDENCE.PRODUCTION_CONFIDENCE_TESTS    = src/lib/production-confidence.test.ts
 EVIDENCE.GATE_CONFIG_SCHEMA             = src/lib/production-confidence-gate-config.schema.json
 EVIDENCE.VERIFICATION_PERSISTENCE       = src/convex/verification.ts (ingestVerificationRun, upsertCanaryPrincipal)
 EVIDENCE.VERIFICATION_SCHEMA            = src/convex/schema.ts (verificationRuns, verificationEvidence, canaryPrincipals)
-EVIDENCE.STRIPE_REFUND_VERIFICATION     = src/convex/stripeRefundVerification.ts
+EVIDENCE.STRIPE_REFUND_VERIFICATION     = src/convex/creditPackPurchaseActions.ts (refundCheckoutForCanary)
 ```
 
 ---

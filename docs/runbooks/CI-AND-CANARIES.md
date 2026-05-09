@@ -40,6 +40,14 @@ If the bare domain (`https://example.com`) **308-redirects** to `https://www.exa
 - Set `AUTH_CANARY_BASE_URL` to the **final** origin (`https://www.…`), or  
 - Rely on the script’s default **fetch redirect following** for `/api/auth/get-session` (do not use `redirect: 'manual'` for that probe, or a 308 is reported as failure).
 
+### Auth proxy failure contract
+
+`/api/auth/*` is served by SvelteKit and proxied to Convex Better Auth (`*.convex.site`). The proxy owns the public failure shape:
+
+- Safe methods (`GET`, `HEAD`, `OPTIONS`) retry bounded upstream failures before responding.
+- Upstream connect failures, upstream timeouts, and upstream HTTP **5xx** responses are normalized to **503 JSON** with `error: "auth_backend_unavailable"`.
+- Upstream edge diagnostics are reported server-side; users and canaries should not receive raw Convex / Cloudflare 5xx bodies.
+
 ### Contract tests
 
 `scripts/auth-canary-probe.mjs` defines which **final** HTTP statuses count as OK for the get-session probe (`200`, `401`).  
@@ -48,8 +56,10 @@ If the bare domain (`https://example.com`) **308-redirects** to `https://www.exa
 ### Interpreting failures (`scripts/check-auth-health.mjs`)
 
 - Failures are prefixed with **`[auth_page]`** (HTML `/auth` marker probe) or **`[get_session]`** (JSON `/api/auth/get-session` probe) so logs and ops webhooks name the failing step.
+- Non-OK responses include safe diagnostics in the workflow log: final URL, selected response headers (`cf-ray`, `server`, `x-vercel-id`, `x-request-id`, `convex-usher`, `via`, `content-type`), and a small body prefix. Request cookies and `set-cookie` are never logged.
 - **`request timed out after …ms`** means the probe’s `fetch` hit the per-request abort budget (cold starts, edge/network blips, or GitHub runner egress). A single timeout with surrounding runs **green** usually points to **transience**, not a bad HTTP status from the app.
 - For sustained outages, expect explicit status / content-type / marker errors rather than only timeouts.
+- GitHub scheduled workflows are best-effort and can be delayed or skipped during platform load. Treat this workflow as a production smoke check, not precise uptime monitoring or a recovery-time clock.
 
 ## Production verification (`/.github/workflows/production-verification.yml`)
 

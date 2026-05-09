@@ -15,13 +15,36 @@ export default tseslint.config(
 		]
 	},
 	{
-		files: ['src/**/*.{ts,tsx}', 'scripts/**/*.{ts,tsx,mjs}', 'e2e/**/*.ts', 'playwright.config.ts'],
+		files: ['src/**/*.{ts,tsx}', 'scripts/**/*.{ts,tsx}', 'e2e/**/*.ts', 'playwright.config.ts'],
 		languageOptions: {
 			parser: tseslint.parser,
 			parserOptions: {
 				projectService: true,
 				tsconfigRootDir: import.meta.dirname
 			}
+		},
+		plugins: {
+			'@typescript-eslint': tseslint.plugin
+		},
+		rules: {
+			'@typescript-eslint/ban-ts-comment': [
+				'error',
+				{
+					'ts-expect-error': 'allow-with-description',
+					minimumDescriptionLength: 10
+				}
+			]
+		}
+	},
+	{
+		files: ['scripts/**/*.mjs'],
+		languageOptions: {
+			parser: tseslint.parser,
+			parserOptions: {
+				projectService: false
+			},
+			ecmaVersion: 'latest',
+			sourceType: 'module'
 		},
 		plugins: {
 			'@typescript-eslint': tseslint.plugin

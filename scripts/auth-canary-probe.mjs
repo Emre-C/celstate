@@ -14,12 +14,49 @@ export const AUTH_CANARY_PROBE = /** @type {const} */ ({
 
 /** Per-probe `fetch` budget (cold starts / edge latency). */
 export const AUTH_CANARY_PROBE_TIMEOUT_MS = 20_000;
+export const AUTH_CANARY_DIAGNOSTIC_HEADERS = /** @type {const} */ ([
+	'cf-ray',
+	'server',
+	'x-vercel-id',
+	'x-request-id',
+	'convex-usher',
+	'via',
+	'content-type'
+]);
+const AUTH_CANARY_BODY_PREFIX_LENGTH = 180;
+
+/** @param {string} value */
+const normalizeDiagnosticValue = (value) => value.replace(/\s+/g, ' ').trim();
 
 /**
  * @param {number} status
  */
 export function isFinalGetSessionProbeOk(status) {
 	return status === 200 || status === 401;
+}
+
+/**
+ * @param {Response} response
+ * @param {string} [bodyText]
+ */
+export function formatAuthCanaryResponseDiagnostics(response, bodyText = '') {
+	const parts = [];
+	if (response.url) {
+		parts.push(`final_url=${response.url}`);
+	}
+	for (const headerName of AUTH_CANARY_DIAGNOSTIC_HEADERS) {
+		const value = response.headers.get(headerName);
+		if (value) {
+			parts.push(`${headerName}=${normalizeDiagnosticValue(value).slice(0, 220)}`);
+		}
+	}
+
+	const bodyPrefix = normalizeDiagnosticValue(bodyText).slice(0, AUTH_CANARY_BODY_PREFIX_LENGTH);
+	if (bodyPrefix) {
+		parts.push(`body_prefix=${JSON.stringify(bodyPrefix)}`);
+	}
+
+	return parts.length > 0 ? `diagnostics: ${parts.join('; ')}` : 'diagnostics: none';
 }
 
 /**

@@ -1,6 +1,7 @@
 import {
 	AUTH_CANARY_PROBE,
 	AUTH_CANARY_PROBE_TIMEOUT_MS,
+	formatAuthCanaryResponseDiagnostics,
 	formatAuthCanaryProbeFailure,
 	isFinalGetSessionProbeOk
 } from './auth-canary-probe.mjs';
@@ -31,12 +32,14 @@ const checkAuthPage = async () => {
 			headers: { accept: 'text/html' },
 			signal: controller.signal
 		});
+		const html = await response.text();
 
 		if (!response.ok) {
-			throw new Error(`/auth returned ${response.status}`);
+			throw new Error(
+				`/auth returned ${response.status}; ${formatAuthCanaryResponseDiagnostics(response, html)}`
+			);
 		}
 
-		const html = await response.text();
 		if (!html.includes('data-testid="auth-page"')) {
 			throw new Error('/auth did not render the expected auth page marker');
 		}
@@ -61,19 +64,29 @@ const checkSessionEndpoint = async () => {
 			headers: { accept: 'application/json' },
 			signal: controller.signal
 		});
+		const text = await response.text();
 
 		if (!isFinalGetSessionProbeOk(response.status)) {
-			throw new Error(`/api/auth/get-session returned ${response.status}`);
+			throw new Error(
+				`/api/auth/get-session returned ${response.status}; ${formatAuthCanaryResponseDiagnostics(response, text)}`
+			);
 		}
 
 		const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
 		if (!contentType.includes('application/json')) {
-			throw new Error(`/api/auth/get-session returned unexpected content-type: ${contentType || 'missing'}`);
+			throw new Error(
+				`/api/auth/get-session returned unexpected content-type: ${contentType || 'missing'}; ${formatAuthCanaryResponseDiagnostics(response, text)}`
+			);
 		}
 
-		const text = await response.text();
 		if (text.length > 0) {
-			JSON.parse(text);
+			try {
+				JSON.parse(text);
+			} catch (error) {
+				throw new Error(
+					`/api/auth/get-session returned invalid JSON: ${error instanceof Error ? error.message : String(error)}; ${formatAuthCanaryResponseDiagnostics(response, text)}`
+				);
+			}
 		}
 
 		return response.status;
