@@ -734,7 +734,11 @@ export async function getSettlementSummaryByPaymentIntent(
     )
     .collect();
   if (settlements.length === 0) return null;
-  return buildSettlementSummary(ctx, settlements.at(-1)!, settlements.length);
+  return buildSettlementSummary(
+    ctx,
+    settlements[settlements.length - 1]!,
+    settlements.length,
+  );
 }
 
 export async function getSettlementSummaryByPendingCheckout(
@@ -750,7 +754,7 @@ export async function getSettlementSummaryByPendingCheckout(
   if (settlements.length === 0) return null;
   // Re-query by payment intent so the credit-grant count stays consistent
   // with `getSettlementSummaryByPaymentIntent`.
-  const latest = settlements.at(-1)!;
+  const latest = settlements[settlements.length - 1]!;
   const allForPi = await ctx.db
     .query("purchaseSettlements")
     .withIndex("by_payment_intent", (q) =>

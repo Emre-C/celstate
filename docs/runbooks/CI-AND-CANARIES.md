@@ -2,7 +2,7 @@
 
 Short reference for what runs on GitHub Actions, common failure modes, and how to avoid regressions.
 
-**Scope:** `ci.yml` is **preview-local** (build + marketing E2E). `auth-canary.yml` is a **lightweight production smoke** on `/auth` and get-session. **`production-verification.yml`** runs **deploy-scoped** probes against live production (auth with protected-route proof, generation, checkout session, and scheduled live settlement). Contract and evidence model: [`docs/product/production-confidence.md`](../product/production-confidence.md).
+**Scope:** `ci.yml` is **preview-local** (build + marketing E2E). `auth-canary.yml` is a **lightweight production smoke** on `/auth` and `/api/auth/session`. **`production-verification.yml`** runs **deploy-scoped** probes against live production (auth with protected-route proof, generation, checkout session, and scheduled live settlement). Contract and evidence model: [`docs/product/production-confidence.md`](../product/production-confidence.md).
 
 ## Local verification tiers
 
@@ -15,7 +15,7 @@ Knip false positives, try/marker audit commands, and cleanup audit pointers: [`C
 
 Two steps after checkout/install:
 
-1. **`pnpm test:auth`** — Fast Vitest subset (auth proxy, guards, canary probe contract, etc.). See `package.json` → `test:auth`.
+1. **`pnpm test:auth`** — Fast Vitest subset (guards, canary probe contract, Convex provisioning, access-token JSON contract, etc.). See `package.json` → `test:auth`.
 2. **`pnpm verify`** — Typecheck, Knip, jscpd, ESLint, full Vitest, production `vite build`, then **`pnpm test:e2e`** (Playwright against `vite preview`).
 
 Other notes:
@@ -25,6 +25,7 @@ Other notes:
 - **Playwright:** The workflow runs `pnpm exec playwright install chromium --with-deps` so E2E can launch Chromium on the runner.
 - **Public env in CI:** The workflow sets placeholder `PUBLIC_*` values so `pnpm verify` can build without real Convex/PostHog secrets. **`PUBLIC_SITE_URL` is `http://127.0.0.1:4174`** so the built canonical origin matches the preview URL used by Playwright (see [PUBLIC-ENV-CHECKLIST.md](./PUBLIC-ENV-CHECKLIST.md), rule **4. CI**).
 - **E2E:** `playwright.config.ts` starts **`vite preview`** on port **4174**; `e2e/marketing-landing.spec.ts` loads `/` and fails if the console reports Svelte **`hydration_mismatch`** or if primary hero CTAs are missing.
+- **Auth-boundary PRs** — CI does not validate live WorkOS JWT claim shape. Use the checklist in [`authentication.md`](../product/authentication.md) (real sign-in, token inspection, `pnpm check:kit-server-env`) before merging auth changes.
 
 ## Auth Canary (`/.github/workflows/auth-canary.yml`)
 
@@ -38,24 +39,23 @@ Other notes:
 If the bare domain (`https://example.com`) **308-redirects** to `https://www.example.com`, the canary must either:
 
 - Set `AUTH_CANARY_BASE_URL` to the **final** origin (`https://www.…`), or  
-- Rely on the script’s default **fetch redirect following** for `/api/auth/get-session` (do not use `redirect: 'manual'` for that probe, or a 308 is reported as failure).
+- Rely on the script’s default **fetch redirect following** for `/api/auth/session` (do not use `redirect: 'manual'` for that probe, or a 308 is reported as failure).
 
-### Auth proxy failure contract
+### Auth route resilience
 
-`/api/auth/*` is served by SvelteKit and proxied to Convex Better Auth (`*.convex.site`). The proxy owns the public failure shape:
+`/api/auth/*` is served by **SvelteKit** (WorkOS AuthKit). Operational notes:
 
-- Safe methods (`GET`, `HEAD`, `OPTIONS`) retry bounded upstream failures before responding.
-- Upstream connect failures, upstream timeouts, and upstream HTTP **5xx** responses are normalized to **503 JSON** with `error: "auth_backend_unavailable"`.
-- Upstream edge diagnostics are reported server-side; users and canaries should not receive raw Convex / Cloudflare 5xx bodies.
+- Prefer **stable 200 / 401** final statuses for `/api/auth/session` JSON probes after redirects.
+- Repeated **5xx** on auth paths should raise via `src/lib/server/auth-alerts.ts` (Sentry + ops webhook when configured).
 
 ### Contract tests
 
-`scripts/auth-canary-probe.mjs` defines which **final** HTTP statuses count as OK for the get-session probe (`200`, `401`).  
+`scripts/auth-canary-probe.mjs` defines which **final** HTTP statuses count as OK for the `/api/auth/session` probe (`200`, `401`).  
 `scripts/auth-canary-probe.test.ts` locks that in (including that `308` is not OK as a final status).
 
 ### Interpreting failures (`scripts/check-auth-health.mjs`)
 
-- Failures are prefixed with **`[auth_page]`** (HTML `/auth` marker probe) or **`[get_session]`** (JSON `/api/auth/get-session` probe) so logs and ops webhooks name the failing step.
+- Failures are prefixed with **`[auth_page]`** (HTML `/auth` marker probe) or **`[get_session]`** (JSON `/api/auth/session` probe) so logs and ops webhooks name the failing step.
 - Non-OK responses include safe diagnostics in the workflow log: final URL, selected response headers (`cf-ray`, `server`, `x-vercel-id`, `x-request-id`, `convex-usher`, `via`, `content-type`), and a small body prefix. Request cookies and `set-cookie` are never logged.
 - **`request timed out after …ms`** means the probe’s `fetch` hit the per-request abort budget (cold starts, edge/network blips, or GitHub runner egress). A single timeout with surrounding runs **green** usually points to **transience**, not a bad HTTP status from the app.
 - For sustained outages, expect explicit status / content-type / marker errors rather than only timeouts.
@@ -79,7 +79,7 @@ Machine-evaluable **release evidence** for production: runner `scripts/productio
 - **Variables (optional)**
   - **`AUTH_CANARY_REQUIRE_PROTECTED_ROUTE`** — Repository variable; aligns with the runner’s default (protected-route proof expected for deploy/scheduled triggers).
 
-- **External setup** — Vercel (or similar) **deployment protection** can gate promotion on this workflow’s check status; canary Better Auth users and one-time principal bootstrap are described in the [formal spec §10.3](../product/production-confidence.md#103-remaining-external-configuration).
+- **External setup** — Vercel (or similar) **deployment protection** can gate promotion on this workflow’s check status; WorkOS canary users and one-time principal bootstrap are described in the [formal spec §10.3](../product/production-confidence.md#103-remaining-external-configuration).
 
 ## Optional hardening (not in repo by default)
 

@@ -2,9 +2,9 @@
 
 **Audience:** anyone changing deploys or secrets. **Rule:** production is priority #1 — verify the **deployment** before every change.
 
-> **Doppler is the source of truth for all secrets.** Do not edit Convex env
-> vars directly with `convex env set` — instead, edit in Doppler and run
-> `pnpm secrets:sync:convex` to propagate. Do not run `convex env list`
+> **Doppler is the source of truth for all secrets.** Prefer editing in Doppler and running
+> `pnpm secrets:sync:convex:dev` (dev) or `pnpm secrets:sync:convex` (prod); those scripts invoke
+> `convex env set` under the hood. Do not run `convex env list`
 > (it leaks plaintext into terminal history and any AI-assistant context
 > capturing the session). Use `pnpm secrets:diff` for safe inspection. Full
 > details: [`SECRETS-MANAGEMENT.md`](./SECRETS-MANAGEMENT.md).
@@ -28,7 +28,7 @@ Every Convex **project** has separate **development** and **production** deploym
 - **Development** — what `pnpm exec convex dev` syncs to; default target for `convex env`, `convex run`, `convex logs` (without flags).
 - **Production** — what users rely on; only change when you intend to ship backend changes or prod-specific config.
 
-Stripe, Vertex, Better Auth secrets, and `SITE_URL` are **per deployment**. See also [STRIPE-CONVEX-ENVIRONMENTS.md](./STRIPE-CONVEX-ENVIRONMENTS.md) and [Authentication](../product/authentication.md) (local dev).
+Stripe, Vertex, WorkOS (`WORKOS_CLIENT_ID` for JWT validation), and hosting metadata such as `SITE_URL` are **per deployment**. See also [STRIPE-CONVEX-ENVIRONMENTS.md](./STRIPE-CONVEX-ENVIRONMENTS.md) and [Authentication](../product/authentication.md) (local dev).
 
 ---
 
@@ -56,7 +56,7 @@ Stripe, Vertex, Better Auth secrets, and `SITE_URL` are **per deployment**. See 
 
 This repo follows **split deploys** (see [VERCEL-DEPLOYMENT.md](./VERCEL-DEPLOYMENT.md)):
 
-- **Vercel** — SvelteKit frontend only. Public vars such as `PUBLIC_CONVEX_URL` / `PUBLIC_CONVEX_SITE_URL` so the browser knows which Convex deployment to use. No Stripe/Vertex/Better Auth secrets in Vercel.
+- **Vercel** — SvelteKit frontend. `PUBLIC_*` for the browser **plus** the `WORKOS_*` / optional `SENTRY_DSN` allowlist for AuthKit (synced from Doppler). Stripe/Vertex secrets stay on Convex only.
 - **Convex** — All backend secrets, webhooks, and HTTP actions.
 
 Convex’s Vercel guide also describes an **integrated** workflow: build command `npx convex deploy --cmd 'npm run build'` plus `CONVEX_DEPLOY_KEY` on Vercel ([Using Convex with Vercel](https://docs.convex.dev/production/hosting/vercel)). Celstate may still deploy Convex **manually** from the machine; the same **prod vs preview vs dev** separation rules apply.
@@ -74,4 +74,4 @@ Convex’s Vercel guide also describes an **integrated** workflow: build command
 ## Local development
 
 - Point `.env.local` at the **development** Convex URLs for `PUBLIC_CONVEX_*`.
-- Use `SITE_URL=http://localhost:5173` on the **dev** Convex deployment for Better Auth; production keeps the real canonical URL (see [Authentication](../product/authentication.md)).
+- Keep `SITE_URL` / `PUBLIC_SITE_URL` aligned on the **dev** Convex + Vite origins (see [Authentication](../product/authentication.md)); production keeps the real canonical URL.

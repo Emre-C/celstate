@@ -1,6 +1,6 @@
 # Public env checklist (stop dev / preview / prod drift)
 
-SvelteKit exposes `PUBLIC_*` variables to the client. Anything imported from `$env/static/public` (including inside dependencies such as `@mmailaender/convex-better-auth-svelte`) **must exist at build time** in that environment. Missing keys → Rollup error: `"PUBLIC_*" is not exported by virtual:env/static/public`.
+SvelteKit exposes `PUBLIC_*` variables to the client. Anything imported from `$env/static/public` **must exist at build time** in that environment. Missing keys → Rollup error: `"PUBLIC_*" is not exported by virtual:env/static/public`.
 
 ## Roles (three different URLs)
 
@@ -8,7 +8,7 @@ SvelteKit exposes `PUBLIC_*` variables to the client. Anything imported from `$e
 |----------|------|
 | `PUBLIC_SITE_URL` | **This SvelteKit app** — canonical origin (e.g. `https://your-app.vercel.app`). Used for auth client base URL, canonical host redirects, and marketing SEO/social metadata (`rel=canonical`, `og:url`, absolute `og:image` on the landing page). |
 | `PUBLIC_CONVEX_URL` | **Convex realtime / client API** — `https://<deployment>.convex.cloud` (or loopback when using local Convex). |
-| `PUBLIC_CONVEX_SITE_URL` | **Optional.** Only when `PUBLIC_CONVEX_URL` is loopback: set to the **same deployment’s** `https://<deployment>.convex.site` so Better Auth HTTP routes resolve. If `PUBLIC_CONVEX_URL` is already `*.convex.cloud`, omit this — the app derives `*.convex.site`. |
+| `PUBLIC_CONVEX_SITE_URL` | **Optional.** Only when `PUBLIC_CONVEX_URL` is loopback: set to the **same deployment’s** `https://<deployment>.convex.site` for Convex **HTTP** routes (verification, webhooks) when the browser uses local realtime. If `PUBLIC_CONVEX_URL` is already `*.convex.cloud`, omit unless you have a rare split deployment. |
 
 Convex secrets and `SITE_URL` **inside Convex** are separate; see [CONVEX-VERCEL-ENVIRONMENTS.md](./CONVEX-VERCEL-ENVIRONMENTS.md).
 
@@ -40,7 +40,8 @@ That keeps client-built absolute URLs for SEO and Open Graph consistent with the
 |---------|---------|
 | `pnpm check:public-env` | Validates URL shapes and Convex site derivation (no network). |
 | `pnpm check:ui-contracts` | Static guard for known-bad patterns (e.g. JSON-LD in `(marketing)/+page.svelte` that caused Svelte hydration mismatch). |
-| `pnpm check:convex-auth` | GETs Better Auth session on resolved `*.convex.site` (needs `pnpm dev`). |
+| `pnpm check:convex-auth` | GETs `/api/auth/session` on `PUBLIC_SITE_URL` (needs a running SvelteKit server, e.g. `pnpm dev`). |
+| `pnpm check:kit-server-env` | Validates `WORKOS_*` (+ optional `SENTRY_DSN`) for AuthKit. |
 | `pnpm test:e2e` | Playwright: production build + `vite preview`; asserts marketing `/` hydrates without `hydration_mismatch` (see `e2e/`). |
 | `pnpm verify` | Full gate: `check:public-env`, `check:ui-contracts`, `svelte-check`, Knip, jscpd, ESLint, Vitest, `vite build`, `test:e2e`. Wrapped with `PUBLIC_SITE_URL=http://127.0.0.1:4174` in `package.json` so the build matches E2E preview. |
 | `vercel env ls` | Confirm Preview **and** Production have `PUBLIC_*`. |

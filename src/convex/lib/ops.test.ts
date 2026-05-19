@@ -120,32 +120,34 @@ describe('ops helpers', () => {
 				webhookUrl: 'https://ops.example.com/webhook'
 			},
 			{
-				alertType: 'auth_proxy_failure',
+				alertType: 'auth_endpoint_5xx',
 				severity: 'critical',
-				attempts: 3,
-				error: 'fetch failed',
+				count: 3,
+				windowMs: 60_000,
 				host: 'celstate.com',
 				method: 'GET',
-				pathname: '/api/auth/get-session',
-				requestId: 'req-123'
+				pathname: '/api/auth/session',
+				requestId: 'req-123',
+				status: 503
 			}
 		);
 
 		expect(request.headers['content-type']).toBe('application/json');
 		expect(JSON.parse(request.body)).toEqual({
 			event: 'auth_outage',
-			title: 'Celstate auth proxy failure',
+			title: 'Celstate auth endpoint returned repeated 5xx responses',
 			severity: 'critical',
-			alert_type: 'auth_proxy_failure',
+			alert_type: 'auth_endpoint_5xx',
 			context: {
-				alertType: 'auth_proxy_failure',
+				alertType: 'auth_endpoint_5xx',
 				severity: 'critical',
-				attempts: 3,
-				error: 'fetch failed',
+				count: 3,
+				windowMs: 60_000,
 				host: 'celstate.com',
 				method: 'GET',
-				pathname: '/api/auth/get-session',
-				requestId: 'req-123'
+				pathname: '/api/auth/session',
+				requestId: 'req-123',
+				status: 503
 			}
 		});
 	});

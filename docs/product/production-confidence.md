@@ -67,8 +67,8 @@ CF3  Current CI does not execute production-hosted authenticated auth, generatio
 
 ```text
 CF4  .github/workflows/auth-canary.yml executes scripts/check-auth-health.mjs on a 15-minute schedule and on manual dispatch.
-CF5  scripts/check-auth-health.mjs probes /auth and /api/auth/get-session only.
-CF6  scripts/auth-canary-probe.mjs and scripts/auth-canary-probe.test.ts define final acceptable get-session statuses {200, 401};
+CF5  scripts/check-auth-health.mjs probes /auth and `/api/auth/session` only.
+CF6  scripts/auth-canary-probe.mjs and scripts/auth-canary-probe.test.ts define final acceptable session-probe statuses {200, 401};
      final 308 is rejected.
 CF7  docs/product/authentication.md and docs/runbooks/CI-AND-CANARIES.md characterize auth-canary.yml as a smoke check (not full OAuth).
      They also point to production verification for protected-route reachability and deploy-scoped AUTH evidence; full OAuth E2E remains out of scope for that smoke workflow.
@@ -113,7 +113,7 @@ CF25  scripts/production-verification.ts exercises AUTH, GENERATION, CHECKOUT_SE
 CF26  .github/workflows/production-verification.yml triggers on deployment_status (production success), workflow_call,
       workflow_dispatch, and weekly schedule; the runner exits non-zero on DENY.
 CF27  src/convex/verification.ts implements ingestVerificationRun (writing to verificationRuns and verificationEvidence)
-      and upsertCanaryPrincipal (provisioning canary principal bindings from canonical Better Auth users).
+      and upsertCanaryPrincipal (provisioning canary principal bindings from canonical app users).
 CF28  src/convex/http.ts exposes HTTP routes for all canary operations: /verification/ingest,
       /verification/canary/{start-generation, generation-status, start-checkout, checkout-status,
       settlement-by-checkout, refund-settlement, upsert-principal, start-settlement-checkout, settlement-checkout-status}.
@@ -139,7 +139,7 @@ CF34  Browser-captured analytics are explicitly non-authoritative for revenue co
 
 ```text
 EK1   Auth endpoint availability is necessary but not sufficient for authenticated product-path correctness.
-EK2   Final 401 from /api/auth/get-session is an admissible healthy unauthenticated result.
+EK2   Final 401 from `/api/auth/session` is an admissible healthy unauthenticated result.
 EK3   Canonical-origin correctness is part of auth correctness because redirect and cookie semantics depend on origin consistency.
 EK4   Checkout-session creation and payment settlement are separate obligations and must not be collapsed into one probe.
 EK5   Checkout-session creation can be proven without spending money.
@@ -845,7 +845,7 @@ G9   CLOSED — creditPackPurchaseActions.refundCheckoutForCanary provides autom
 
 ```text
 EC1  Vercel deployment protection rules referencing the production-verification check status (external to repo).
-EC2  Canary Better Auth user accounts + app user rows must exist before first provisioning succeeds (one-time manual bootstrap).
+EC2  Canary WorkOS user accounts + app user rows must exist before first provisioning succeeds (one-time manual bootstrap).
 EC3  GitHub secrets (VERIFICATION_RUNNER_SECRET, CONVEX_URL, AUTH_CANARY_BASE_URL, AUTH_CANARY_STORAGE_JSON) must be configured.
 ```
 

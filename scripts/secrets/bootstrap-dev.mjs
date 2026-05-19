@@ -18,10 +18,10 @@
 //   - Temp file is mode 0o600, deleted in a `finally` block.
 //
 // What ends up in Doppler dev:
-//   * Auto-rotated names (JWT, Better Auth, Verification Runner, QA Reset)
-//     are SKIPPED here. Run `pnpm secrets:rotate:dev` afterwards.
-//   * Apple OAuth credentials are NOT required for SITE_URL=http://localhost
-//     (see src/lib/auth/config.ts), so they are SKIPPED.
+//   * Auto-rotated names (JWT, WorkOS cookie password, Verification Runner,
+//     QA Reset) are SKIPPED here. Run `pnpm secrets:rotate:dev` afterwards.
+//   * Apple OAuth credentials are NOT required for SITE_URL=http://localhost,
+//     so they are SKIPPED.
 //   * Legacy `.env` names are renamed to canonical names where applicable.
 //   * Live-mode Stripe values, deprecated Gemini/Vertex API keys, and other
 //     dead names are DROPPED.
@@ -40,7 +40,7 @@ const dryRun = process.argv.includes("--dry-run");
 const AUTO_ROTATED = new Set([
   "JWT_PRIVATE_KEY",
   "JWKS",
-  "BETTER_AUTH_SECRET",
+  "WORKOS_COOKIE_PASSWORD",
   "VERIFICATION_RUNNER_SECRET",
   "QA_USER_RESET_SECRET",
 ]);
@@ -85,8 +85,9 @@ const DROP_NAMES = new Set([
 // flag remaining gaps after bootstrap so the operator knows what to add by
 // hand. Auto-rotated names are excluded because the rotate step handles them.
 const REQUIRED_FOR_DEV = [
-  "AUTH_GOOGLE_ID",
-  "AUTH_GOOGLE_SECRET",
+  "WORKOS_CLIENT_ID",
+  "WORKOS_API_KEY",
+  "WORKOS_REDIRECT_URI",
   "PUBLIC_CONVEX_URL",
   "PUBLIC_POSTHOG_HOST",
   "PUBLIC_POSTHOG_KEY",
@@ -177,8 +178,8 @@ for (const [name, value] of Object.entries(legacy)) {
   devPayload[canonical] = value;
 }
 
-// 3c. Dev-specific overrides. SITE_URL must be the local origin so Better Auth
-// trusts loopback in `getTrustedOrigins` (see src/lib/auth/config.ts).
+// 3c. Dev-specific overrides. SITE_URL must be the local origin so the app
+// and WorkOS AuthKit redirect URI match.
 devPayload.SITE_URL = "http://localhost:5173";
 devPayload.PUBLIC_SITE_URL = "http://localhost:5173";
 

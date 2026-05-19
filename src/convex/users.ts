@@ -1,6 +1,6 @@
 import { v } from "convex/values";
-import { authComponent } from "./auth.js";
-import { components, internal } from "./_generated/api.js";
+import type { UserIdentity } from "convex/server";
+import { internal } from "./_generated/api.js";
 import {
   mutation,
   query,
@@ -20,6 +20,8 @@ const userDoc = v.object({
   _id: v.id("users"),
   _creationTime: v.number(),
   tokenIdentifier: v.optional(v.string()),
+  legacyAuthSubjects: v.optional(v.array(v.string())),
+  workosUserId: v.optional(v.string()),
   email: v.optional(v.string()),
   name: v.optional(v.string()),
   image: v.optional(v.string()),
@@ -27,30 +29,51 @@ const userDoc = v.object({
   stripeCustomerId: v.optional(v.string()),
 });
 
-type BetterAuthAccountRecord = { providerId?: string } | null;
+const mergeLegacySubjects = (
+  previousTokenIdentifier: string | undefined,
+  existingLegacy: string[] | undefined,
+  nextTokenIdentifier: string,
+): string[] | undefined => {
+  if (!previousTokenIdentifier || previousTokenIdentifier === nextTokenIdentifier) {
+    return existingLegacy;
+  }
+  const base = existingLegacy ? [...existingLegacy] : [];
+  if (!base.includes(previousTokenIdentifier)) {
+    base.push(previousTokenIdentifier);
+  }
+  return base;
+};
+
+/** Lowercase / trim for index lookups; WorkOS JWT may omit `email` entirely. */
+const normalizeOptionalEmail = (email: string | undefined): string | undefined => {
+  const t = email?.trim().toLowerCase();
+  return t && t.length > 0 ? t : undefined;
+};
+
+const resolveAuthProviderFromIdentity = (identity: UserIdentity): ResolvedAuthProvider => {
+  const connection =
+    (typeof identity["connection_type"] === "string" ? identity["connection_type"] : undefined) ??
+    (typeof identity["connectionType"] === "string" ? identity["connectionType"] : undefined);
+
+  const normalized = connection?.toLowerCase() ?? "";
+  if (normalized.includes("google")) {
+    return "google";
+  }
+  if (normalized.includes("apple")) {
+    return "apple";
+  }
+
+  const email = identity.email?.trim().toLowerCase();
+  if (email?.endsWith("@privaterelay.appleid.com")) {
+    return "apple";
+  }
+
+  return "unknown";
+};
 
 const getCurrentTokenIdentifier = async (ctx: QueryCtx | MutationCtx) => {
   const identity = await ctx.auth.getUserIdentity();
   return identity?.tokenIdentifier ?? null;
-};
-
-const getAuthProviderForBetterAuthUser = async (
-  ctx: MutationCtx,
-  betterAuthUserId: string | undefined,
-): Promise<ResolvedAuthProvider> => {
-  if (!betterAuthUserId) {
-    return "unknown";
-  }
-
-  const account = await ctx.runQuery(components.betterAuth.adapter.findOne, {
-    model: "account",
-    select: ["providerId"],
-    where: [{ field: "userId", operator: "eq", value: betterAuthUserId }],
-  }) as BetterAuthAccountRecord;
-
-  const providerId = account?.providerId;
-
-  return providerId === "google" || providerId === "apple" ? providerId : "unknown";
 };
 
 export const getCurrentAppUser = async (ctx: QueryCtx | MutationCtx) => {
@@ -69,50 +92,73 @@ const upsertUserRecord = async (
   ctx: MutationCtx,
   profile: {
     tokenIdentifier: string;
+    workosUserId: string;
     email?: string;
     name?: string;
     image?: string;
     authProvider?: ResolvedAuthProvider;
   },
 ) => {
-  const existing = await ctx.db
+  const email = normalizeOptionalEmail(profile.email);
+
+  const patchFromExisting = async (
+    existingId: Id<"users">,
+    existing: {
+      tokenIdentifier?: string;
+      legacyAuthSubjects?: string[];
+      email?: string;
+      name?: string;
+      image?: string;
+    },
+  ) => {
+    await ctx.db.patch(existingId, {
+      tokenIdentifier: profile.tokenIdentifier,
+      workosUserId: profile.workosUserId,
+      email: email ?? existing.email,
+      name: profile.name ?? existing.name,
+      image: profile.image ?? existing.image,
+      legacyAuthSubjects: mergeLegacySubjects(
+        existing.tokenIdentifier,
+        existing.legacyAuthSubjects,
+        profile.tokenIdentifier,
+      ),
+    });
+    return (await ctx.db.get(existingId))!;
+  };
+
+  const byWorkos = await ctx.db
+    .query("users")
+    .withIndex("by_workos_user", (q) => q.eq("workosUserId", profile.workosUserId))
+    .first();
+
+  if (byWorkos) {
+    return await patchFromExisting(byWorkos._id, byWorkos);
+  }
+
+  const byToken = await ctx.db
     .query("users")
     .withIndex("by_token", (q) => q.eq("tokenIdentifier", profile.tokenIdentifier))
     .first();
 
-  if (existing) {
-    await ctx.db.patch(existing._id, {
-      tokenIdentifier: profile.tokenIdentifier,
-      email: profile.email,
-      name: profile.name,
-      image: profile.image,
-    });
-
-    return (await ctx.db.get(existing._id))!;
+  if (byToken) {
+    return await patchFromExisting(byToken._id, byToken);
   }
 
-  // Fallback: find by email to prevent duplicates when tokenIdentifier changes
-  if (profile.email) {
+  if (email) {
     const byEmail = await ctx.db
       .query("users")
-      .withIndex("email", (q) => q.eq("email", profile.email))
+      .withIndex("email", (q) => q.eq("email", email))
       .first();
 
     if (byEmail) {
-      await ctx.db.patch(byEmail._id, {
-        tokenIdentifier: profile.tokenIdentifier,
-        email: profile.email,
-        name: profile.name,
-        image: profile.image,
-      });
-
-      return (await ctx.db.get(byEmail._id))!;
+      return await patchFromExisting(byEmail._id, byEmail);
     }
   }
 
   const userId = await ctx.db.insert("users", {
     tokenIdentifier: profile.tokenIdentifier,
-    email: profile.email,
+    workosUserId: profile.workosUserId,
+    email,
     name: profile.name,
     image: profile.image,
     credits: GENERATION_CONFIG.initialCredits,
@@ -142,23 +188,30 @@ const upsertUserRecord = async (
 };
 
 export const upsertCurrentUser = async (ctx: MutationCtx) => {
-  const tokenIdentifier = await getCurrentTokenIdentifier(ctx);
-  if (!tokenIdentifier) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
     throw new Error("Unauthorized");
   }
 
-  const authUser = await authComponent.safeGetAuthUser(ctx);
-  if (!authUser) {
-    throw new Error("Authenticated user record not found");
+  const workosUserId = identity.subject?.trim();
+  if (!workosUserId) {
+    throw new Error("Missing auth subject (WorkOS sub).");
   }
 
-  const authProvider = await getAuthProviderForBetterAuthUser(ctx, authUser.userId ?? undefined);
+  // Convex maps OIDC `email_verified` when present; WorkOS access tokens often omit it unless the
+  // JWT template includes standard OIDC claims — only block on an explicit false.
+  if (identity.emailVerified === false) {
+    throw new Error("Email must be verified before using Celstate.");
+  }
+
+  const authProvider = resolveAuthProviderFromIdentity(identity);
 
   return await upsertUserRecord(ctx, {
-    tokenIdentifier,
-    email: authUser.email,
-    name: authUser.name,
-    image: authUser.image ?? undefined,
+    tokenIdentifier: identity.tokenIdentifier,
+    workosUserId,
+    email: identity.email ?? undefined,
+    name: identity.name ?? undefined,
+    image: identity.pictureUrl ?? undefined,
     authProvider,
   });
 };
@@ -279,7 +332,6 @@ export const grantWeeklyCredit = internalAction({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    // Type annotation required to avoid TypeScript circularity on same-file calls.
     const result: { continueCursor: string; isDone: boolean; processed: number } =
       await ctx.runMutation(internal.users.grantWeeklyCreditBatch, {
         cursor: args.cursor ?? null,

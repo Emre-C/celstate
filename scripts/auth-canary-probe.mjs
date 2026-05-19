@@ -32,7 +32,7 @@ const normalizeDiagnosticValue = (value) => value.replace(/\s+/g, ' ').trim();
  * @param {number} status
  */
 export function isFinalGetSessionProbeOk(status) {
-	return status === 200 || status === 401;
+	return status === 200;
 }
 
 /**

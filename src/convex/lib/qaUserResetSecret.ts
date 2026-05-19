@@ -1,5 +1,5 @@
 /**
- * Gate for wiping an allowlisted QA email from Convex app tables + Better Auth.
+ * Gate for wiping an allowlisted QA email from Convex app tables.
  * Convex env: `QA_USER_RESET_SECRET`, `QA_USER_RESET_ALLOWED_EMAILS` (comma-separated).
  */
 

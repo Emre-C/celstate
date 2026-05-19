@@ -5,7 +5,6 @@ import { internal } from "./_generated/api.js";
 import schema from "./schema.js";
 
 process.env.SITE_URL ??= "http://127.0.0.1:4174";
-process.env.BETTER_AUTH_SECRET ??= "test-better-auth-secret";
 process.env.AUTH_GOOGLE_ID ??= "test-google-client-id";
 process.env.AUTH_GOOGLE_SECRET ??= "test-google-client-secret";
 

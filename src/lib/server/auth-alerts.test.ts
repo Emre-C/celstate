@@ -7,11 +7,7 @@ vi.mock('@sentry/sveltekit', () => ({
 
 import * as Sentry from '@sentry/sveltekit';
 
-import {
-	recordRepeatedAuthEndpoint5xx,
-	reportAuthProxyFailure,
-	resetAuthAlertStateForTests
-} from './auth-alerts.js';
+import { recordRepeatedAuthEndpoint5xx, resetAuthAlertStateForTests } from './auth-alerts.js';
 
 describe('auth alerting', () => {
 	beforeEach(() => {
@@ -36,14 +32,14 @@ describe('auth alerting', () => {
 		await recordRepeatedAuthEndpoint5xx({
 			host: 'celstate.com',
 			method: 'GET',
-			pathname: '/api/auth/get-session',
+			pathname: '/api/auth/session',
 			requestId: 'req-1',
 			status: 503
 		});
 		await recordRepeatedAuthEndpoint5xx({
 			host: 'celstate.com',
 			method: 'GET',
-			pathname: '/api/auth/get-session',
+			pathname: '/api/auth/session',
 			requestId: 'req-2',
 			status: 503
 		});
@@ -54,7 +50,7 @@ describe('auth alerting', () => {
 		await recordRepeatedAuthEndpoint5xx({
 			host: 'celstate.com',
 			method: 'GET',
-			pathname: '/api/auth/get-session',
+			pathname: '/api/auth/session',
 			requestId: 'req-3',
 			status: 503
 		});
@@ -64,30 +60,8 @@ describe('auth alerting', () => {
 		const [, options] = vi.mocked(fetch).mock.calls[0] ?? [];
 		const body = JSON.parse(String(options?.body));
 		expect(body.content).toContain('CRITICAL: Celstate auth endpoint returned repeated 5xx responses');
-		expect(body.content).toContain('Path: /api/auth/get-session');
+		expect(body.content).toContain('Path: /api/auth/session');
 		expect(body.content).toContain('Failure count: 3');
 		expect(body.content).toContain('Status: 503');
-	});
-
-	it('rate limits repeated auth proxy outage webhook alerts', async () => {
-		await reportAuthProxyFailure({
-			attempts: 3,
-			error: 'fetch failed',
-			host: 'celstate.com',
-			method: 'GET',
-			pathname: '/api/auth/get-session',
-			requestId: 'req-1'
-		});
-		await reportAuthProxyFailure({
-			attempts: 3,
-			error: 'fetch failed',
-			host: 'celstate.com',
-			method: 'GET',
-			pathname: '/api/auth/get-session',
-			requestId: 'req-2'
-		});
-
-		expect(vi.mocked(Sentry.captureMessage)).toHaveBeenCalledTimes(1);
-		expect(fetch).toHaveBeenCalledTimes(1);
 	});
 });

@@ -9,6 +9,112 @@ export const generationStageValidator = v.union(
   v.literal("finalizing"),
 );
 
+export const animationUseCaseValidator = v.union(
+  v.literal("stream_alert"),
+  v.literal("stinger_transition"),
+  v.literal("mascot_reaction"),
+  v.literal("logo_sting"),
+  v.literal("lower_third"),
+  v.literal("video_callout"),
+  v.literal("creator_overlay"),
+);
+
+export const animationDestinationValidator = v.union(
+  v.literal("obs"),
+  v.literal("video_editor"),
+  v.literal("obs_and_video_editor"),
+);
+
+export const animationGenerationStatusValidator = v.union(
+  v.literal("intake"),
+  v.literal("queued"),
+  v.literal("generating_reference"),
+  v.literal("submitting_video"),
+  v.literal("polling_video"),
+  v.literal("reconstructing_alpha"),
+  v.literal("qa"),
+  v.literal("exporting"),
+  v.literal("complete"),
+  v.literal("failed"),
+);
+
+const animationTextBrandInputFields = {
+  channelName: v.optional(v.string()),
+  colors: v.optional(v.array(v.string())),
+  creatorHandle: v.optional(v.string()),
+} as const;
+
+export const animationPublicBrandInputsValidator = v.object(animationTextBrandInputFields);
+
+export const animationBrandInputsValidator = v.object({
+  ...animationTextBrandInputFields,
+  logoStorageId: v.optional(v.id("_storage")),
+});
+
+export const animationAttributionSourceValidator = v.union(
+  v.literal("organic"),
+  v.literal("tiktok_creator"),
+  v.literal("spark_ad"),
+  v.literal("direct_outreach"),
+  v.literal("other"),
+);
+
+export const animationAttributionValidator = v.object({
+  campaignId: v.optional(v.string()),
+  creatorCode: v.optional(v.string()),
+  landingPageVariant: v.optional(v.string()),
+  source: v.optional(animationAttributionSourceValidator),
+});
+
+export const animationExportsValidator = v.object({
+  apngStorageId: v.optional(v.id("_storage")),
+  movStorageId: v.optional(v.id("_storage")),
+  obsBundleStorageId: v.optional(v.id("_storage")),
+  pngSequenceStorageId: v.optional(v.id("_storage")),
+  webmStorageId: v.optional(v.id("_storage")),
+});
+
+export const animationQaDecisionValidator = v.union(
+  v.literal("pass"),
+  v.literal("rerun_veo"),
+  v.literal("rerun_reference"),
+  v.literal("repair_alpha"),
+  v.literal("fail_refund"),
+  v.literal("review"),
+);
+
+export const animationQaReasonCodeValidator = v.union(
+  v.literal("alpha_missing_frame"),
+  v.literal("border_contact"),
+  v.literal("boundary_flicker_high"),
+  v.literal("component_instability_high"),
+  v.literal("edge_spill_high"),
+  v.literal("export_alpha_lost"),
+  v.literal("loop_seam_high"),
+  v.literal("reference_identity_drift"),
+  v.literal("subject_cropped"),
+  v.literal("transparent_region_contaminated"),
+);
+
+export const animationQaMetricsValidator = v.object({
+  alphaFrameCoverage: v.number(),
+  borderTransparencyMin: v.number(),
+  boundaryFlicker: v.number(),
+  componentStability: v.number(),
+  decodedExportAlphaCoverage: v.number(),
+  durationSeconds: v.number(),
+  edgeSpill: v.number(),
+  frameCount: v.number(),
+  loopSeamScore: v.number(),
+});
+
+export const animationQaValidator = v.object({
+  decision: animationQaDecisionValidator,
+  metrics: animationQaMetricsValidator,
+  reasonCodes: v.array(animationQaReasonCodeValidator),
+  version: v.string(),
+});
+
 export const transparentQaDecisionValidator = v.union(
   v.literal("pass"),
   v.literal("retry_black"),
@@ -131,7 +237,7 @@ export const canaryPrincipalBindingFields = {
   destructive: v.boolean(),
   email: v.string(),
   name: v.string(),
-  betterAuthUserId: v.string(),
+  workosUserId: v.string(),
   minimumCredits: v.number(),
   appUserId: v.union(v.id("users"), v.null()),
 };

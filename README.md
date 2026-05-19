@@ -9,7 +9,7 @@ Primary product docs live in [`docs/product/`](docs/product/); deployment and op
 - **Transparent images** — Dual-pass generation on white/black backgrounds, then **difference matting** for exact alpha (see [`docs/product/image-generation.md`](docs/product/image-generation.md)). Inference uses **Vertex AI** (Generative AI on Vertex), not the Gemini Developer API key flow.
 - **Style references** — Optional reference image(s) steer palette and look; text-only mode when none are attached.
 - **Credits** — Balance shown in-app; generations deduct credits; failures refund. **Sign-up bonus**, **weekly free drip**, and **one-time Stripe packs** (no subscriptions). Details: [`docs/product/payments-system.md`](docs/product/payments-system.md).
-- **Auth** — **Better Auth on Convex** with a SvelteKit proxy; **Google** sign-in live; **Apple** implemented but disabled until Apple-side setup is done; **no email/password**. Server-side guards for `/app/*`. Details: [`docs/product/authentication.md`](docs/product/authentication.md).
+- **Auth** — **WorkOS AuthKit** (SvelteKit) + Convex JWT; **Google** via WorkOS; **Apple** when enabled in WorkOS; **no email/password**. Details: [`docs/product/authentication.md`](docs/product/authentication.md).
 - **Agent access** — Celstate ships a hosted **remote MCP server** plus an optional local proxy package for enterprise networking or local URL needs. Details: [`docs/product/mcp-server.md`](docs/product/mcp-server.md).
 - **Observability** — **PostHog** (client + Convex server capture), **Sentry** on the SvelteKit app, optional **ops webhooks** (e.g. Slack/Discord) for purchases and generation alerts. Convex workers do not use Sentry. Overview: [`docs/product/observability.md`](docs/product/observability.md).
 - **Production verification** — Deploy-scoped production canaries prove auth, generation, checkout-session creation, and scheduled live settlement. Details: [`docs/product/production-confidence.md`](docs/product/production-confidence.md).
@@ -20,7 +20,7 @@ Primary product docs live in [`docs/product/`](docs/product/); deployment and op
 |------|--------|
 | UI | Svelte 5, SvelteKit, TypeScript, Tailwind CSS |
 | Backend | Convex (queries, mutations, actions, crons, file storage) |
-| Auth | Better Auth + `@convex-dev/better-auth` |
+| Auth | WorkOS AuthKit + Convex JWT |
 | Payments | Stripe Checkout (one-time packs), `@convex-dev/stripe` |
 | Image pipeline | Vertex AI via `@google/genai` in Node actions; matting and optimization in Convex |
 
@@ -33,7 +33,7 @@ pnpm install
 pnpm dev
 ```
 
-Runs the Vite dev server and Convex dev in parallel (both are required for sign-in: the app proxies `/api/auth/*` to Convex’s `*.convex.site` URL, not to Vite). If you only run `vite dev`, auth requests have nowhere to go. The auth proxy URL is derived from `PUBLIC_CONVEX_URL` (`https://…convex.cloud` → `https://…convex.site`) so it cannot drift; use `PUBLIC_CONVEX_SITE_URL` only when realtime uses a local Convex URL. Verify connectivity: `pnpm check:convex-auth`.
+Runs the Vite dev server and Convex dev in parallel. Configure **WorkOS AuthKit** in `.env.local` or `doppler run` (`WORKOS_*`); after adding WorkOS to Doppler, run **`pnpm secrets:sync:convex:dev`** once so your **dev** Convex deployment has `WORKOS_CLIENT_ID` (required for `auth.config.ts` to bundle). Verify: `pnpm check:kit-server-env`, `pnpm check:public-env`, and (with the app up) `pnpm check:convex-auth` for `/api/auth/session`.
 
 ## Build & check
 

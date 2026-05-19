@@ -5,7 +5,7 @@
  *
  * When `PUBLIC_CONVEX_URL` points at a local Convex process (`http://127.0.0.1:…`),
  * there is no `.convex.cloud` host to derive from — callers must set `PUBLIC_CONVEX_SITE_URL`
- * to the cloud HTTPS site URL for the same logical deployment (see docs/product/authentication.md).
+ * to the cloud HTTPS site URL for the same logical deployment (HTTP routes / `.convex.site`).
  */
 
 const LOOPBACK_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
@@ -73,7 +73,8 @@ export const deriveConvexSiteUrlFromPublicConvexUrl = (convexUrl: string): strin
 	return `https://${siteHost}`;
 };
 
-export const resolveConvexSiteUrlForAuthProxy = (options: {
+/** Resolves `https://<deployment>.convex.site` for Convex HTTP endpoints (verification, webhooks, etc.). */
+export const resolveConvexHttpSiteOrigin = (options: {
 	publicConvexUrl: string | undefined;
 	publicConvexSiteUrl: string | undefined;
 }): string => {
@@ -110,7 +111,7 @@ export const resolveConvexSiteUrlForAuthProxy = (options: {
 	}
 
 	throw new Error(
-		`Could not determine Convex site URL for the auth proxy. ` +
+		`Could not determine Convex HTTP site origin (*.convex.site). ` +
 			`Set PUBLIC_CONVEX_URL to https://<deployment>.convex.cloud, ` +
 			`or set PUBLIC_CONVEX_SITE_URL to https://<deployment>.convex.site (required when using a local Convex URL for realtime).`
 	);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	deriveConvexSiteUrlFromPublicConvexUrl,
-	resolveConvexSiteUrlForAuthProxy
+	resolveConvexHttpSiteOrigin
 } from './convex-site-url.js';
 
 describe('deriveConvexSiteUrlFromPublicConvexUrl', () => {
@@ -26,10 +26,10 @@ describe('deriveConvexSiteUrlFromPublicConvexUrl', () => {
 	});
 });
 
-describe('resolveConvexSiteUrlForAuthProxy', () => {
+describe('resolveConvexHttpSiteOrigin', () => {
 	it('derives from PUBLIC_CONVEX_URL when cloud', () => {
 		expect(
-			resolveConvexSiteUrlForAuthProxy({
+			resolveConvexHttpSiteOrigin({
 				publicConvexUrl: 'https://abc.convex.cloud',
 				publicConvexSiteUrl: undefined
 			})
@@ -38,7 +38,7 @@ describe('resolveConvexSiteUrlForAuthProxy', () => {
 
 	it('rejects mismatched explicit PUBLIC_CONVEX_SITE_URL', () => {
 		expect(() =>
-			resolveConvexSiteUrlForAuthProxy({
+			resolveConvexHttpSiteOrigin({
 				publicConvexUrl: 'https://abc.convex.cloud',
 				publicConvexSiteUrl: 'https://wrong.convex.site'
 			})
@@ -47,7 +47,7 @@ describe('resolveConvexSiteUrlForAuthProxy', () => {
 
 	it('allows matching explicit PUBLIC_CONVEX_SITE_URL', () => {
 		expect(
-			resolveConvexSiteUrlForAuthProxy({
+			resolveConvexHttpSiteOrigin({
 				publicConvexUrl: 'https://abc.convex.cloud',
 				publicConvexSiteUrl: 'https://abc.convex.site'
 			})
@@ -56,7 +56,7 @@ describe('resolveConvexSiteUrlForAuthProxy', () => {
 
 	it('canonicalizes matching explicit PUBLIC_CONVEX_SITE_URL to an origin', () => {
 		expect(
-			resolveConvexSiteUrlForAuthProxy({
+			resolveConvexHttpSiteOrigin({
 				publicConvexUrl: 'https://abc.convex.cloud',
 				publicConvexSiteUrl: 'https://abc.convex.site/'
 			})
@@ -65,7 +65,7 @@ describe('resolveConvexSiteUrlForAuthProxy', () => {
 
 	it('uses PUBLIC_CONVEX_SITE_URL when realtime URL is local', () => {
 		expect(
-			resolveConvexSiteUrlForAuthProxy({
+			resolveConvexHttpSiteOrigin({
 				publicConvexUrl: 'http://127.0.0.1:3210',
 				publicConvexSiteUrl: 'https://abc.convex.site'
 			})
@@ -74,7 +74,7 @@ describe('resolveConvexSiteUrlForAuthProxy', () => {
 
 	it('rejects PUBLIC_CONVEX_SITE_URL values that are not origin-only', () => {
 		expect(() =>
-			resolveConvexSiteUrlForAuthProxy({
+			resolveConvexHttpSiteOrigin({
 				publicConvexUrl: 'http://127.0.0.1:3210',
 				publicConvexSiteUrl: 'https://abc.convex.site/api'
 			})
@@ -83,7 +83,7 @@ describe('resolveConvexSiteUrlForAuthProxy', () => {
 
 	it('rejects PUBLIC_CONVEX_URL values that are neither cloud nor loopback origins', () => {
 		expect(() =>
-			resolveConvexSiteUrlForAuthProxy({
+			resolveConvexHttpSiteOrigin({
 				publicConvexUrl: 'https://api.example.com',
 				publicConvexSiteUrl: undefined
 			})
@@ -92,10 +92,10 @@ describe('resolveConvexSiteUrlForAuthProxy', () => {
 
 	it('throws when local realtime and no site URL', () => {
 		expect(() =>
-			resolveConvexSiteUrlForAuthProxy({
+			resolveConvexHttpSiteOrigin({
 				publicConvexUrl: 'http://127.0.0.1:3210',
 				publicConvexSiteUrl: undefined
 			})
-		).toThrow(/Could not determine Convex site URL/);
+		).toThrow(/Could not determine Convex HTTP site origin/);
 	});
 });

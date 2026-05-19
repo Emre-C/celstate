@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
-	import { goto } from '$app/navigation';
-	import { authClient } from '$lib/auth-client';
+	import { page } from '$app/stores';
 	import { growthEvents } from '$lib/analytics/growth-events.js';
 	import { initPostHog, posthog } from '$lib/posthog';
 	import { useQuery } from '@mmailaender/convex-svelte';
@@ -15,6 +14,7 @@
 	const creditColor = $derived(
 		credits === 0 ? 'text-red-700' : credits <= 2 ? 'text-accent' : 'text-dim'
 	);
+	const activePath = $derived($page.url.pathname);
 	let signingOut = $state(false);
 	let apiKeyDialogOpen = $state(false);
 
@@ -40,15 +40,29 @@
 		signingOut = true;
 		initPostHog();
 		posthog.reset();
-		await authClient.signOut();
-		await goto('/', { replaceState: true });
-		signingOut = false;
+		window.location.href = '/sign-out';
 	}
 </script>
 
 <div class="min-h-dvh">
 	<NavBar compact max="4xl">
 		<div class="flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1 sm:gap-x-4">
+			<nav class="flex min-w-0 items-center gap-1" aria-label="Workspace">
+				<a
+					href="/app"
+					aria-current={activePath === '/app' ? 'page' : undefined}
+					class="rounded-full border px-3 py-1.5 text-[10px] font-medium tracking-[0.06em] uppercase transition-colors {activePath === '/app' ? 'border-accent/60 bg-accent/10 text-accent' : 'border-border text-dim hover:border-accent hover:text-text'}"
+				>
+					Images
+				</a>
+				<a
+					href="/app/animations"
+					aria-current={activePath === '/app/animations' ? 'page' : undefined}
+					class="rounded-full border px-3 py-1.5 text-[10px] font-medium tracking-[0.06em] uppercase transition-colors {activePath === '/app/animations' ? 'border-accent/60 bg-accent/10 text-accent' : 'border-border text-dim hover:border-accent hover:text-text'}"
+				>
+					Motion
+				</a>
+			</nav>
 			<button
 				type="button"
 				onclick={() => (apiKeyDialogOpen = true)}
@@ -74,6 +88,7 @@
 			</a>
 			<button
 				type="button"
+				data-testid="workspace-sign-out"
 				onclick={handleSignOut}
 				disabled={signingOut}
 				class="shrink-0 text-xs font-medium tracking-[0.06em] text-dim uppercase transition-colors hover:text-text disabled:cursor-not-allowed disabled:opacity-60"

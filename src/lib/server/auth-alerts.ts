@@ -25,13 +25,6 @@ type AuthEndpoint5xxInput = AuthRequestMetadata & {
 	status: number;
 };
 
-type AuthProxyFailureInput = AuthRequestMetadata & {
-	attempts: number;
-	error?: string;
-	upstreamHeaders?: Record<string, string>;
-	upstreamStatus?: number;
-};
-
 const AUTH_5XX_THRESHOLD = 3;
 const AUTH_5XX_WINDOW_MS = 60_000;
 const AUTH_ALERT_COOLDOWN_MS = 5 * 60_000;
@@ -100,56 +93,6 @@ const sendAuthWebhookAlert = async (context: AuthAlertContext) => {
 			}
 		});
 	}
-};
-
-export const reportAuthProxyFailure = async (input: AuthProxyFailureInput) => {
-	const { shouldAlert } = takeRateLimitedAlert({
-		key: `auth_proxy_failure:${input.pathname}`,
-		threshold: 1,
-		windowMs: AUTH_ALERT_COOLDOWN_MS,
-		cooldownMs: AUTH_ALERT_COOLDOWN_MS
-	});
-
-	if (!shouldAlert) {
-		return;
-	}
-
-	Sentry.captureMessage('Auth proxy failure', {
-		level: 'error',
-		tags: {
-			auth_alert: 'true',
-			alert_type: 'auth_proxy_failure',
-			pathname: input.pathname
-		},
-		extra: {
-			attempts: input.attempts,
-			error: input.error,
-			host: input.host,
-			method: input.method,
-			origin: input.origin,
-			pathname: input.pathname,
-			referer: input.referer,
-			requestId: input.requestId,
-			upstreamHeaders: input.upstreamHeaders,
-			upstreamStatus: input.upstreamStatus
-		},
-		fingerprint: ['auth', 'proxy-failure', input.pathname]
-	});
-
-	await sendAuthWebhookAlert({
-		alertType: 'auth_proxy_failure',
-		severity: 'critical',
-		attempts: input.attempts,
-		error: input.error,
-		host: input.host,
-		method: input.method,
-		origin: input.origin,
-		pathname: input.pathname,
-		referer: input.referer,
-		requestId: input.requestId,
-		upstreamCfRay: input.upstreamHeaders?.['cf-ray'],
-		upstreamStatus: input.upstreamStatus
-	});
 };
 
 export const recordRepeatedAuthEndpoint5xx = async (input: AuthEndpoint5xxInput) => {

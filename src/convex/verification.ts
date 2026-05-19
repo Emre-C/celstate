@@ -1,6 +1,5 @@
 import { v } from "convex/values";
-import { components } from "./_generated/api.js";
-import { internalMutation, internalQuery, type MutationCtx } from "./_generated/server.js";
+import { internalMutation, internalQuery } from "./_generated/server.js";
 import {
   canaryPrincipalBindingValidator,
   canaryPrincipalIdValidator,
@@ -19,40 +18,6 @@ import {
   type FeatureDomain,
   type GateConfig,
 } from "../lib/production-confidence.js";
-
-type BetterAuthUserRecord = {
-  email?: string;
-  emailVerified?: boolean;
-  name?: string;
-  userId?: string;
-};
-
-type BetterAuthLookupCtx = Pick<MutationCtx, "runQuery">;
-
-async function resolveCanonicalBetterAuthUser(
-  ctx: BetterAuthLookupCtx,
-  email: string,
-): Promise<Required<Pick<BetterAuthUserRecord, "email" | "userId">> & BetterAuthUserRecord> {
-  const user = (await ctx.runQuery(components.betterAuth.adapter.findOne, {
-    model: "user",
-    select: ["email", "emailVerified", "name", "userId"],
-    where: [{ field: "email", operator: "eq", value: email }],
-  })) as BetterAuthUserRecord | null;
-
-  if (!user?.userId || typeof user.email !== "string") {
-    throw new Error(`Canonical Better Auth user not found for ${email}`);
-  }
-
-  if (user.email.toLowerCase() !== email.toLowerCase()) {
-    throw new Error(`Canonical Better Auth user email mismatch for ${email}`);
-  }
-
-  if (user.emailVerified !== true) {
-    throw new Error(`Canonical Better Auth user must have a verified email for ${email}`);
-  }
-
-  return user as Required<Pick<BetterAuthUserRecord, "email" | "userId">> & BetterAuthUserRecord;
-}
 
 export const getCanaryPrincipalById = internalQuery({
   args: { principalId: canaryPrincipalIdValidator },
@@ -73,7 +38,7 @@ export const getCanaryPrincipalById = internalQuery({
       destructive: principal.destructive,
       email: principal.email,
       name: principal.name,
-      betterAuthUserId: principal.betterAuthUserId,
+      workosUserId: principal.workosUserId,
       minimumCredits: principal.minimumCredits,
       appUserId: principal.appUserId,
     };
@@ -90,21 +55,61 @@ export const upsertCanaryPrincipal = internalMutation({
     assertVerificationRunnerSecret(args.runnerSecret);
     const cfg = CANARY_PRINCIPAL_CONFIG[args.principalId];
     const now = Date.now();
-    const authUser = await resolveCanonicalBetterAuthUser(ctx, cfg.email);
-    const matchingAppUsers = await ctx.db
+
+    // Primary lookup by email (canonical for initial provisioning).
+    const matchingByEmail = await ctx.db
       .query("users")
       .withIndex("email", (q) => q.eq("email", cfg.email))
       .take(2);
 
-    if (matchingAppUsers.length !== 1) {
+    let appUser: (typeof matchingByEmail)[number] | null = null;
+
+    if (matchingByEmail.length === 1) {
+      appUser = matchingByEmail[0]!;
+    } else if (matchingByEmail.length > 1) {
       throw new Error(
-        matchingAppUsers.length === 0
-          ? `Canonical app user not found for ${cfg.email}`
-          : `Multiple app users matched canonical canary email ${cfg.email}`,
+        `Multiple app users matched canonical canary email ${cfg.email}`,
       );
     }
 
-    const appUser = matchingAppUsers[0]!;
+    // Fallback: if the canary principal was previously provisioned it stores
+    // the bound workosUserId. Use that when email is missing from the user
+    // row (e.g., WorkOS default JWT templates omit the email claim).
+    if (!appUser) {
+      const existingPrincipal = await ctx.db
+        .query("canaryPrincipals")
+        .withIndex("by_principal_id", (q) => q.eq("principalId", args.principalId))
+        .first();
+
+      if (existingPrincipal?.workosUserId) {
+        appUser = await ctx.db
+          .query("users")
+          .withIndex("by_workos_user", (q) =>
+            q.eq("workosUserId", existingPrincipal.workosUserId),
+          )
+          .first();
+
+        // If we recovered by workosUserId but the user row lacks an email,
+        // patch it now so future email lookups succeed.
+        if (appUser && !appUser.email) {
+          await ctx.db.patch(appUser._id, { email: cfg.email });
+          appUser = { ...appUser, email: cfg.email };
+        }
+      }
+    }
+
+    if (!appUser) {
+      throw new Error(
+        `Canonical app user not found for ${cfg.email}` +
+          " (and no existing canary principal workosUserId to fallback).",
+      );
+    }
+
+    if (!appUser.workosUserId) {
+      throw new Error(
+        `Canary user ${cfg.email} has no workosUserId — complete one WorkOS AuthKit sign-in so Convex can bind provider subject.`,
+      );
+    }
     if ((appUser.credits ?? 0) < cfg.minimumCredits) {
       throw new Error(
         `${args.principalId} requires at least ${cfg.minimumCredits} credits but has ${appUser.credits ?? 0}`,
@@ -127,7 +132,7 @@ export const upsertCanaryPrincipal = internalMutation({
         destructive: cfg.destructive,
         email: cfg.email,
         name: cfg.name,
-        betterAuthUserId: authUser.userId,
+        workosUserId: appUser.workosUserId,
         minimumCredits: cfg.minimumCredits,
         appUserId: appUser._id,
         updatedAt: now,
@@ -142,7 +147,7 @@ export const upsertCanaryPrincipal = internalMutation({
       email: cfg.email,
       name: cfg.name,
       minimumCredits: cfg.minimumCredits,
-      betterAuthUserId: authUser.userId,
+      workosUserId: appUser.workosUserId,
       appUserId: appUser._id,
       createdAt: now,
       updatedAt: now,

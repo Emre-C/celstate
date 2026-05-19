@@ -61,7 +61,7 @@ export interface SecretRotationReminderContext {
 }
 
 export interface AuthAlertContext {
-	alertType: 'auth_proxy_failure' | 'auth_endpoint_5xx' | 'better_auth_api_error';
+	alertType: 'auth_endpoint_5xx' | 'auth_kit_api_error';
 	severity: Exclude<OpsAlertSeverity, 'info'>;
 	pathname?: string;
 	method?: string;
@@ -297,10 +297,8 @@ function buildSignupAlertFacts(context: SignupAlertContext): string[] {
 
 function buildAuthAlertTitle(context: AuthAlertContext): string {
 	switch (context.alertType) {
-		case 'auth_proxy_failure':
-			return 'Celstate auth proxy failure';
-		case 'better_auth_api_error':
-			return 'Celstate Better Auth API error';
+		case 'auth_kit_api_error':
+			return 'Celstate WorkOS AuthKit API error';
 		default:
 			return 'Celstate auth endpoint returned repeated 5xx responses';
 	}

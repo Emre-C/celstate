@@ -5,9 +5,8 @@
  * Reports:
  *  - All pages currently open and their URLs
  *  - All cookies for any *.celstate.com / celstate.com domain
- *  - The result of GET /api/auth/get-session executed inside the browser
- *  - The result of GET /api/auth/convex/token (mints the convex_jwt cookie)
- *  - Cookies again, after the /convex/token call
+ *  - The result of GET /api/auth/session executed inside the browser
+ *  - The result of GET /api/auth/access-token (when logged in)
  *  - The result of GET /app executed inside the browser (final URL after redirects)
  */
 import { chromium } from "@playwright/test";
@@ -37,14 +36,14 @@ for (const [i, ctx] of contexts.entries()) {
     }
   };
 
-  await dumpCookies("BEFORE /convex/token");
+  await dumpCookies("BEFORE /api/auth/access-token");
 
   const runner = pages[0] ?? (await ctx.newPage());
 
-  console.log(`\n[diag] context[${i}] fetching ${SITE}/api/auth/get-session`);
+  console.log(`\n[diag] context[${i}] fetching ${SITE}/api/auth/session`);
   const sessionResult = await runner.evaluate(async (site) => {
     try {
-      const r = await fetch(`${site}/api/auth/get-session`, {
+      const r = await fetch(`${site}/api/auth/session`, {
         headers: { accept: "application/json" },
         credentials: "include",
       });
@@ -54,27 +53,26 @@ for (const [i, ctx] of contexts.entries()) {
       return { error: e instanceof Error ? e.message : String(e) };
     }
   }, SITE);
-  console.log(`[diag]   get-session: ${JSON.stringify(sessionResult)}`);
+  console.log(`[diag]   session: ${JSON.stringify(sessionResult)}`);
 
-  console.log(`\n[diag] context[${i}] fetching ${SITE}/api/auth/convex/token to mint JWT cookie`);
+  console.log(`\n[diag] context[${i}] fetching ${SITE}/api/auth/access-token`);
   const tokenResult = await runner.evaluate(async (site) => {
     try {
-      const r = await fetch(`${site}/api/auth/convex/token`, {
+      const r = await fetch(`${site}/api/auth/access-token`, {
         headers: { accept: "application/json" },
         credentials: "include",
       });
       const text = await r.text();
-      const setCookieHeaders = [];
-      // We can't see Set-Cookie from JS, but list response headers we can.
-      r.headers.forEach((v, k) => setCookieHeaders.push(`${k}: ${v.slice(0, 80)}`));
-      return { status: r.status, body: text.slice(0, 300), responseHeaders: setCookieHeaders };
+      const responseHeaders = [];
+      r.headers.forEach((v, k) => responseHeaders.push(`${k}: ${v.slice(0, 80)}`));
+      return { status: r.status, body: text.slice(0, 300), responseHeaders };
     } catch (e) {
       return { error: e instanceof Error ? e.message : String(e) };
     }
   }, SITE);
-  console.log(`[diag]   convex/token: ${JSON.stringify(tokenResult, null, 2)}`);
+  console.log(`[diag]   access-token: ${JSON.stringify(tokenResult, null, 2)}`);
 
-  await dumpCookies("AFTER /convex/token");
+  await dumpCookies("AFTER /api/auth/access-token");
 
   console.log(`\n[diag] context[${i}] navigating to ${SITE}/app and reporting final URL`);
   try {

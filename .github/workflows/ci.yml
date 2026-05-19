@@ -21,6 +21,11 @@ jobs:
       PUBLIC_CONVEX_URL: https://celstate-ci-placeholder.convex.cloud
       PUBLIC_POSTHOG_KEY: phc_ci_placeholder
       PUBLIC_POSTHOG_HOST: https://us.i.posthog.com
+      # WorkOS AuthKit — placeholder shapes only (`vite preview` + E2E load `hooks.server.ts`).
+      WORKOS_CLIENT_ID: client_ci_placeholder
+      WORKOS_API_KEY: sk_test_ci_placeholder_000000000000000000000000
+      WORKOS_REDIRECT_URI: http://127.0.0.1:4174/callback
+      WORKOS_COOKIE_PASSWORD: "01234567890123456789012345678901"
     steps:
       - uses: actions/checkout@v4
 

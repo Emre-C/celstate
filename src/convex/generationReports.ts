@@ -173,7 +173,7 @@ function summarizeTransparentQaMetricValues(values: number[]): TransparentQaMetr
   return {
     count: values.length,
     min: sortedValues[0] ?? null,
-    max: sortedValues.at(-1) ?? null,
+    max: sortedValues[sortedValues.length - 1] ?? null,
     avg: total / values.length,
     p10: getPercentile(sortedValues, 0.1),
     p50: getPercentile(sortedValues, 0.5),

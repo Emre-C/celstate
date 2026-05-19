@@ -10,7 +10,7 @@ export default defineConfig({
         }), tailwindcss(), sveltekit()],
         server: {
                 host: '0.0.0.0',
-                port: 5000,
+                port: 5173,
                 allowedHosts: true,
                 strictPort: true,
                 watch: {

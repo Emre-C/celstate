@@ -31,7 +31,7 @@ crons.cron(
 // Quarterly secret-rotation reminder posted to the Discord ops webhook
 // (OPS_ALERT_WEBHOOK_URL). Runs at 14:00 UTC on the 1st day of January,
 // April, July, and October — ~91 days apart, the standard cadence for
-// rotating Better Auth, JWT, Vertex SA keys, and the manually-rotated
+// rotating WorkOS credentials, JWT (legacy), Vertex SA keys, and the manually-rotated
 // vendor secrets (Stripe, Google OAuth). Background:
 // docs/runbooks/SECRETS-MANAGEMENT.md.
 crons.cron(

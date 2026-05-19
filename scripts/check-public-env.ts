@@ -1,5 +1,5 @@
 /**
- * Validates public/env contract for SvelteKit + Convex + Better Auth.
+ * Validates public/env contract for SvelteKit + Convex + WorkOS AuthKit.
  *
  * - Local: run `pnpm check:public-env` (reads `.env` / `.env.local` + shell).
  * - CI: same script; GitHub Actions must set the same PUBLIC_* names as Vercel
@@ -8,7 +8,7 @@
  * See docs/runbooks/PUBLIC-ENV-CHECKLIST.md
  */
 
-import { resolveConvexSiteUrlForAuthProxy } from "../src/lib/server/convex-site-url.js";
+import { resolveConvexHttpSiteOrigin } from "../src/lib/server/convex-site-url.js";
 import { mergedEnvForScripts } from "./lib/env-files.js";
 
 function isCi(): boolean {
@@ -49,7 +49,7 @@ function validatePublicEnv(env: Record<string, string | undefined>): void {
 		);
 	}
 
-	resolveConvexSiteUrlForAuthProxy({
+	resolveConvexHttpSiteOrigin({
 		publicConvexUrl: env.PUBLIC_CONVEX_URL,
 		publicConvexSiteUrl: env.PUBLIC_CONVEX_SITE_URL
 	});

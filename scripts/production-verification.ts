@@ -18,6 +18,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { chromium } from "@playwright/test";
 import {
+  AUTH_CANARY_PROBE,
   AUTH_CANARY_PROBE_TIMEOUT_MS,
   formatAuthCanaryProbeFailure,
   isFinalGetSessionProbeOk,
@@ -206,6 +207,9 @@ async function probeAuthSmoke(baseUrl: string): Promise<{
     if (!html.includes('data-testid="auth-page"')) {
       throw new Error("auth page marker missing");
     }
+    if (!html.includes('data-testid="auth-workos-sign-in"')) {
+      throw new Error("auth page WorkOS sign-in marker missing");
+    }
   } finally {
     clearTimeout(t);
   }
@@ -213,12 +217,20 @@ async function probeAuthSmoke(baseUrl: string): Promise<{
   const sc = new AbortController();
   const t2 = setTimeout(() => sc.abort(), AUTH_CANARY_PROBE_TIMEOUT_MS);
   try {
-    const sessionRes = await fetch(joinUrl("/api/auth/get-session"), {
+    const sessionRes = await fetch(joinUrl("/api/auth/session"), {
       headers: { accept: "application/json" },
       signal: sc.signal,
     });
     if (!isFinalGetSessionProbeOk(sessionRes.status)) {
-      throw new Error(`/api/auth/get-session returned ${sessionRes.status}`);
+      throw new Error(`/api/auth/session returned ${sessionRes.status}`);
+    }
+    const ct = sessionRes.headers.get("content-type")?.toLowerCase() ?? "";
+    if (!ct.includes("application/json")) {
+      throw new Error(`/api/auth/session returned unexpected content-type: ${ct || "missing"}`);
+    }
+    const sessionBody = (await sessionRes.json()) as { authenticated?: unknown };
+    if (typeof sessionBody.authenticated !== "boolean") {
+      throw new Error("/api/auth/session JSON missing boolean authenticated");
     }
   } finally {
     clearTimeout(t2);
@@ -227,29 +239,89 @@ async function probeAuthSmoke(baseUrl: string): Promise<{
   return { authPageHealthy: true, sessionEndpointHealthy: true };
 }
 
-async function probeProtectedRoute(baseUrl: string, storageStatePath: string): Promise<boolean> {
+async function probeWorkOsProtectedRoute(
+  baseUrl: string,
+  storageStatePath: string,
+): Promise<{
+  protectedRouteReachable: boolean;
+  convexAuthenticatedQueryHealthy: boolean;
+}> {
   const raw = readFileSync(storageStatePath, "utf-8");
   const storageState = JSON.parse(raw);
   const browser = await chromium.launch({ headless: true });
-  let context: Awaited<ReturnType<typeof browser.newContext>> | null = null;
+  const context = await browser.newContext({ storageState });
   try {
-    context = await browser.newContext({ storageState });
     const page = await context.newPage();
     const normalized = baseUrl.replace(/\/$/, "");
     const response = await page.goto(`${normalized}/app`, {
       waitUntil: "domcontentloaded",
       timeout: PLAYWRIGHT_NAVIGATION_TIMEOUT_MS,
     });
-    if (!response || !response.ok()) {
-      return false;
+    if (!response?.ok()) {
+      throw new Error(`[protected_route] /app returned ${response?.status() ?? "no response"}`);
     }
-    // Verify we actually landed on /app and weren't silently redirected to /auth.
-    // A redirect to /auth returns 200 and passes response.ok(), so we must check the final URL.
     const finalPath = new URL(page.url()).pathname;
-    return finalPath.startsWith("/app");
+    if (!finalPath.startsWith("/app")) {
+      throw new Error(`[protected_route] expected /app, got ${finalPath}`);
+    }
+
+    const convexReady = await page.evaluate(async () => {
+      const r = await fetch(`${window.location.origin}/api/auth/convex-ready`, {
+        credentials: "include",
+      });
+      let body: unknown = {};
+      try {
+        body = await r.json();
+      } catch {
+        /* ignore */
+      }
+      return { status: r.status, body };
+    });
+    const convexOk =
+      convexReady.status === 200 &&
+      typeof convexReady.body === "object" &&
+      convexReady.body !== null &&
+      (convexReady.body as { ok?: boolean }).ok === true;
+    if (!convexOk) {
+      throw new Error(`[convex_ready] status=${convexReady.status} body=${JSON.stringify(convexReady.body)}`);
+    }
+
+    return {
+      protectedRouteReachable: true,
+      convexAuthenticatedQueryHealthy: true,
+    };
   } finally {
-    if (context) await context.close().catch(() => {});
+    await context.close().catch(() => {});
     await browser.close();
+  }
+}
+
+/**
+ * Lightweight sign-out smoke test that does NOT burn a persistent WorkOS session.
+ * It verifies the /sign-out endpoint returns a redirect (302) and the logout URL
+ * is well-formed, without invalidating any server-side session state.
+ */
+async function probeAuthSignOutSmoke(baseUrl: string): Promise<boolean> {
+  const normalized = baseUrl.replace(/\/$/, "");
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), 15_000);
+  try {
+    const res = await fetch(`${normalized}/sign-out`, {
+      method: "GET",
+      redirect: "manual",
+      signal: ac.signal,
+    });
+    // /sign-out should always redirect (302 to WorkOS logout, or via SDK)
+    if (res.status !== 302) {
+      throw new Error(`[sign_out_smoke] expected 302, got ${res.status}`);
+    }
+    const location = res.headers.get("location") ?? "";
+    if (!location) {
+      throw new Error("[sign_out_smoke] missing Location header on 302");
+    }
+    return true;
+  } finally {
+    clearTimeout(t);
   }
 }
 
@@ -290,12 +362,10 @@ async function automateStripeCheckout(checkoutUrl: string): Promise<void> {
 }
 
 /**
- * Provision required canary principals before probes run. Provisioning is
- * infrastructure: a failure here will produce probe errors with the wrong
- * root cause (e.g. "no canaryPrincipals row" instead of "principal X failed
- * to provision: Y"). Throw so the deploy gate DENYs with a clear message.
+ * Provision required canary principals before probes run. Never throws — failures are
+ * recorded on AUTH evidence (`preflightProvisioningHealthy`) so ingest still captures a full run.
  */
-async function provisionCanaryPrincipals(env: RunnerEnv): Promise<void> {
+async function provisionCanaryPrincipals(env: RunnerEnv): Promise<{ ok: boolean; errors: string[] }> {
   const principalIds: CanaryPrincipalId[] = ["CANARY_GENERATION", "CANARY_CHECKOUT"];
   if (env.trigger === "SCHEDULED") {
     principalIds.push("CANARY_SETTLEMENT");
@@ -321,10 +391,10 @@ async function provisionCanaryPrincipals(env: RunnerEnv): Promise<void> {
   }
 
   if (failures.length > 0) {
-    throw new Error(
-      `Canary principal provisioning failed (deploy gate will DENY): ${failures.join("; ")}`,
-    );
+    console.error(`Canary principal provisioning failed: ${failures.join("; ")}`);
+    return { ok: false, errors: failures };
   }
+  return { ok: true, errors: [] };
 }
 
 async function main(): Promise<void> {
@@ -332,10 +402,10 @@ async function main(): Promise<void> {
   const trigger = env.trigger;
   const startedAt = Date.now();
 
-  // Provision canary principals before running probes. Failure here is fatal:
-  // a probe failing because the principal is unprovisioned would surface a
-  // misleading root cause downstream.
-  await provisionCanaryPrincipals(env);
+  const provisionOutcome = await provisionCanaryPrincipals(env);
+  if (!provisionOutcome.ok) {
+    console.error(JSON.stringify({ provisionFailures: provisionOutcome.errors }, null, 2));
+  }
 
   const siteUrl = env.siteUrl;
   const runKey = createRunKey({
@@ -362,41 +432,68 @@ async function main(): Promise<void> {
   // Set AUTH_CANARY_REQUIRE_PROTECTED_ROUTE=false to explicitly opt out (e.g., emergency deploys).
   const requireProtected = env.requireProtectedRoute;
   const storagePath = env.storagePath;
-  type AuthFailureStage = "auth_page" | "get_session" | "protected_route";
+  type AuthFailureStage =
+    | "auth_page"
+    | "get_session"
+    | "protected_route"
+    | "convex_ready"
+    | "sign_out";
   let authFailureStage: AuthFailureStage | null = null;
   let authFailureMessage: string | null = null;
   let authPageHealthy = false;
   let sessionEndpointHealthy = false;
   let protectedRouteReachable = false;
+  let convexAuthenticatedQueryHealthy = !requireProtected;
+  let signOutHealthy = !requireProtected;
   try {
     await probeAuthSmoke(siteUrl);
     authPageHealthy = true;
     sessionEndpointHealthy = true;
   } catch (e) {
-    // probeAuthSmoke runs /auth then /api/auth/get-session sequentially. Without
-    // re-probing each in isolation we infer stage from the message body.
     const msg = e instanceof Error ? e.message : String(e);
-    authFailureStage = msg.includes("get-session") ? "get_session" : "auth_page";
+    authFailureStage =
+      msg.includes("/api/auth/session") || msg.includes("session JSON")
+        ? AUTH_CANARY_PROBE.GET_SESSION
+        : AUTH_CANARY_PROBE.AUTH_PAGE;
     authFailureMessage = formatAuthCanaryProbeFailure(authFailureStage, e);
   }
   if (!authFailureStage) {
     try {
       if (storagePath && existsSync(storagePath)) {
-        protectedRouteReachable = await probeProtectedRoute(siteUrl, storagePath);
+        const routeBundle = await probeWorkOsProtectedRoute(siteUrl, storagePath);
+        protectedRouteReachable = routeBundle.protectedRouteReachable;
+        convexAuthenticatedQueryHealthy = routeBundle.convexAuthenticatedQueryHealthy;
       } else if (requireProtected) {
         throw new Error(
           "AUTH_CANARY_REQUIRE_PROTECTED_ROUTE=true but AUTH_CANARY_PROTECTED_STORAGE_STATE is missing or not a file",
         );
       }
     } catch (e) {
-      authFailureStage = "protected_route";
-      authFailureMessage = `[protected_route] ${e instanceof Error ? e.message : String(e)}`;
+      const raw = e instanceof Error ? e.message : String(e);
+      const bracket = /^\[([a-z_]+)\]/u.exec(raw);
+      authFailureStage = (bracket?.[1] as AuthFailureStage | undefined) ?? "protected_route";
+      authFailureMessage = raw;
+    }
+  }
+
+  // Sign-out smoke test runs independently so it never burns the persistent
+  // WorkOS session used for protected-route proof.
+  if (!authFailureStage) {
+    try {
+      signOutHealthy = await probeAuthSignOutSmoke(siteUrl);
+    } catch (e) {
+      const raw = e instanceof Error ? e.message : String(e);
+      authFailureStage = "sign_out";
+      authFailureMessage = raw;
     }
   }
   const authEvidence: AuthCanaryEvidence = {
     authPageHealthy,
     sessionEndpointHealthy,
     protectedRouteReachable,
+    convexAuthenticatedQueryHealthy,
+    signOutHealthy,
+    preflightProvisioningHealthy: provisionOutcome.ok,
   };
   const authVerdictResult = authFailureStage
     ? "FAILED"

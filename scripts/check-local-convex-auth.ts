@@ -1,42 +1,20 @@
 /**
- * Verifies local SvelteKit → Convex Better Auth wiring for development.
+ * Verifies the SvelteKit auth endpoints are healthy on the app origin.
  *
- * Usage:  pnpm check:convex-auth
+ * Checks:
+ *   1. /api/auth/session — returns valid WorkOS session JSON
+ *   2. /api/auth/convex-ready — Convex auth boundary is reachable and responds
+ *
+ * Usage: `pnpm check:convex-auth`
  *
  * Loads `.env` then `.env.local` from the repo root, then overlays `process.env`.
- * Resolves the Convex site URL the same way as `src/routes/api/auth/[...all]/+server.ts`
- * (`PUBLIC_CONVEX_URL` → derived `*.convex.site`, or `PUBLIC_CONVEX_SITE_URL` when needed),
- * then GETs `/api/auth/get-session` on that host.
- *
- * If this fails but you "have auth locally", typical causes are:
- * - Only `vite dev` is running (use `pnpm dev` so `convex dev` runs too), or
- * - `PUBLIC_CONVEX_URL` / optional `PUBLIC_CONVEX_SITE_URL` don’t match the deployment `convex dev` uses.
+ * Uses `PUBLIC_SITE_URL` as the fetch origin (the Celstate web app, not `*.convex.site`).
  */
 
-import { resolveConvexSiteUrlForAuthProxy } from "../src/lib/server/convex-site-url.js";
 import { mergedEnvForScripts } from "./lib/env-files.js";
 
-async function main() {
-	console.log("Checking local Convex auth proxy (resolved site URL from env)...\n");
-
-	const env = mergedEnvForScripts();
-	let site: string;
-	try {
-		site = resolveConvexSiteUrlForAuthProxy({
-			publicConvexUrl: env.PUBLIC_CONVEX_URL,
-			publicConvexSiteUrl: env.PUBLIC_CONVEX_SITE_URL
-		});
-	} catch (e) {
-		console.error(
-			`❌ ${e instanceof Error ? e.message : String(e)}\n` +
-				"   See docs/product/authentication.md (Convex / public env).\n"
-		);
-		process.exit(1);
-	}
-
-	const base = new URL(site);
-
-	const sessionUrl = new URL("/api/auth/get-session", base);
+async function checkSession(base: URL): Promise<void> {
+	const sessionUrl = new URL("/api/auth/session", base);
 	const controller = new AbortController();
 	const t = setTimeout(() => controller.abort(), 12_000);
 
@@ -44,25 +22,98 @@ async function main() {
 		const res = await fetch(sessionUrl, {
 			method: "GET",
 			signal: controller.signal,
-			headers: { accept: "application/json" }
+			headers: { accept: "application/json" },
 		});
 		clearTimeout(t);
-		console.log(`✅ Reachable: ${sessionUrl.origin} (HTTP ${res.status} on get-session)`);
-		console.log(
-			"\n   SvelteKit proxies /api/auth/* to this host. Keep `pnpm dev` running so both " +
-				"Vite and `convex dev` stay up — do not use `vite dev` alone if you need sign-in.\n"
-		);
+		if (!res.ok) {
+			throw new Error(`HTTP ${res.status}`);
+		}
+		const ct = res.headers.get("content-type")?.toLowerCase() ?? "";
+		if (!ct.includes("application/json")) {
+			throw new Error(`unexpected content-type: ${ct || "missing"}`);
+		}
+		const body = (await res.json()) as { authenticated?: unknown };
+		if (typeof body.authenticated !== "boolean") {
+			throw new Error("response JSON missing boolean `authenticated`");
+		}
+		console.log(`✅ ${sessionUrl.href} (authenticated=${body.authenticated})`);
 	} catch (e) {
 		clearTimeout(t);
 		const err = e instanceof Error ? e : new Error(String(e));
-		console.error(`❌ Could not reach ${sessionUrl.origin}`);
-		console.error(`   ${err.name}: ${err.message}`);
-		console.error(
-			"\n   Fix:\n" +
-				"   • Run `pnpm dev` (starts `convex dev` + `vite dev` together).\n" +
-				"   • Ensure `PUBLIC_CONVEX_URL` is the deployment `convex dev` uses (`https://…convex.cloud` → auth uses derived `https://…convex.site`).\n" +
-				"   • If realtime uses a local URL, set `PUBLIC_CONVEX_SITE_URL` to the matching `https://…convex.site` — see docs/product/authentication.md.\n"
-		);
+		console.error(`❌ ${sessionUrl.href} — ${err.name}: ${err.message}`);
+		throw err;
+	}
+}
+
+async function checkConvexReady(base: URL): Promise<void> {
+	const readyUrl = new URL("/api/auth/convex-ready", base);
+	const controller = new AbortController();
+	const t = setTimeout(() => controller.abort(), 12_000);
+
+	try {
+		const res = await fetch(readyUrl, {
+			method: "GET",
+			signal: controller.signal,
+			headers: { accept: "application/json" },
+		});
+		clearTimeout(t);
+		if (!res.ok) {
+			throw new Error(`HTTP ${res.status}`);
+		}
+		const ct = res.headers.get("content-type")?.toLowerCase() ?? "";
+		if (!ct.includes("application/json")) {
+			throw new Error(`unexpected content-type: ${ct || "missing"}`);
+		}
+		const body = (await res.json()) as { ok?: unknown };
+		if (body.ok !== true) {
+			throw new Error(`response ok=${String(body.ok)} (expected true)`);
+		}
+		console.log(`✅ ${readyUrl.href} (ok=true)`);
+	} catch (e) {
+		clearTimeout(t);
+		const err = e instanceof Error ? e : new Error(String(e));
+		console.error(`❌ ${readyUrl.href} — ${err.name}: ${err.message}`);
+		throw err;
+	}
+}
+
+async function main() {
+	console.log("Checking auth endpoints on PUBLIC_SITE_URL…\n");
+
+	const env = mergedEnvForScripts();
+	const raw = env.PUBLIC_SITE_URL?.trim();
+	if (!raw) {
+		console.error("❌ PUBLIC_SITE_URL is required.\n");
+		process.exit(1);
+	}
+
+	let base: URL;
+	try {
+		base = new URL(raw);
+		if (base.pathname !== "/" && base.pathname !== "") {
+			throw new Error("PUBLIC_SITE_URL must be origin-only");
+		}
+	} catch (e) {
+		console.error(`❌ PUBLIC_SITE_URL invalid: ${e instanceof Error ? e.message : String(e)}\n`);
+		process.exit(1);
+	}
+
+	let failed = false;
+	try {
+		await checkSession(base);
+	} catch {
+		failed = true;
+	}
+
+	try {
+		await checkConvexReady(base);
+	} catch {
+		failed = true;
+	}
+
+	console.log("");
+	if (failed) {
+		console.error("Run `pnpm dev` so SvelteKit is up, or point PUBLIC_SITE_URL at a reachable deployment.\n");
 		process.exit(1);
 	}
 }

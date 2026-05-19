@@ -5,8 +5,8 @@ rotate a secret that has no programmatic CLI rotation path. As of 2026-Q2
 that's four secrets: two Stripe keys, the Google OAuth client secret, and
 the Discord ops webhook URL.
 
-For everything else (JWT, Better Auth, Verification Runner, Vertex service
-account), use the scripts described in
+For everything else (JWT / signing keys, WorkOS kit secrets, Verification
+Runner, Vertex service account), use the scripts described in
 [`SECRETS-MANAGEMENT.md`](./SECRETS-MANAGEMENT.md). Those don't require
 clicking through any vendor UI.
 
@@ -102,8 +102,7 @@ older standalone "Webhooks" page.
 
 ## 3. Google — OAuth client secret
 
-Rotates `AUTH_GOOGLE_SECRET`. Used by Better Auth on Convex to exchange
-authorization codes for ID tokens during Google sign-in.
+Rotates `AUTH_GOOGLE_SECRET` for the **Google OAuth client** used by your **WorkOS AuthKit** Google connection (pair with `AUTH_GOOGLE_ID` in Doppler). Update the secret in Google Cloud and Doppler whenever the client secret is rotated.
 
 The Google Cloud UI was reorganized in 2025: OAuth client management moved
 from **APIs & Services → Credentials** to the **Google Auth Platform**.
@@ -240,8 +239,8 @@ Doppler (those go to Vercel, not Convex).
 ## Verify the rotation worked
 
 ```pwsh
-# Auth still serves sessions (returns null since old sessions invalidated).
-Invoke-WebRequest -Uri "https://www.celstate.com/api/auth/get-session" `
+# Auth session probe (JSON). Unauthenticated callers still get 200 with `authenticated: false`.
+Invoke-WebRequest -Uri "https://www.celstate.com/api/auth/session" `
   -SkipHttpErrorCheck | ForEach-Object { "Status: $($_.StatusCode); Body: $($_.Content)" }
 
 # Homepage loads.
@@ -249,9 +248,8 @@ Invoke-WebRequest -Uri "https://www.celstate.com/" `
   -SkipHttpErrorCheck | ForEach-Object { "Status: $($_.StatusCode); Length: $($_.RawContentLength)" }
 ```
 
-Then sign in to <https://www.celstate.com/auth> with Google. If sign-in
-succeeds, every rotated secret is verified end-to-end (JWT signing key →
-session cookie → Better Auth secret → Google OAuth secret).
+Then sign in to <https://www.celstate.com/auth> with Google (via **WorkOS AuthKit**). If sign-in
+succeeds, the rotated vendor secrets propagated correctly (Stripe webhooks, Google client secret in Doppler, etc.).
 
 If sign-in fails with `redirect_uri_mismatch` or `invalid_client`, the
 Google OAuth secret didn't propagate — re-check that `AUTH_GOOGLE_SECRET`

@@ -33,7 +33,7 @@ ROUTE(signal):
     "generation_stalled",
     "auth_proxy_failure",
     "auth_endpoint_5xx",
-    "better_auth_api_error",
+    "auth_callback_failure",
     "secret_rotation_reminder"  // quarterly cron — see docs/runbooks/SECRETS-MANAGEMENT.md
   ) THEN HUMAN_OPS_WEBHOOK  // early-stage: low volume; revisit ~50+ users
   ELIF signal.supports_growth_or_product_analysis THEN LLM_ANALYTICS
@@ -94,11 +94,13 @@ POSTHOG_PERSONAL_API_KEY:
 ## 3. PostHog component (Convex)
 
 ```typescript
-// src/convex/convex.config.ts (excerpt — also uses betterAuth, stripe)
+// src/convex/convex.config.ts (excerpt — stripe + posthog components)
 import { defineApp } from "convex/server";
+import stripe from "@convex-dev/stripe/convex.config.js";
 import posthog from "@posthog/convex/convex.config.js";
 
 const app = defineApp();
+app.use(stripe);
 app.use(posthog);
 
 // src/convex/posthog.ts
@@ -329,9 +331,8 @@ upsertUserRecord(ctx, profile):
   })
   RETURN user
 
-getAuthProviderForBetterAuthUser:
-  query components.betterAuth.adapter account by userId → providerId
-  IF providerId IN ("google","apple") THEN return else "unknown"
+getAuthProviderFromConvexIdentity:
+  derive from WorkOS JWT identity fields (connection type / email heuristics in users.ts)
 ```
 
 ---
@@ -570,7 +571,7 @@ slack_discord: "same structural pattern as generation alerts (header + facts)"
 
 ```typescript
 interface AuthAlertContext {
-  alertType: "auth_proxy_failure" | "auth_endpoint_5xx" | "better_auth_api_error";
+  alertType: "auth_proxy_failure" | "auth_endpoint_5xx" | "auth_callback_failure";
   severity: "warning" | "critical";
   pathname?: string;
   method?: string;
@@ -603,13 +604,9 @@ auth_endpoint_5xx:
 rate_limit_scope: "process-local in-memory; not durable across instances or cold starts"
 ```
 
-#### Better Auth server-side (`src/convex/auth.ts`)
+#### Convex auth / JWT
 
-```yaml
-better_auth_api_error:
-  channel: "webhook only (Convex does not import Sentry)"
-  cooldown: "5m process-local; best-effort across isolate recycling"
-```
+Convex validates WorkOS JWTs in `auth.config.ts`. Session and OAuth UX live in SvelteKit (`@workos/authkit-sveltekit`).
 
 ---
 
@@ -692,7 +689,7 @@ convex:
   merge_duplicate_users: "src/convex/ops.ts" # mergeDuplicateUsers
   ops_queries_actions: "src/convex/ops.ts"
   ops_pure: "src/convex/lib/ops.ts"
-  auth_server_alerting: "src/convex/auth.ts"  # Better Auth onAPIError → webhook
+  auth_server_logs: "src/hooks.server.ts (WorkOS AuthKit)"
   stripe_webhook_posthog_discord: "src/convex/http.ts"
   posthog_component_wrapper: "src/convex/posthog.ts"
   app_config: "src/convex/convex.config.ts"

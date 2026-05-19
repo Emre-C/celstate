@@ -8,7 +8,7 @@
  * @module
  */
 
-import type * as auth from "../auth.js";
+import type * as animationGenerations from "../animationGenerations.js";
 import type * as creditPackPurchase from "../creditPackPurchase.js";
 import type * as creditPackPurchaseActions from "../creditPackPurchaseActions.js";
 import type * as crons from "../crons.js";
@@ -16,6 +16,8 @@ import type * as generation from "../generation.js";
 import type * as generationReports from "../generationReports.js";
 import type * as generations from "../generations.js";
 import type * as http from "../http.js";
+import type * as lib_animationGenerationRun from "../lib/animationGenerationRun.js";
+import type * as lib_animationPrompts from "../lib/animationPrompts.js";
 import type * as lib_config from "../lib/config.js";
 import type * as lib_creditPackPurchase_catalog from "../lib/creditPackPurchase/catalog.js";
 import type * as lib_creditPackPurchase_inMemoryStripeAdapter from "../lib/creditPackPurchase/inMemoryStripeAdapter.js";
@@ -60,7 +62,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  auth: typeof auth;
+  animationGenerations: typeof animationGenerations;
   creditPackPurchase: typeof creditPackPurchase;
   creditPackPurchaseActions: typeof creditPackPurchaseActions;
   crons: typeof crons;
@@ -68,6 +70,8 @@ declare const fullApi: ApiFromModules<{
   generationReports: typeof generationReports;
   generations: typeof generations;
   http: typeof http;
+  "lib/animationGenerationRun": typeof lib_animationGenerationRun;
+  "lib/animationPrompts": typeof lib_animationPrompts;
   "lib/config": typeof lib_config;
   "lib/creditPackPurchase/catalog": typeof lib_creditPackPurchase_catalog;
   "lib/creditPackPurchase/inMemoryStripeAdapter": typeof lib_creditPackPurchase_inMemoryStripeAdapter;
@@ -133,7 +137,6 @@ export declare const internal: FilterApi<
 >;
 
 export declare const components: {
-  betterAuth: import("@convex-dev/better-auth/_generated/component.js").ComponentApi<"betterAuth">;
   stripe: import("@convex-dev/stripe/_generated/component.js").ComponentApi<"stripe">;
   posthog: import("@posthog/convex/_generated/component.js").ComponentApi<"posthog">;
 };

@@ -50,6 +50,7 @@ celstate-*-*.json
 # Bulky generated output — never commit (was bloating git history)
 /jobs/
 /experiments/video_frames/
+/tmp/transparent-animation-spike/
 
 # NPM
 .npmrc
@@ -80,3 +81,4 @@ AGENTS.md
 replit.nix
 .breakpoints
 *.replit
+.env.local

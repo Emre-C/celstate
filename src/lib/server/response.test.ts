@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { withResponseHeader } from './response.js';
+import { AUTHKIT_SESSION_COOKIE } from './authkit-constants.js';
 
 describe('withResponseHeader', () => {
 	it('adds headers to redirect responses without mutating immutable headers', () => {
@@ -22,5 +23,25 @@ describe('withResponseHeader', () => {
 		expect(response.headers.get('content-type')).toContain('text/plain');
 		expect(response.headers.get('x-request-id')).toBe('req-456');
 		expect(await response.text()).toBe('ok');
+	});
+
+	it('preserves multiple Set-Cookie headers without comma-joining', () => {
+		const original = new Response(null, {
+			status: 302,
+			headers: {
+				Location: '/auth',
+				'Set-Cookie': `${AUTHKIT_SESSION_COOKIE}=; Max-Age=0; Path=/; HttpOnly`,
+			},
+		});
+		// Simulate a second Set-Cookie header appended via Headers API
+		original.headers.append('Set-Cookie', 'wos-auth-verifier-abc=; Max-Age=0; Path=/');
+
+		const response = withResponseHeader(original, 'x-request-id', 'req-789');
+
+		const cookies = response.headers.getSetCookie();
+		expect(cookies).toHaveLength(2);
+		expect(cookies[0]).toContain(`${AUTHKIT_SESSION_COOKIE}=`);
+		expect(cookies[1]).toContain('wos-auth-verifier-abc=');
+		expect(response.headers.get('x-request-id')).toBe('req-789');
 	});
 });

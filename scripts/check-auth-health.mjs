@@ -43,8 +43,8 @@ const checkAuthPage = async () => {
 		if (!html.includes('data-testid="auth-page"')) {
 			throw new Error('/auth did not render the expected auth page marker');
 		}
-		if (!html.includes('data-provider="google"')) {
-			throw new Error('/auth did not render the Google sign-in provider');
+		if (!html.includes('data-testid="auth-workos-sign-in"')) {
+			throw new Error('/auth did not render the WorkOS sign-in marker');
 		}
 
 		return response.status;
@@ -60,7 +60,7 @@ const checkSessionEndpoint = async () => {
 
 	try {
 		// Follow redirects (default). Apex → www (308) must not be treated as failure.
-		const response = await fetch(joinUrl('/api/auth/get-session'), {
+		const response = await fetch(joinUrl('/api/auth/session'), {
 			headers: { accept: 'application/json' },
 			signal: controller.signal
 		});
@@ -68,25 +68,29 @@ const checkSessionEndpoint = async () => {
 
 		if (!isFinalGetSessionProbeOk(response.status)) {
 			throw new Error(
-				`/api/auth/get-session returned ${response.status}; ${formatAuthCanaryResponseDiagnostics(response, text)}`
+				`/api/auth/session returned ${response.status}; ${formatAuthCanaryResponseDiagnostics(response, text)}`
 			);
 		}
 
 		const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
 		if (!contentType.includes('application/json')) {
 			throw new Error(
-				`/api/auth/get-session returned unexpected content-type: ${contentType || 'missing'}; ${formatAuthCanaryResponseDiagnostics(response, text)}`
+				`/api/auth/session returned unexpected content-type: ${contentType || 'missing'}; ${formatAuthCanaryResponseDiagnostics(response, text)}`
 			);
 		}
 
-		if (text.length > 0) {
-			try {
-				JSON.parse(text);
-			} catch (error) {
-				throw new Error(
-					`/api/auth/get-session returned invalid JSON: ${error instanceof Error ? error.message : String(error)}; ${formatAuthCanaryResponseDiagnostics(response, text)}`
-				);
-			}
+		let parsed;
+		try {
+			parsed = JSON.parse(text);
+		} catch (error) {
+			throw new Error(
+				`/api/auth/session returned invalid JSON: ${error instanceof Error ? error.message : String(error)}; ${formatAuthCanaryResponseDiagnostics(response, text)}`
+			);
+		}
+		if (typeof parsed.authenticated !== 'boolean') {
+			throw new Error(
+				`/api/auth/session JSON missing boolean authenticated; ${formatAuthCanaryResponseDiagnostics(response, text)}`
+			);
 		}
 
 		return response.status;

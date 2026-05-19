@@ -13,6 +13,7 @@
 - **Convex + Stripe**: Live keys only on prod; live Stripe keys live in Doppler `prd` and reach Convex via sync — `docs/runbooks/STRIPE-CONVEX-ENVIRONMENTS.md`.
 - **Convex**: Follow `docs/conventions/convex.md` — idempotency inside mutations (no query-then-mutation TOCTOU), and index every field used in filters or indexed lookups.
 - **CI / verify:** For a **fast local gate**, use `pnpm check`, `pnpm typecheck:tsc`, `pnpm lint:ts`, and `pnpm test`. `pnpm verify` runs the **full** gate including Knip, jscpd, `pnpm build`, and `pnpm test:e2e` (Playwright Chromium against `vite preview`). Knip caveats and audit commands: `docs/runbooks/CODEBASE-HYGIENE.md`. CI uses `PUBLIC_SITE_URL=http://127.0.0.1:4174` so canonical redirects align with the preview origin—see `docs/runbooks/PUBLIC-ENV-CHECKLIST.md`. Production **deploy** confidence (live probes: auth with protected-route proof, generation, checkout, scheduled settlement) is separate—`docs/runbooks/CI-AND-CANARIES.md`, `docs/product/production-confidence.md`.
+- **Agent execution (Cursor):** Always-on rule `.cursor/rules/agent-execution.mdc` — prefer running repo scripts and CLIs over tutorial handoffs when the work can be done in-session.
 
 ## Common Svelte 5 Mistakes
 1. Using `let` without `$state` - Variables are not reactive without `$state()`

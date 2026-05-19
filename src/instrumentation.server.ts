@@ -1,13 +1,19 @@
-import * as Sentry from '@sentry/sveltekit';
+import * as Sentry from "@sentry/sveltekit";
+import { PUBLIC_SITE_URL } from "$env/static/public";
+import { resolveSentryEnvironmentFromSignals } from "$lib/sentry-environment";
 
-Sentry.init({
-  dsn: 'https://02ede8116352a88253602c00d8a4f134@o4510330822197248.ingest.us.sentry.io/4511077711347712',
-
-  tracesSampleRate: 1.0,
-
-  // Enable logs to be sent to Sentry
-  enableLogs: true,
-
-  // uncomment the line below to enable Spotlight (https://spotlightjs.com)
-  // spotlight: import.meta.env.DEV,
-});
+const dsn = process.env.SENTRY_DSN?.trim();
+if (dsn) {
+	const dev = process.env.NODE_ENV !== "production";
+	Sentry.init({
+		dsn,
+		environment: resolveSentryEnvironmentFromSignals({
+			siteUrl: PUBLIC_SITE_URL,
+			vercelEnv: process.env.VERCEL_ENV,
+			nodeEnv: process.env.NODE_ENV,
+			dev,
+		}),
+		tracesSampleRate: 1.0,
+		enableLogs: true,
+	});
+}

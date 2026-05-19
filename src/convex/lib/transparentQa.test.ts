@@ -108,8 +108,8 @@ describe("analyzeTransparentOutput", () => {
       if (distance <= 14) {
         return { alpha: 255, color: [71, 110, 214] };
       }
-      if (distance <= 18) {
-        const alpha = Math.max(12, Math.round((18 - distance) * 28));
+      if (distance <= 17) {
+        const alpha = 15;
         return { alpha, color: [71, 110, 214] };
       }
       return { alpha: 0, color: [0, 0, 0] };

@@ -8,8 +8,7 @@ Use this when you need the QA account to behave like a brand-new user again for 
 
 The shipped reset path deletes the QA user's:
 
-- app user row
-- Better Auth user, sessions, and linked accounts
+- app user row (`users` — Convex data only; **WorkOS** sessions and hosted users are **not** deleted here)
 - generations and generation ops events
 - MCP API keys
 - credit grants, pending checkouts, and purchase settlements
@@ -58,14 +57,13 @@ Set these on the **production** deployment only:
 
 1. reads `QA_USER_RESET_SECRET` from `convex env get ... --prod`
 2. sends the secret plus the hardcoded QA email to `qaUserReset:resetAllowlistedTestUser`
-3. prints a completion message telling you to sign in again with Google
+3. prints a completion message telling you to sign in again via **WorkOS AuthKit** (e.g. Google through WorkOS)
 
 The internal mutation refuses to run when:
 
 - the secret is wrong or missing
 - the email is not allowlisted
 - the email belongs to a canary principal used by production verification
-- the app user exists but the Better Auth user record is missing, because that indicates inconsistent state
 
 ## Manual Fallback
 
@@ -79,7 +77,7 @@ You can also invoke it from the Convex dashboard if needed.
 
 ## After Reset
 
-1. Sign in again with the QA Google account.
+1. Sign in again through **WorkOS AuthKit** for the QA account (e.g. Google).
 2. Confirm the app creates a fresh user row.
 3. Re-run the flow you are validating, such as initial credits, Stripe checkout, or MCP API key creation.
 

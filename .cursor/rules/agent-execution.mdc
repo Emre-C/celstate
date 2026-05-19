@@ -1,0 +1,10 @@
+---
+alwaysApply: true
+---
+
+- If the task can be done with repo scripts, `pnpm`, Convex/Doppler/Vercel CLIs, MCP tools, or a short terminal command on this machine, **do it** before writing long handoffs. Assume CLIs are installed unless the user says otherwise.
+- For secrets sync (`pnpm secrets:sync:*`), Convex push (`pnpm exec convex dev --once` / `deploy`), worker runs (`pnpm animation-worker*`), and Vercel sync — **execute** and report exit codes; only fall back to manual steps when the command fails or needs credentials the sandbox cannot access.
+- Do not send the owner to a vendor UI when the repo already documents or implements a CLI/script path (fix the script if Windows/Preview/etc. breaks).
+- Prefer a short outcome summary over tutorial prose when the run succeeded.
+- **Boundaries:** Steps that require **your authenticated browser session**, MFA, or secrets not available to the agent cannot be executed here—state that in **one sentence**, then run everything else (CLI, scripts, worker polls). If full automation is needed, add or run **Playwright with saved auth** / a **dev-only** Convex harness rather than a numbered tutorial for the owner.
+- **Stay aligned with `AGENTS.md`:** security (no `convex env list`), Doppler as source of truth, `pnpm` not `npm`, Convex conventions — this rule adds *behavior*, not duplicate policy.

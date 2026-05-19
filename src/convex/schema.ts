@@ -2,6 +2,13 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import {
   canaryPrincipalBindingFields,
+  animationAttributionValidator,
+  animationBrandInputsValidator,
+  animationDestinationValidator,
+  animationExportsValidator,
+  animationGenerationStatusValidator,
+  animationQaValidator,
+  animationUseCaseValidator,
   creditGrantReasonValidator,
   generationStageValidator,
   transparentQaValidator,
@@ -25,6 +32,10 @@ export default defineSchema({
 
   users: defineTable({
     tokenIdentifier: v.optional(v.string()),
+    /** Prior Convex auth subjects (e.g. Better Auth era); retained for rollback forensics. */
+    legacyAuthSubjects: v.optional(v.array(v.string())),
+    /** WorkOS User Management subject (`sub`); stable provider-side user id. */
+    workosUserId: v.optional(v.string()),
     name: v.optional(v.string()),
     image: v.optional(v.string()),
     email: v.optional(v.string()),
@@ -33,7 +44,8 @@ export default defineSchema({
     stripeCustomerId: v.optional(v.string()),
   })
     .index("email", ["email"])
-    .index("by_token", ["tokenIdentifier"]),
+    .index("by_token", ["tokenIdentifier"])
+    .index("by_workos_user", ["workosUserId"]),
 
   generations: defineTable({
     userId: v.id("users"),
@@ -81,6 +93,43 @@ export default defineSchema({
     .index("by_user_status", ["userId", "status"])
     .index("by_createdAt", ["createdAt"])
     .index("by_status", ["status"]),
+
+  animationGenerations: defineTable({
+    userId: v.id("users"),
+    prompt: v.string(),
+    useCase: animationUseCaseValidator,
+    destination: animationDestinationValidator,
+    productionBrief: v.optional(v.string()),
+    status: animationGenerationStatusValidator,
+    statusMessage: v.optional(v.string()),
+    aspectRatio: v.string(),
+    durationSeconds: v.number(),
+    creditsCost: v.number(),
+    stageStartedAt: v.optional(v.number()),
+    lastProgressAt: v.optional(v.number()),
+    retryCount: v.number(),
+    creditRefundedAt: v.optional(v.number()),
+    referenceGenerationId: v.optional(v.id("generations")),
+    uploadedReferenceStorageIds: v.optional(v.array(v.id("_storage"))),
+    brandInputs: v.optional(animationBrandInputsValidator),
+    attribution: v.optional(animationAttributionValidator),
+    veoOperationName: v.optional(v.string()),
+    veoOutputGcsUri: v.optional(v.string()),
+    canonicalFrameManifestStorageId: v.optional(v.id("_storage")),
+    previewStorageId: v.optional(v.id("_storage")),
+    exports: v.optional(animationExportsValidator),
+    animationQa: v.optional(animationQaValidator),
+    createdAt: v.number(),
+    completedAt: v.optional(v.number()),
+    failedAt: v.optional(v.number()),
+    error: v.optional(v.string()),
+  })
+    .index("by_user_created", ["userId", "createdAt"])
+    .index("by_user_status_created", ["userId", "status", "createdAt"])
+    .index("by_status_last_progress", ["status", "lastProgressAt"])
+    .index("by_veo_operation", ["veoOperationName"])
+    .index("by_attribution_campaign_created", ["attribution.campaignId", "createdAt"])
+    .index("by_attribution_creator_code_created", ["attribution.creatorCode", "createdAt"]),
 
   generationOpsEvents: defineTable({
     generationId: v.id("generations"),

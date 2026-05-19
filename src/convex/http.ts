@@ -8,7 +8,6 @@ import { components, internal } from "./_generated/api.js";
 import type { Id } from "./_generated/dataModel.js";
 import { registerRoutes } from "@convex-dev/stripe";
 import type Stripe from "stripe";
-import { authComponent, createAuth } from "./auth.js";
 import { posthog } from "./posthog.js";
 import {
   assertOkWebhookResponse,
@@ -51,8 +50,6 @@ type CreditPackCheckoutEvent =
 type CreditPackCheckoutEventContext = GenericActionCtx<GenericDataModel>;
 
 const http = httpRouter();
-
-authComponent.registerRoutes(http, createAuth);
 
 http.route({
   path: "/mcp",

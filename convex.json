@@ -1,6 +1,12 @@
 {
+  "$schema": "node_modules/convex/schemas/convex.schema.json",
   "functions": "src/convex/",
   "node": {
-    "externalPackages": ["sharp"]
+    "externalPackages": [
+      "sharp"
+    ]
+  },
+  "aiFiles": {
+    "enabled": false
   }
 }

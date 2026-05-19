@@ -97,7 +97,7 @@ These are the properties unit tests cannot exercise — they are the **purpose**
 
 The repo-supported live entry point is `pnpm verify:production`, which runs [scripts/production-verification.ts](file:///c%3A/Users/emrec/codebase/active-projects/celstate/scripts/production-verification.ts). It exercises four domains:
 
-1. **AUTH** — `/auth` page healthy, `/api/auth/get-session` returns sane status, optionally protected `/app` route reachable with stored session.
+1. **AUTH** — `/auth` page healthy, `/api/auth/session` returns sane status, optionally protected `/app` route reachable with stored session.
 2. **GENERATION** — exercises image generation via `internal.generations.requestGenerationForCanaryRunner`. Not part of our refactor scope but runs anyway.
 3. **CHECKOUT_SESSION** — exercises **checkout initiation** through the production seam (`internal.creditPackPurchase.requestCheckoutForCanaryRunner` -> `requestCreditPackCheckoutHelper` -> `creditPackPurchaseActions.processCheckout` -> `buildStripeCheckoutSessionCreateParams` -> Stripe -> `markReady`). Asserts `pendingObserved`, `readyObserved`, `hostedCheckoutUrlPresent`.
 4. **LIVE_SETTLEMENT** *(SCHEDULED trigger only)* — full end-to-end: creates a settlement checkout, **drives Stripe hosted checkout via Playwright with the canary's saved payment method**, polls `settlement-by-checkout` until `GRANTED_ONCE` (or fault), then **refunds idempotently**. This is the path that proves F1–F6.

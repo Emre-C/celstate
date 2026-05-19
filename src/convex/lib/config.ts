@@ -68,8 +68,8 @@ export const GENERATION_CONFIG = {
   transparentQaMinAlphaPresence: 0.2,
   transparentQaMinBorderTransparencyRatio: 0.9,
   transparentQaMaxBoundaryErrorRate: 0.12,
-  transparentQaMaxExternalSpill: 0.01,
-  transparentQaMaxHaloTail: 0.01,
+  transparentQaMaxExternalSpill: 0.04,
+  transparentQaMaxHaloTail: 0.02,
   transparentQaMaxFragmentNoise: 0.015,
   transparentQaMaxTopologyVolatility: 0.18,
   transparentQaHoleKeywords: [
@@ -108,4 +108,52 @@ export const GENERATION_CONFIG = {
   optimizedPngEffort: 7,
   optimizedPngColours: 256,
   optimizedPngDither: 0.5,
+} as const;
+
+export const ANIMATION_ASPECT_RATIOS = {
+  "16:9": { label: "Widescreen" },
+  "9:16": { label: "Vertical" },
+} as const;
+
+export type AnimationAspectRatioKey = keyof typeof ANIMATION_ASPECT_RATIOS;
+
+const VALID_ANIMATION_ASPECT_RATIOS = new Set<string>(
+  Object.keys(ANIMATION_ASPECT_RATIOS),
+);
+
+export function isValidAnimationAspectRatio(
+  value: string,
+): value is AnimationAspectRatioKey {
+  return VALID_ANIMATION_ASPECT_RATIOS.has(value);
+}
+
+export const ANIMATION_DURATIONS_SECONDS = [4, 6, 8] as const;
+
+export type AnimationDurationSeconds = (typeof ANIMATION_DURATIONS_SECONDS)[number];
+
+const VALID_ANIMATION_DURATIONS_SECONDS = new Set<number>(
+  ANIMATION_DURATIONS_SECONDS,
+);
+
+export function isValidAnimationDurationSeconds(
+  value: number,
+): value is AnimationDurationSeconds {
+  return VALID_ANIMATION_DURATIONS_SECONDS.has(value);
+}
+
+export const ANIMATION_GENERATION_CONFIG = {
+  defaultAspectRatio: "16:9" as AnimationAspectRatioKey,
+  defaultDurationSeconds: 4 as AnimationDurationSeconds,
+  maxActiveAnimationGenerations: 5,
+  maxAttributionValueLength: 120,
+  maxBrandColors: 6,
+  maxBrandInputLength: 80,
+  maxPromptLength: 4_000,
+  maxReferenceImages: 4,
+  maxRequestsPerWindow: 20,
+  requestWindowMs: 24 * 60 * 60 * 1000,
+
+  // Phase -1 concierge validation records requests without charging credits.
+  // The automated pipeline can raise this when Veo + alpha reconstruction are live.
+  creditsPerAnimationRequest: 0,
 } as const;

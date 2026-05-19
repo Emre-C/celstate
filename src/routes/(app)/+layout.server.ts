@@ -1,19 +1,10 @@
-import { redirect } from "@sveltejs/kit";
 import type { ServerLoadEvent } from "@sveltejs/kit";
-import { resolveProtectedSessionRequest } from "$lib/auth/protected-session.js";
+import { requireAuthKitSession } from "$lib/server/authkit-guard.js";
 
-export const load = async ({ locals, url }: ServerLoadEvent) => {
-	const protectedSession = resolveProtectedSessionRequest({
-		pathname: url.pathname,
-		search: url.search,
-		token: locals.token
-	});
-
-	if (protectedSession.kind === 'redirect') {
-		throw redirect(303, protectedSession.location);
-	}
+export const load = async (event: ServerLoadEvent) => {
+	requireAuthKitSession(event);
 
 	return {
-		protectedSession: protectedSession.bootstrap
+		protectedSession: { isAuthenticated: true as const },
 	};
 };

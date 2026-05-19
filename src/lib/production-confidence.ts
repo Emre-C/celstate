@@ -77,6 +77,10 @@ export interface AuthCanaryEvidence {
 	readonly authPageHealthy: boolean;
 	readonly sessionEndpointHealthy: boolean;
 	readonly protectedRouteReachable: boolean;
+	readonly convexAuthenticatedQueryHealthy: boolean;
+	readonly signOutHealthy: boolean;
+	/** False when canary principal provisioning fails before probes (runner still ingests). */
+	readonly preflightProvisioningHealthy: boolean;
 }
 
 export interface GenerationCanaryEvidence {
@@ -140,12 +144,9 @@ export interface CanaryPrincipalDefinition extends CanaryPrincipal {
 }
 
 // All four canary principals bind to the same shared QA identity
-// (ycoklar@gmail.com). Production only accepts Google OAuth — there is no
-// email+password path — so plus-addressed inboxes like canary+auth@celstate.app
-// cannot be created. The shared QA Google account is the canonical canary user
-// for every domain. canaryPrincipals rows remain distinct by principalId; they
-// just share betterAuthUserId / appUserId. See docs/runbooks/QA-RESET.md and
-// docs/runbooks/CI-AND-CANARIES.md.
+// (ycoklar@gmail.com). Users authenticate via WorkOS AuthKit (Google, etc.).
+// canaryPrincipals rows remain distinct by principalId; they share workosUserId
+// / appUserId once the QA account has completed at least one WorkOS sign-in.
 const CANARY_SHARED_QA_EMAIL = "ycoklar@gmail.com" as const;
 
 export const CANARY_PRINCIPAL_CONFIG: Record<CanaryPrincipalId, CanaryPrincipalDefinition> = {
@@ -414,8 +415,11 @@ export const classifyAuthProbeVerdict = (
 	evidence: AuthCanaryEvidence,
 	config: { requireProtectedRoute: boolean },
 ): Verdict => {
+	if (!evidence.preflightProvisioningHealthy) return "FAILED";
 	if (!evidence.authPageHealthy || !evidence.sessionEndpointHealthy) return "FAILED";
 	if (config.requireProtectedRoute && !evidence.protectedRouteReachable) return "FAILED";
+	if (config.requireProtectedRoute && !evidence.convexAuthenticatedQueryHealthy) return "FAILED";
+	if (config.requireProtectedRoute && !evidence.signOutHealthy) return "FAILED";
 	return "PASSED";
 };
 

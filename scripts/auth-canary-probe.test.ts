@@ -7,10 +7,10 @@ import {
 	isFinalGetSessionProbeOk
 } from './auth-canary-probe.mjs';
 
-describe('auth canary get-session probe', () => {
-	it('accepts 200 and 401 as final status (after redirects)', () => {
+describe('auth canary session probe', () => {
+	it('accepts only 200 as final status (after redirects)', () => {
 		expect(isFinalGetSessionProbeOk(200)).toBe(true);
-		expect(isFinalGetSessionProbeOk(401)).toBe(true);
+		expect(isFinalGetSessionProbeOk(401)).toBe(false);
 	});
 
 	it('rejects 308 — apex→www must be followed, not treated as success', () => {
@@ -31,12 +31,12 @@ describe('formatAuthCanaryResponseDiagnostics', () => {
 			}
 		});
 		Object.defineProperty(response, 'url', {
-			value: 'https://www.celstate.com/api/auth/get-session'
+			value: 'https://www.celstate.com/api/auth/session'
 		});
 
 		const diagnostics = formatAuthCanaryResponseDiagnostics(response, '<html>\n  Cloudflare 520\n</html>');
 
-		expect(diagnostics).toContain('final_url=https://www.celstate.com/api/auth/get-session');
+		expect(diagnostics).toContain('final_url=https://www.celstate.com/api/auth/session');
 		expect(diagnostics).toContain('cf-ray=ray-123-IAD');
 		expect(diagnostics).toContain('server=cloudflare');
 		expect(diagnostics).toContain('x-vercel-id=iad1::abc');
@@ -71,8 +71,8 @@ describe('formatAuthCanaryProbeFailure', () => {
 		expect(
 			formatAuthCanaryProbeFailure(
 				AUTH_CANARY_PROBE.GET_SESSION,
-				new Error('/api/auth/get-session returned 500')
+				new Error('/api/auth/session returned 500')
 			)
-		).toBe(`[${AUTH_CANARY_PROBE.GET_SESSION}] /api/auth/get-session returned 500`);
+		).toBe(`[${AUTH_CANARY_PROBE.GET_SESSION}] /api/auth/session returned 500`);
 	});
 });

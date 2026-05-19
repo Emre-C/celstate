@@ -5,11 +5,11 @@
 //
 // Usage:
 //   node scripts/secrets/rotate.mjs                 # rotate all auto-rotatable
-//   node scripts/secrets/rotate.mjs JWT BETTER_AUTH # rotate only listed groups
+//   node scripts/secrets/rotate.mjs JWT WORKOS_COOKIE # rotate only listed groups
 //
 // Available rotation groups:
 //   - jwt                         : JWT_PRIVATE_KEY + JWKS (RSA-2048, kid=uuid)
-//   - better-auth-secret          : BETTER_AUTH_SECRET (32 random bytes, base64)
+//   - workos-cookie-password      : WORKOS_COOKIE_PASSWORD (32 random bytes, base64)
 //   - verification-runner-secret  : VERIFICATION_RUNNER_SECRET (32 random bytes)
 //   - qa-user-reset-secret        : QA_USER_RESET_SECRET (32 random bytes)
 //
@@ -36,8 +36,8 @@ const GROUPS = {
       JWKS: JSON.stringify({ keys: [jwk] }),
     };
   },
-  "better-auth-secret": () => ({
-    BETTER_AUTH_SECRET: randomBytes(32).toString("base64"),
+  "workos-cookie-password": () => ({
+    WORKOS_COOKIE_PASSWORD: randomBytes(32).toString("base64"),
   }),
   "verification-runner-secret": () => ({
     VERIFICATION_RUNNER_SECRET: randomBytes(32).toString("base64"),

@@ -43,6 +43,16 @@ import {
 	type LiveSettlementCanaryState,
 } from "./production-confidence.js";
 
+const authEvidenceBase = (partial: Partial<AuthCanaryEvidence> = {}): AuthCanaryEvidence => ({
+	authPageHealthy: true,
+	sessionEndpointHealthy: true,
+	protectedRouteReachable: false,
+	convexAuthenticatedQueryHealthy: true,
+	signOutHealthy: true,
+	preflightProvisioningHealthy: true,
+	...partial,
+});
+
 const req = (domain: DomainVerdictRecord["domain"], verdict: DomainVerdictRecord["verdict"]): DomainVerdictRecord => ({
 	domain,
 	trigger: "POST_DEPLOY",
@@ -262,17 +272,20 @@ describe("live-settlement canary lifecycle (§6.4)", () => {
 describe("classifyAuthProbeVerdict", () => {
 	it("passes when all smoke probes healthy and protected route not required", () => {
 		expect(
-			classifyAuthProbeVerdict(
-				{ authPageHealthy: true, sessionEndpointHealthy: true, protectedRouteReachable: false },
-				{ requireProtectedRoute: false },
-			),
+			classifyAuthProbeVerdict(authEvidenceBase({ protectedRouteReachable: false }), {
+				requireProtectedRoute: false,
+			}),
 		).toBe("PASSED");
 	});
 
 	it("passes when protected route required and reachable", () => {
 		expect(
 			classifyAuthProbeVerdict(
-				{ authPageHealthy: true, sessionEndpointHealthy: true, protectedRouteReachable: true },
+				authEvidenceBase({
+					protectedRouteReachable: true,
+					convexAuthenticatedQueryHealthy: true,
+					signOutHealthy: true,
+				}),
 				{ requireProtectedRoute: true },
 			),
 		).toBe("PASSED");
@@ -281,7 +294,11 @@ describe("classifyAuthProbeVerdict", () => {
 	it("fails when protected route required but not reachable (redirect to /auth)", () => {
 		expect(
 			classifyAuthProbeVerdict(
-				{ authPageHealthy: true, sessionEndpointHealthy: true, protectedRouteReachable: false },
+				authEvidenceBase({
+					protectedRouteReachable: false,
+					convexAuthenticatedQueryHealthy: true,
+					signOutHealthy: true,
+				}),
 				{ requireProtectedRoute: true },
 			),
 		).toBe("FAILED");
@@ -289,18 +306,50 @@ describe("classifyAuthProbeVerdict", () => {
 
 	it("fails when auth page is unhealthy", () => {
 		expect(
-			classifyAuthProbeVerdict(
-				{ authPageHealthy: false, sessionEndpointHealthy: true, protectedRouteReachable: false },
-				{ requireProtectedRoute: false },
-			),
+			classifyAuthProbeVerdict(authEvidenceBase({ authPageHealthy: false }), {
+				requireProtectedRoute: false,
+			}),
 		).toBe("FAILED");
 	});
 
 	it("fails when session endpoint is unhealthy", () => {
 		expect(
+			classifyAuthProbeVerdict(authEvidenceBase({ sessionEndpointHealthy: false }), {
+				requireProtectedRoute: false,
+			}),
+		).toBe("FAILED");
+	});
+
+	it("fails when preflight provisioning failed", () => {
+		expect(
+			classifyAuthProbeVerdict(authEvidenceBase({ preflightProvisioningHealthy: false }), {
+				requireProtectedRoute: false,
+			}),
+		).toBe("FAILED");
+	});
+
+	it("fails when convex authenticated query unhealthy while protected route required", () => {
+		expect(
 			classifyAuthProbeVerdict(
-				{ authPageHealthy: true, sessionEndpointHealthy: false, protectedRouteReachable: false },
-				{ requireProtectedRoute: false },
+				authEvidenceBase({
+					protectedRouteReachable: true,
+					convexAuthenticatedQueryHealthy: false,
+					signOutHealthy: true,
+				}),
+				{ requireProtectedRoute: true },
+			),
+		).toBe("FAILED");
+	});
+
+	it("fails when sign-out unhealthy while protected route required", () => {
+		expect(
+			classifyAuthProbeVerdict(
+				authEvidenceBase({
+					protectedRouteReachable: true,
+					convexAuthenticatedQueryHealthy: true,
+					signOutHealthy: false,
+				}),
+				{ requireProtectedRoute: true },
 			),
 		).toBe("FAILED");
 	});
@@ -440,17 +489,21 @@ describe("gate configuration invariants", () => {
 
 describe("evidence contract conformance (§5.3)", () => {
 	it("AuthCanaryEvidence has exactly the required fields", () => {
-		const evidence: AuthCanaryEvidence = {
-			authPageHealthy: true,
-			sessionEndpointHealthy: true,
-			protectedRouteReachable: false,
-		};
-		expect(Object.keys(evidence).sort()).toEqual(
-			["authPageHealthy", "protectedRouteReachable", "sessionEndpointHealthy"],
-		);
+		const evidence: AuthCanaryEvidence = authEvidenceBase();
+		expect(Object.keys(evidence).sort()).toEqual([
+			"authPageHealthy",
+			"convexAuthenticatedQueryHealthy",
+			"preflightProvisioningHealthy",
+			"protectedRouteReachable",
+			"sessionEndpointHealthy",
+			"signOutHealthy",
+		]);
 		expect(typeof evidence.authPageHealthy).toBe("boolean");
 		expect(typeof evidence.sessionEndpointHealthy).toBe("boolean");
 		expect(typeof evidence.protectedRouteReachable).toBe("boolean");
+		expect(typeof evidence.convexAuthenticatedQueryHealthy).toBe("boolean");
+		expect(typeof evidence.signOutHealthy).toBe("boolean");
+		expect(typeof evidence.preflightProvisioningHealthy).toBe("boolean");
 	});
 
 	it("GenerationCanaryEvidence has exactly the required fields", () => {
@@ -505,11 +558,11 @@ describe("evidence contract conformance (§5.3)", () => {
 
 	it("classifiers accept evidence shapes without extra fields", () => {
 		// Auth
-		const authEvidence: AuthCanaryEvidence = {
-			authPageHealthy: true,
-			sessionEndpointHealthy: true,
+		const authEvidence: AuthCanaryEvidence = authEvidenceBase({
 			protectedRouteReachable: true,
-		};
+			convexAuthenticatedQueryHealthy: true,
+			signOutHealthy: true,
+		});
 		expect(classifyAuthProbeVerdict(authEvidence, { requireProtectedRoute: true })).toBe("PASSED");
 
 		// Checkout
@@ -559,7 +612,7 @@ describe("canary principal config invariants", () => {
 		// so plus-addressed canary inboxes cannot be created. All four
 		// principals must therefore bind to the same shared QA Google account.
 		// Distinct canary identities would silently fail upsertCanaryPrincipal
-		// in src/convex/verification.ts ("Canonical Better Auth user not found").
+		// in src/convex/verification.ts ("Canonical app user not found for …").
 		const emails = new Set(
 			Object.values(CANARY_PRINCIPAL_CONFIG).map((c) => c.email.toLowerCase()),
 		);

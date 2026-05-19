@@ -2,9 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { PUBLIC_CONVEX_URL } from '$env/static/public';
-	import { createSvelteAuthClient, useAuth } from '@mmailaender/convex-better-auth-svelte/svelte';
-	import { useConvexClient } from '@mmailaender/convex-svelte';
-	import { authClient } from '$lib/auth-client';
+	import { setupConvex, setupAuth, useAuth, useConvexClient } from '@mmailaender/convex-svelte';
 	import {
 		beginUserSyncAttempt,
 		createInitialUserSyncStatus,
@@ -22,11 +20,26 @@
 
 	let { children, data } = $props();
 
-	createSvelteAuthClient({
-		authClient,
-		convexUrl: PUBLIC_CONVEX_URL,
-		getServerState: () => data.protectedSession
-	});
+	setupConvex(PUBLIC_CONVEX_URL);
+
+	const serverAuthenticated = $derived(data.protectedSession.isAuthenticated);
+
+	setupAuth(
+		() => ({
+			isLoading: false,
+			isAuthenticated: serverAuthenticated,
+			fetchAccessToken: async (_args) => {
+				// Token rotation is handled by `authKitHandle` on each server request — no refresh query flag.
+				const res = await fetch('/api/auth/access-token', { credentials: 'include' });
+				if (!res.ok) return null;
+				const body = (await res.json()) as { token?: string | null };
+				return body.token ?? null;
+			}
+		}),
+		// Convex `setupAuth` needs a one-shot SSR snapshot; not a reactive binding.
+		// svelte-ignore state_referenced_locally
+		{ initialState: { isAuthenticated: serverAuthenticated } }
+	);
 
 	const auth = useAuth();
 	const client = useConvexClient();
@@ -54,8 +67,6 @@
 	);
 
 	const runUserSync = async () => {
-		// Snapshot the previous status synchronously so the running transition
-		// records the correct attempt counter even under rapid re-entry.
 		const previous = userSyncStatus;
 		userSyncStatus = beginUserSyncAttempt(previous);
 		try {
@@ -67,8 +78,6 @@
 	};
 
 	const triggerManualUserSyncRetry = () => {
-		// Manual retry is only meaningful from the error state; gate to avoid
-		// cancelling a flight already in progress or re-running after success.
 		if (userSyncStatus.kind !== 'error') {
 			return;
 		}
@@ -104,9 +113,6 @@
 	});
 
 	$effect(() => {
-		// Bounded auto-retry: schedule the next attempt with the policy-supplied
-		// backoff. The cleanup clears the pending timeout whenever the status
-		// transitions out of the retry window (success, manual retry, sign-out).
 		if (!auth.isAuthenticated) {
 			return;
 		}

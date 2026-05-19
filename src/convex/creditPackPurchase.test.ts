@@ -15,7 +15,6 @@ const RUNNER_SECRET = "test-runner-secret-for-credit-pack";
 
 beforeEach(() => {
   vi.stubEnv("SITE_URL", "http://127.0.0.1:4174");
-  vi.stubEnv("BETTER_AUTH_SECRET", "test-better-auth-secret");
   vi.stubEnv("AUTH_GOOGLE_ID", "test-google-client-id");
   vi.stubEnv("AUTH_GOOGLE_SECRET", "test-google-client-secret");
   vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_credit_pack_purchase");
