@@ -1,0 +1,11 @@
+# Local bulky artifacts — never upload to Vercel (CLI reads this from cwd)
+tmp/
+test*.mp4
+/jobs/
+/experiments/
+/playwright-report/
+/test-results/
+/blob-report/
+/secrets-local/
+.growth/
+.playwright-cli/
