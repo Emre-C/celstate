@@ -28,7 +28,8 @@ const checkAuthPage = async () => {
 	const timeout = setTimeout(() => controller.abort(), AUTH_CANARY_PROBE_TIMEOUT_MS);
 
 	try {
-		const response = await fetch(joinUrl('/auth'), {
+		// /auth is error-recovery only; healthy sign-in bypasses it. Probe the recovery UI.
+		const response = await fetch(joinUrl('/auth?error=access_denied'), {
 			headers: { accept: 'text/html' },
 			signal: controller.signal
 		});
@@ -43,8 +44,8 @@ const checkAuthPage = async () => {
 		if (!html.includes('data-testid="auth-page"')) {
 			throw new Error('/auth did not render the expected auth page marker');
 		}
-		if (!html.includes('data-testid="auth-workos-sign-in"')) {
-			throw new Error('/auth did not render the WorkOS sign-in marker');
+		if (!html.includes('data-testid="auth-sign-in"')) {
+			throw new Error('/auth did not render the sign-in marker');
 		}
 
 		return response.status;

@@ -16,7 +16,7 @@ describe("requireAuthKitSession", () => {
 		} catch (e: unknown) {
 			expect(e).toMatchObject({
 				status: 303,
-				location: "/auth?redirectTo=%2Fapp%2Fteam%3Finvite%3Dabc",
+				location: "/api/auth/initiate?returnTo=%2Fapp%2Fteam%3Finvite%3Dabc",
 			});
 		}
 	});

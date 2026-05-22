@@ -1,4 +1,5 @@
 import { redirect } from "@sveltejs/kit";
+import { buildAuthPageTarget, normalizeAuthReturnTo } from "$lib/auth/redirect.js";
 import type { PageServerLoad } from "./$types";
 import * as Sentry from "@sentry/sveltekit";
 
@@ -33,14 +34,8 @@ export const load: PageServerLoad = async ({ url, request }) => {
 	const productCode = SDK_CODE_TO_PRODUCT_CODE[rawCode] ?? "default";
 	const severity = SDK_CODE_TO_SEVERITY[rawCode] ?? "warning";
 
-	const redirectTarget = new URL("/auth", url);
-	redirectTarget.searchParams.set("error", productCode);
-
-	// Preserve return path if the SDK included one
-	const returnTo = url.searchParams.get("returnTo");
-	if (returnTo) {
-		redirectTarget.searchParams.set("redirectTo", returnTo);
-	}
+	const returnTo = normalizeAuthReturnTo(url.searchParams.get("returnTo"));
+	const redirectTarget = buildAuthPageTarget(returnTo, { error: productCode });
 
 	// Structured observability for auth callback failures
 	const logPayload = {
@@ -73,5 +68,5 @@ export const load: PageServerLoad = async ({ url, request }) => {
 		console.warn(JSON.stringify(logPayload));
 	}
 
-	redirect(302, redirectTarget.href);
+	redirect(302, redirectTarget);
 };

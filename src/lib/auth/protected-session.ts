@@ -1,4 +1,4 @@
-import { buildAuthRedirectTarget } from '$lib/auth/redirect.js';
+import { buildAuthInitiateTarget } from '$lib/auth/redirect.js';
 
 export const AUTH_SESSION_RECOVERY_GRACE_PERIOD_MS = 1000;
 
@@ -46,7 +46,7 @@ export const resolveProtectedSessionRequest = ({
 	if (!bootstrap.isAuthenticated) {
 		return {
 			kind: 'redirect',
-			location: buildAuthRedirectTarget(pathname, search)
+			location: buildAuthInitiateTarget(pathname, search)
 		};
 	}
 
@@ -72,7 +72,7 @@ export const getProtectedSessionRedirectPlan = ({
 		};
 	}
 
-	const location = buildAuthRedirectTarget(pathname, search);
+	const location = buildAuthInitiateTarget(pathname, search);
 
 	if (hasAuthenticatedSession) {
 		return {

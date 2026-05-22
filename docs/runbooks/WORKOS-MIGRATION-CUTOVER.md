@@ -25,6 +25,6 @@ For extra caution, an operator can:
 
 ## Ongoing checks (prod and dev)
 
-- WorkOS dashboard: redirect URI, sign-in endpoint (`/sign-in`), callback (`/callback`), sign-out redirect; values must match `PUBLIC_SITE_URL` / `WORKOS_REDIRECT_URI`.
+- WorkOS dashboard: redirect URI, sign-in endpoint (`/api/auth/initiate`), callback (`/callback`), sign-out redirect; values must match `PUBLIC_SITE_URL` / `WORKOS_REDIRECT_URI`.
 - Doppler → **`pnpm secrets:sync:convex`** / **`pnpm secrets:sync:convex:dev`** so Convex has at least **`WORKOS_CLIENT_ID`** (required by `auth.config.ts`); full **`WORKOS_*`** on **Vercel** per [PUBLIC-ENV-CHECKLIST](./PUBLIC-ENV-CHECKLIST.md).
 - `pnpm exec convex codegen` (or `pnpm exec convex dev --once`) so `_generated` matches the linked deployment.

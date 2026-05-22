@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
+	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	import { PUBLIC_SITE_URL } from '$env/static/public';
+	import { buildAuthInitiateTargetFromReturnTo } from '$lib/auth/redirect.js';
 	import { growthEvents } from '$lib/analytics/growth-events.js';
 	import { initPostHog, posthog } from '$lib/posthog';
 	import HeroShowcase from '$lib/components/HeroShowcase.svelte';
@@ -12,6 +14,12 @@
 	import SectionLabel from '$lib/components/ui/SectionLabel.svelte';
 
 	const heroImageSrc = '/images/celstate-a-majestic-phoenix-bird-in-midflight-win.png';
+
+	const startHref = $derived(
+		$page.data.authState?.isAuthenticated
+			? '/app'
+			: buildAuthInitiateTargetFromReturnTo('/app')
+	);
 
 	const siteOrigin = PUBLIC_SITE_URL.replace(/\/$/, '');
 	const canonicalUrl = `${siteOrigin}/`;
@@ -78,7 +86,7 @@
 		if (!initPostHog()) {
 			return;
 		}
-		posthog.capture(growthEvents.landingCtaClicked, { cta_id: ctaId, destination: '/app' });
+		posthog.capture(growthEvents.landingCtaClicked, { cta_id: ctaId, destination: startHref });
 	}
 </script>
 
@@ -103,7 +111,7 @@
 
 <div class="min-h-dvh">
 	<NavBar>
-		<Button href="/app" class="px-4 py-1.5" onclick={() => captureLandingCta('nav_start')}>
+		<Button href={startHref} class="px-4 py-1.5" onclick={() => captureLandingCta('nav_start')}>
 			Start Generating
 		</Button>
 	</NavBar>
@@ -127,7 +135,7 @@
 						No halos or artifacts. Just your vision, clean and ready to use.
 					</p>
 					<div class="hero-item flex items-center gap-4">
-						<Button href="/app" class="px-7" onclick={() => captureLandingCta('hero_start')}>
+						<Button href={startHref} class="px-7" onclick={() => captureLandingCta('hero_start')}>
 							Start Generating
 						</Button>
 					</div>

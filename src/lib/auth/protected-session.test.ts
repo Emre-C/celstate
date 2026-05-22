@@ -39,7 +39,7 @@ describe('protected session', () => {
 			})
 		).toEqual({
 			kind: 'redirect',
-			location: '/auth?redirectTo=%2Fapp%2Fcredits%3Fplan%3Dstarter%26source%3Dnav'
+			location: '/api/auth/initiate?returnTo=%2Fapp%2Fcredits%3Fplan%3Dstarter%26source%3Dnav'
 		});
 	});
 
@@ -98,7 +98,7 @@ describe('protected session', () => {
 			})
 		).toEqual({
 			kind: 'delayed',
-			location: '/auth?redirectTo=%2Fapp%3Fsource%3Dtab-return',
+			location: '/api/auth/initiate?returnTo=%2Fapp%3Fsource%3Dtab-return',
 			delayMs: AUTH_SESSION_RECOVERY_GRACE_PERIOD_MS
 		});
 	});
@@ -127,7 +127,7 @@ describe('protected session', () => {
 			})
 		).toEqual({
 			kind: 'immediate',
-			location: '/auth?redirectTo=%2Fapp'
+			location: '/api/auth/initiate?returnTo=%2Fapp'
 		});
 	});
 

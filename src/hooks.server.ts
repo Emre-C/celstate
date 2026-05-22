@@ -66,7 +66,7 @@ const getRedirectSummary = (location: string | null, baseUrl: URL) => {
 const isAuthObservedRequest = (url: URL) =>
 	url.pathname.startsWith("/api/auth") ||
 	url.pathname === "/auth" ||
-	url.pathname === "/sign-in" ||
+	url.pathname === "/api/auth/initiate" ||
 	url.pathname === "/callback" ||
 	url.pathname === "/sign-out" ||
 	url.searchParams.has("error");
@@ -74,7 +74,7 @@ const isAuthObservedRequest = (url: URL) =>
 const isAuthAlertableRequest = (url: URL) =>
 	url.pathname.startsWith("/api/auth") ||
 	url.pathname === "/auth" ||
-	url.pathname === "/sign-in" ||
+	url.pathname === "/api/auth/initiate" ||
 	url.pathname === "/callback";
 
 const logAuthRequestEvent = (

@@ -13,7 +13,7 @@
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"test": "vitest run",
 		"test:watch": "vitest",
-		"test:auth": "vitest run scripts/auth-canary-probe.test.ts src/convex/users.provisioning.test.ts src/lib/server/auth-alerts.test.ts src/lib/server/response.test.ts src/lib/server/canonical-site.test.ts src/lib/auth/protected-session.test.ts src/lib/server/auth-guard.test.ts src/lib/server/authkit-guard.test.ts src/lib/server/access-token-response.test.ts src/lib/production-confidence.test.ts",
+		"test:auth": "vitest run scripts/auth-canary-probe.test.ts src/convex/users.provisioning.test.ts src/lib/server/auth-alerts.test.ts src/lib/server/response.test.ts src/lib/server/canonical-site.test.ts src/lib/auth/redirect.test.ts src/lib/auth/protected-session.test.ts src/lib/server/authkit-guard.test.ts src/lib/server/access-token-response.test.ts src/lib/production-confidence.test.ts",
 		"check:stripe-env": "tsx scripts/check-stripe-env.ts",
 		"check:posthog-env": "tsx scripts/check-posthog-env.ts",
 		"check:growth-tooling": "tsx scripts/growth-ops.ts check",

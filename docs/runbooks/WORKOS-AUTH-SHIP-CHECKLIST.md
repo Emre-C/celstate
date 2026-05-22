@@ -41,13 +41,12 @@ doppler run -- pnpm dev
 ### 3.2 Test the protected-route redirect
 
 1. Open an **incognito** browser to `http://localhost:5173/app`.
-2. **Verify**: redirect to `/auth?redirectTo=%2Fapp`.
-3. **Verify**: the `/auth` page shows the WorkOS sign-in link.
+2. **Verify**: redirect to `/api/auth/initiate?returnTo=%2Fapp`, then to WorkOS AuthKit (staging: `*.authkit.app`).
 
 ### 3.3 Test sign-in flow
 
-1. On `/auth`, click **Continue with WorkOS**.
-2. Complete sign-in with a real provider (Google or email magic link).
+1. From home, click **Start Generating** — you should **not** see a Celstate sign-in interstitial on the happy path.
+2. Complete sign-in with Google on AuthKit.
 3. **Verify**: callback lands back at `/app` without errors.
 4. In DevTools **Application → Cookies**, confirm a cookie named `wos-session` exists with `HttpOnly; Secure` (or `Secure` matching your origin).
 
@@ -97,10 +96,25 @@ In the WorkOS Dashboard, verify these match your deployed origin exactly:
 | Setting | Must Match |
 |---|---|
 | Redirect URI | `https://<your-origin>/callback` |
-| Default Sign-in endpoint | `https://<your-origin>/sign-in` |
+| Default Sign-in endpoint | `https://<your-origin>/api/auth/initiate` |
 | Default Sign-out redirect | `https://<your-origin>/` (or `/auth`) |
+| AuthKit domain (production) | `auth.celstate.com` (custom domain; staging uses `*.authkit.app`) |
 
-**Important**: Mismatches here cause `redirect_uri_mismatch` or silent logout loops in production.
+**Important**: Mismatches here cause `redirect_uri_mismatch`, impersonation failures, or silent logout loops in production.
+
+## 5b. AuthKit Branding (Production)
+
+In WorkOS Dashboard → Branding, configure AuthKit to match Celstate design tokens:
+
+| Token | Value |
+|---|---|
+| Page background | `#F5F3ED` (warm parchment) |
+| Button / link accent | `#C2410C` (terracotta) |
+| Appearance | Light only |
+| Logo / favicon | Celstate brand assets |
+| Copy | Editorial tone; no WorkOS-centric language |
+
+Preview sign-in and sign-up pages after changes. Full reference: [`authentication.md`](../product/authentication.md) and [WorkOS AuthKit branding docs](https://workos.com/docs/authkit/branding).
 
 ## 6. User Provisioning Proof
 

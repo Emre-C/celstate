@@ -196,7 +196,7 @@ async function probeAuthSmoke(baseUrl: string): Promise<{
   const ac = new AbortController();
   const t = setTimeout(() => ac.abort(), AUTH_CANARY_PROBE_TIMEOUT_MS);
   try {
-    const authRes = await fetch(joinUrl("/auth"), {
+    const authRes = await fetch(joinUrl("/auth?error=access_denied"), {
       headers: { accept: "text/html" },
       signal: ac.signal,
     });
@@ -207,8 +207,8 @@ async function probeAuthSmoke(baseUrl: string): Promise<{
     if (!html.includes('data-testid="auth-page"')) {
       throw new Error("auth page marker missing");
     }
-    if (!html.includes('data-testid="auth-workos-sign-in"')) {
-      throw new Error("auth page WorkOS sign-in marker missing");
+    if (!html.includes('data-testid="auth-sign-in"')) {
+      throw new Error("auth page sign-in marker missing");
     }
   } finally {
     clearTimeout(t);

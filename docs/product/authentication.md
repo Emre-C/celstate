@@ -27,14 +27,16 @@ Celstate does not want to own password storage, reset flows, breach handling, or
 - `src/routes/api/auth/access-token/+server.ts` — JSON access token for Convex (`Cache-Control: no-store`). Session refresh runs in `authKitHandle` on every request; there is no separate refresh query parameter.
 - `src/routes/api/auth/session/+server.ts` — JSON `{ authenticated: boolean }` for probes (`no-store`).
 - `src/routes/api/auth/convex-ready/+server.ts` — Optional authenticated Convex `users.getMe` probe (`no-store`).
-- `src/routes/auth/+page.svelte` — Sign-in surface (WorkOS).
+- `src/routes/auth/+page.svelte` — Native Celstate sign-in surface (editorial UX, provider CTAs).
+- `src/routes/auth/+page.server.ts` — Generates AuthKit sign-in URL server-side (`authKit.getSignInUrl`).
+- `src/routes/api/auth/initiate/+server.ts` — Hidden WorkOS Sign-in endpoint (`initiate_login_uri`); not linked from product UI.
 - `src/routes/callback/+server.ts` — AuthKit callback (see WorkOS routes).
 - `src/convex/auth.config.ts` — Convex **custom JWT** providers for WorkOS issuers + JWKS (`WORKOS_CLIENT_ID` on Convex).
 - `src/convex/users.ts` — Idempotent `users.storeUser` / `upsertCurrentUser` (**`workosUserId` first**, then token, then normalized-email adoption; legacy subject merge).
 
 ### Supporting
 
-- `src/lib/auth/redirect.ts` — `redirectTo` query builder for `/auth`.
+- `src/lib/auth/redirect.ts` — `redirectTo` query builder for `/auth`; `normalizeAuthReturnTo` for safe post-auth paths.
 - `src/lib/auth/protected-session.ts` — Client shell policy (loading, sync retries, redirect plan).
 - `src/lib/server/auth-alerts.ts` — Rate-limited Sentry + webhook alerts for auth endpoints.
 - `src/lib/server/convex-site-url.ts` — Derives `https://…convex.site` for HTTP actions when needed (verification, not AuthKit).
@@ -51,10 +53,14 @@ Celstate does not want to own password storage, reset flows, breach handling, or
 
 ### Sign-in
 
-1. User visits `/auth` and starts AuthKit (WorkOS-hosted OAuth).
-2. Callback establishes encrypted session cookie; `hooks` populate `locals.auth`.
-3. For `/app`, the server guard ensures `locals.auth.user` exists; unauthenticated users go to `/auth?redirectTo=…`.
+1. Unauthenticated users hit `/api/auth/initiate?returnTo=…` (from protected routes or the marketing **Start Generating** CTA), which redirects to AuthKit (`authKit.getSignInUrl`).
+2. User completes OAuth on AuthKit (production: custom domain `auth.celstate.com` when configured in the WorkOS **production** environment).
+3. `/callback` establishes the encrypted session cookie; `hooks` populate `locals.auth`.
 4. The client calls `/api/auth/access-token` to pass the JWT to Convex (`setAuth`).
+
+`/auth` is **error recovery only** (callback failures). It is not on the happy path.
+
+WorkOS-initiated flows (e.g. dashboard impersonation) use `/api/auth/initiate` as the Sign-in endpoint — same handler, not linked from product UI except indirectly.
 
 ### Protected routes (`/app/*`)
 
@@ -100,7 +106,17 @@ CI exercises mocks and Vitest contracts; it does not speak to live WorkOS issuer
 
 ## Observability
 
-Structured JSON logs: `scope: "auth"` in `hooks.server.ts` for `/auth`, `/api/auth/*`, `/sign-in`, `/callback`, `/sign-out`. Alerts: `src/lib/server/auth-alerts.ts`. Full stack notes: [`observability.md`](observability.md).
+Structured JSON logs: `scope: "auth"` in `hooks.server.ts` for `/auth`, `/api/auth/*`, `/api/auth/initiate`, `/callback`, `/sign-out`. Alerts: `src/lib/server/auth-alerts.ts`. Full stack notes: [`observability.md`](observability.md).
+
+## WorkOS AuthKit domain and branding (production)
+
+Production should use a **custom AuthKit domain** (`auth.celstate.com`) and WorkOS **Branding** aligned with [`design-system.md`](design-system.md):
+
+- **AuthKit domain** — WorkOS Dashboard → **Production** environment → **Domains** → Configure AuthKit domain → CNAME for `auth.celstate.com`. Once DNS shows **Verified** and **SSL Active**, `authKit.getSignInUrl()` in production automatically uses `auth.celstate.com` (no code change). **Staging** and **local dev** keep the default `*.authkit.app` host.
+- **When it is “live”** — As soon as WorkOS shows the domain verified + SSL active **and** you sign in against the **Production** WorkOS client (prod `WORKOS_CLIENT_ID` / deployed site). Local `doppler run --config dev` uses **Staging** and will **not** hit `auth.celstate.com`.
+- **Branding** — Warm parchment background (`#F5F3ED`), terracotta primary (`#C2410C`), Celstate logo/favicon, light-only appearance, editorial copy. See [WorkOS AuthKit branding](https://workos.com/docs/authkit/branding).
+- **Sign-in endpoint** — `https://<your-origin>/api/auth/initiate` (not user-facing; required for impersonation and WorkOS-initiated flows).
+- **Redirect URI** — `https://<your-origin>/callback` (must match `WORKOS_REDIRECT_URI`).
 
 ## Regression coverage
 
