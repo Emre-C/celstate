@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { differenceMatte } from "./matte.js";
+import { differenceMatte } from "../generation/matte.js";
 import { analyzeTransparentOutput, buildTransparentQaRetryPlan } from "./transparentQa.js";
 
 type Pixel = {

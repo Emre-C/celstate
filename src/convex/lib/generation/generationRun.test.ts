@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Id } from "../_generated/dataModel.js";
+import type { Id } from "../../_generated/dataModel.js";
 import {
   buildGenerationRunRetry,
   buildGenerationRunStageAttemptPatch,

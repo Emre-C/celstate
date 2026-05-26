@@ -155,7 +155,7 @@ export function readGeminiRuntimeConfigFromEnv(
   };
 }
 
-function createClient(runtimeConfig: GeminiRuntimeConfig): GoogleGenAI {
+export function createGeminiClient(runtimeConfig: GeminiRuntimeConfig): GoogleGenAI {
   return new GoogleGenAI({
     ...(runtimeConfig.googleAuthOptions
       ? { googleAuthOptions: runtimeConfig.googleAuthOptions }
@@ -202,8 +202,9 @@ export function createChatSession(
     aspectRatio?: string;
     imageSize?: string;
   },
+  client?: GoogleGenAI,
 ): GeminiChatSession {
-  const ai = createClient(runtimeConfig);
+  const ai = client ?? createGeminiClient(runtimeConfig);
 
   const aspectRatio = config?.aspectRatio ?? GENERATION_CONFIG.defaultAspectRatio;
   const imageSize = config?.imageSize ?? GENERATION_CONFIG.defaultImageSize;
@@ -215,10 +216,6 @@ export function createChatSession(
       imageConfig: {
         aspectRatio,
         imageSize,
-      },
-      thinkingConfig: {
-        thinkingLevel: ThinkingLevel.LOW,
-        includeThoughts: false,
       },
     },
   });

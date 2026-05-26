@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server.js";
 import type { Doc } from "./_generated/dataModel.js";
-import { generationStageValidator } from "./lib/validators.js";
+import { generationStageValidator } from "./lib/validation/validators.js";
 import {
   assertOkWebhookResponse,
   buildGenerationAlertRequest,
@@ -11,7 +11,7 @@ import {
   readOpsAlertRuntimeConfig,
   summarizeGenerationOpsEvents,
 } from "./lib/ops.js";
-import { insertGenerationOpsEventRow } from "./lib/generationOpsEvents.js";
+import { insertGenerationOpsEventRow } from "./lib/generation/generationOpsEvents.js";
 
 function clampHoursWindow(hoursWindow: number | undefined): number {
   if (hoursWindow === undefined || !Number.isFinite(hoursWindow)) {

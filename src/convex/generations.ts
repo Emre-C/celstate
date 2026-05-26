@@ -12,11 +12,11 @@ import {
 import { internal } from "./_generated/api.js";
 import type { Doc, Id } from "./_generated/dataModel.js";
 import { GENERATION_CONFIG, isValidAspectRatio } from "./lib/config.js";
-import { insertGenerationOpsEventRow } from "./lib/generationOpsEvents.js";
+import { insertGenerationOpsEventRow } from "./lib/generation/generationOpsEvents.js";
 import {
   generationStageValidator,
   transparentQaValidator,
-} from "./lib/validators.js";
+} from "./lib/validation/validators.js";
 import {
   buildGenerationRunCompletionPatch,
   buildGenerationRunFailurePatch,
@@ -32,15 +32,15 @@ import {
   getGenerationRunStageRetryCount,
   isGenerationRunInStage,
   isGenerationRunInFlight,
-} from "./lib/generationRun.js";
+} from "./lib/generation/generationRun.js";
 import {
   classifyGenerationFailureKind,
   normalizeGenerationFailureStage,
 } from "../lib/analytics/generation.js";
 import { applyCreditsToUser, getCurrentAppUser, upsertCurrentUser } from "./users.js";
-import { validateReferenceImageMetadata } from "./lib/validation.js";
+import { validateReferenceImageMetadata } from "./lib/validation/validation.js";
 import { mergedReferenceStorageIds } from "./lib/referenceStorageIds.js";
-import { assertVerificationRunnerSecret } from "./lib/verificationRunnerSecret.js";
+import { assertVerificationRunnerSecret } from "./lib/verification/verificationRunnerSecret.js";
 
 const generationWithUrlsValidator = v.object({
   _id: v.id("generations"),

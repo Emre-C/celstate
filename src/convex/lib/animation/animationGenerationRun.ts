@@ -1,4 +1,4 @@
-import type { Doc, Id } from "../_generated/dataModel.js";
+import type { Doc, Id } from "../../_generated/dataModel.js";
 import { buildAnimationProductionBrief, type AnimationBrandInputs, type AnimationDestination, type AnimationUseCase } from "./animationPrompts.js";
 
 export type AnimationGenerationStatus =

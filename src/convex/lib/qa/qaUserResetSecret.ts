@@ -3,7 +3,7 @@
  * Convex env: `QA_USER_RESET_SECRET`, `QA_USER_RESET_ALLOWED_EMAILS` (comma-separated).
  */
 
-import { CANARY_PRINCIPAL_CONFIG } from "../../lib/production-confidence.js";
+import { CANARY_PRINCIPAL_CONFIG } from "../../../lib/production-confidence/index.js";
 
 export const UNAUTHORIZED_MESSAGE = "Unauthorized" as const;
 

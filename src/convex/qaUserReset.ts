@@ -5,7 +5,7 @@ import { internalMutation, type MutationCtx } from "./_generated/server.js";
 import {
   assertEmailAllowlistedForQaReset,
   assertQaUserResetSecret,
-} from "./lib/qaUserResetSecret.js";
+} from "./lib/qa/qaUserResetSecret.js";
 import { purgeUserPurchaseStateHelper } from "./lib/creditPackPurchase/lifecycle.js";
 
 const GENERATION_BATCH = 80;

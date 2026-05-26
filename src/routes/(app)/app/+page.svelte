@@ -12,7 +12,7 @@
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import SectionLabel from '$lib/components/ui/SectionLabel.svelte';
 	import { growthEvents } from '$lib/analytics/growth-events.js';
-	import { initPostHog, posthog } from '$lib/posthog';
+	import { initPostHog, posthog } from '$lib/analytics/client-posthog';
 
 	const client = useConvexClient();
 	const user = useQuery(api.users.getMe, {});

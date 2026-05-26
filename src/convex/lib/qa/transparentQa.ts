@@ -1,5 +1,5 @@
-import { GENERATION_CONFIG } from "./config.js";
-import type { MatteOutput } from "./matte.js";
+import { GENERATION_CONFIG } from "../config.js";
+import type { MatteOutput } from "../generation/matte.js";
 
 export const TRANSPARENT_QA_VERSION = "deterministic_v1" as const;
 

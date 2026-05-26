@@ -14,7 +14,7 @@ import {
   transparentQaValidator,
   verificationEvidenceFields,
   verificationRunFields,
-} from "./lib/validators.js";
+} from "./lib/validation/validators.js";
 
 export default defineSchema({
   mcpApiKeys: defineTable({

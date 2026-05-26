@@ -1,7 +1,7 @@
 "use node";
 
 import sharp from "sharp";
-import { GENERATION_CONFIG } from "./config.js";
+import { GENERATION_CONFIG } from "../config.js";
 
 /**
  * Resize + palette-quantize a raw matte PNG buffer for web delivery.

@@ -1,7 +1,7 @@
 import { execSync } from 'node:child_process';
 import { basename, resolve } from 'node:path';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { mergedEnvForScripts } from './lib/env-files.js';
+import { mergedEnvForScripts } from '../lib/env-files.js';
 import {
 	ANALYSIS_QUEUE,
 	CORE_GROWTH_EVENTS,
@@ -9,18 +9,18 @@ import {
 	PRODUCT_DEFINITION,
 	PRICING_MODEL,
 	type AnalysisPhase
-} from './lib/growth-runbook.js';
+} from '../lib/growth-runbook.js';
 import {
 	GROWTH_QUERY_PRESETS,
 	GROWTH_QUERY_PRESET_BY_ARTIFACT,
 	type GrowthQueryPreset
-} from './lib/growth-query-presets.js';
+} from '../lib/growth-query-presets.js';
 import {
 	createAnnotation,
 	listEventDefinitions,
 	readPostHogConfig,
 	runHogQLQuery
-} from './lib/posthog-api.js';
+} from '../lib/posthog-api.js';
 
 interface ParsedArgs {
 	readonly command: string;

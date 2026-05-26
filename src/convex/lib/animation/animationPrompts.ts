@@ -1,4 +1,4 @@
-import type { Id } from "../_generated/dataModel.js";
+import type { Id } from "../../_generated/dataModel.js";
 
 export const ANIMATION_USE_CASES = {
   stream_alert: {

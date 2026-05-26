@@ -22,7 +22,7 @@ import {
   AUTH_CANARY_PROBE_TIMEOUT_MS,
   formatAuthCanaryProbeFailure,
   isFinalGetSessionProbeOk,
-} from "./auth-canary-probe.mjs";
+} from "../canary/auth-canary-probe.mjs";
 import {
   classifyAuthProbeVerdict,
   classifyCheckoutProbeVerdict,
@@ -42,7 +42,7 @@ import {
   type CanaryPrincipalId,
   type SettlementOutcome,
   type VerificationTrigger,
-} from "../src/lib/production-confidence.js";
+} from "../../src/lib/production-confidence/index.js";
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 

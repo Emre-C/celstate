@@ -9,7 +9,7 @@
  *   (reads `.env` / `.env.local` via mergedEnvForScripts + process.env)
  */
 
-import { mergedEnvForScripts } from "./lib/env-files.js";
+import { mergedEnvForScripts } from "../lib/env-files.js";
 
 const REQUIRED_KIT = [
 	"WORKOS_CLIENT_ID",

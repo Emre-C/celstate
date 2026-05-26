@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { internalQuery } from "./_generated/server.js";
-import { verificationRunValidator, verificationTriggerValidator } from "./lib/validators.js";
-import { assertVerificationRunnerSecret } from "./lib/verificationRunnerSecret.js";
+import { verificationRunValidator, verificationTriggerValidator } from "./lib/validation/validators.js";
+import { assertVerificationRunnerSecret } from "./lib/verification/verificationRunnerSecret.js";
 
 /** Fetch a verification run by its stable run key. */
 export const getRunByKey = internalQuery({

@@ -2,7 +2,7 @@
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
 	import { growthEvents } from '$lib/analytics/growth-events.js';
-	import { initPostHog, posthog } from '$lib/posthog';
+	import { initPostHog, posthog } from '$lib/analytics/client-posthog';
 	import { useQuery } from '@mmailaender/convex-svelte';
 	import { api } from '../../../convex/_generated/api.js';
 	import NavBar from '$lib/components/ui/NavBar.svelte';

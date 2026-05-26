@@ -1,5 +1,5 @@
-import type { Doc, Id } from "../_generated/dataModel.js";
-import { GENERATION_CONFIG } from "./config.js";
+import type { Doc, Id } from "../../_generated/dataModel.js";
+import { GENERATION_CONFIG } from "../config.js";
 
 export type GenerationStage = "white_background" | "black_background" | "finalizing";
 

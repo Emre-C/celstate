@@ -1,5 +1,5 @@
 import type { ResolvedAuthProvider } from '../../lib/auth/providers.js';
-import type { GenerationStage } from './generationRun.js';
+import type { GenerationStage } from './generation/generationRun.js';
 
 export const GENERATION_OPS_EVENT_TYPES = [
 	'generation_requested',

@@ -5,7 +5,7 @@
 	import { PUBLIC_SITE_URL } from '$env/static/public';
 	import { buildAuthInitiateTargetFromReturnTo } from '$lib/auth/redirect.js';
 	import { growthEvents } from '$lib/analytics/growth-events.js';
-	import { initPostHog, posthog } from '$lib/posthog';
+	import { initPostHog, posthog } from '$lib/analytics/client-posthog';
 	import HeroShowcase from '$lib/components/HeroShowcase.svelte';
 	import ZoomInspector from '$lib/components/ZoomInspector.svelte';
 	import Button from '$lib/components/ui/Button.svelte';

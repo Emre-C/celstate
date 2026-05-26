@@ -2,7 +2,7 @@
 	import '../app.css';
 	import { onMount } from 'svelte';
 	import { captureSessionAttributionOnce } from '$lib/analytics/session-attribution';
-	import { initPostHog, posthog } from '$lib/posthog';
+	import { initPostHog, posthog } from '$lib/analytics/client-posthog';
 
 	let { children } = $props();
 

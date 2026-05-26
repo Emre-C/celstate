@@ -16,7 +16,7 @@ import {
   createAnimationGenerationRun,
   isTerminalAnimationGenerationStatus,
   type AnimationGenerationStatus,
-} from "./lib/animationGenerationRun.js";
+} from "./lib/animation/animationGenerationRun.js";
 import {
   animationAttributionValidator,
   animationBrandInputsValidator,
@@ -26,9 +26,9 @@ import {
   animationPublicBrandInputsValidator,
   animationQaValidator,
   animationUseCaseValidator,
-} from "./lib/validators.js";
-import type { AnimationBrandInputs } from "./lib/animationPrompts.js";
-import { validateReferenceImageMetadata } from "./lib/validation.js";
+} from "./lib/validation/validators.js";
+import type { AnimationBrandInputs } from "./lib/animation/animationPrompts.js";
+import { validateReferenceImageMetadata } from "./lib/validation/validation.js";
 
 const animationExportUrlsValidator = v.object({
   apngUrl: v.union(v.string(), v.null()),

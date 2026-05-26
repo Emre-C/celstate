@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CANARY_PRINCIPAL_CONFIG } from "../../lib/production-confidence.js";
+import { CANARY_PRINCIPAL_CONFIG } from "../../../lib/production-confidence/index.js";
 import {
   assertEmailAllowlistedForQaReset,
   assertQaUserResetSecret,

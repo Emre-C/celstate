@@ -19,7 +19,7 @@ import {
   hasGenerationRunStageRetryCapacity,
   isGenerationRunStageRunnable,
   type GenerationStage,
-} from "./lib/generationRun.js";
+} from "./lib/generation/generationRun.js";
 import {
   buildWhiteBgPrompt,
   buildBlackBgPrompt,
@@ -27,22 +27,22 @@ import {
   buildBlackBgRetryPrompt,
   buildWhiteBgPromptWithReference,
   buildWhiteBgRetryPromptWithReference,
-} from "./lib/prompts.js";
+} from "./lib/generation/prompts.js";
 import {
   buildRepairInstruction,
   validateWhiteBackground,
   validateBlackBackground,
   validateDimensionMatch,
-} from "./lib/validation.js";
-import { differenceMatte, type MatteOutput } from "./lib/matte.js";
-import { optimizeForWeb } from "./lib/optimize.js";
+} from "./lib/validation/validation.js";
+import { differenceMatte, type MatteOutput } from "./lib/generation/matte.js";
+import { optimizeForWeb } from "./lib/generation/optimize.js";
 import {
   analyzeTransparentOutput,
   buildTransparentQaRetryPlan,
   type TransparentQaDecision,
   type TransparentQaReasonCode,
   type TransparentQaResult,
-} from "./lib/transparentQa.js";
+} from "./lib/qa/transparentQa.js";
 
 interface DecodedImage {
   pixels: Uint8ClampedArray;

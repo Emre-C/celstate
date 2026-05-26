@@ -2,7 +2,7 @@
 import { convexTest } from "convex-test";
 import { describe, expect, it, afterEach, beforeEach, vi } from "vitest";
 import { api, internal } from "./_generated/api.js";
-import { CANARY_PRINCIPAL_CONFIG } from "../lib/production-confidence.js";
+import { CANARY_PRINCIPAL_CONFIG } from "../lib/production-confidence/index.js";
 import posthogTest from "@posthog/convex/test";
 import schema from "./schema.js";
 

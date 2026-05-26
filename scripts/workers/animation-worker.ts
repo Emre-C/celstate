@@ -5,31 +5,31 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { ConvexHttpClient } from "convex/browser";
 import sharp from "sharp";
-import { api } from "../src/convex/_generated/api.js";
-import type { Id } from "../src/convex/_generated/dataModel.js";
-import { buildAnimationReferenceStillPrompt } from "../src/convex/lib/animationPrompts.js";
+import { api } from "../../src/convex/_generated/api.js";
+import type { Id } from "../../src/convex/_generated/dataModel.js";
+import { buildAnimationReferenceStillPrompt } from "../../src/convex/lib/animation/animationPrompts.js";
 import {
   createChatSession,
   normalizeGeminiImageMimeType,
   readGeminiRuntimeConfigFromEnv,
   type GeminiImageResult,
-} from "../src/convex/lib/gemini.js";
-import { differenceMatte, type MatteOutput } from "../src/convex/lib/matte.js";
+} from "../../src/convex/lib/gemini.js";
+import { differenceMatte, type MatteOutput } from "../../src/convex/lib/generation/matte.js";
 import {
   buildBlackBgPrompt,
   buildBlackBgRetryPrompt,
   buildWhiteBgPrompt,
   buildWhiteBgRetryPrompt,
-} from "../src/convex/lib/prompts.js";
+} from "../../src/convex/lib/generation/prompts.js";
 import {
   analyzeTransparentOutput,
   buildTransparentQaRetryPlan,
   type TransparentQaResult,
-} from "../src/convex/lib/transparentQa.js";
+} from "../../src/convex/lib/qa/transparentQa.js";
 import {
   validateBlackBackground,
   validateWhiteBackground,
-} from "../src/convex/lib/validation.js";
+} from "../../src/convex/lib/validation/validation.js";
 
 const execFileAsync = promisify(execFile);
 const FPS = 24;

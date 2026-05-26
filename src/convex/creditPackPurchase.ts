@@ -9,7 +9,7 @@ import {
 } from "./_generated/server.js";
 import type { Id } from "./_generated/dataModel.js";
 import { upsertCurrentUser, getCurrentAppUser } from "./users.js";
-import { assertVerificationRunnerSecret } from "./lib/verificationRunnerSecret.js";
+import { assertVerificationRunnerSecret } from "./lib/verification/verificationRunnerSecret.js";
 import { getKnownCreditPackPriceIds } from "./lib/creditPackPurchase/catalog.js";
 import {
   cacheStripeCustomerIdHelper,

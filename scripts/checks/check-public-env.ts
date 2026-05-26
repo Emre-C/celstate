@@ -8,8 +8,8 @@
  * See docs/runbooks/PUBLIC-ENV-CHECKLIST.md
  */
 
-import { resolveConvexHttpSiteOrigin } from "../src/lib/server/convex-site-url.js";
-import { mergedEnvForScripts } from "./lib/env-files.js";
+import { resolveConvexHttpSiteOrigin } from "../../src/lib/server/convex-site-url.js";
+import { mergedEnvForScripts } from "../lib/env-files.js";
 
 function isCi(): boolean {
 	return process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";

@@ -3,7 +3,7 @@ import {
   buildUpstreamRequestHeaders,
   buildUpstreamRequestUrl,
   handleMcpProxyRequest,
-} from "../../packages/mcp-server/src/proxy.js";
+} from "../../../packages/mcp-server/src/proxy.js";
 
 const upstreamMcpUrl = new URL("https://convex.example/mcp");
 const logger = {

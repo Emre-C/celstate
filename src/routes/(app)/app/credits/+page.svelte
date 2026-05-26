@@ -5,7 +5,7 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import SectionLabel from '$lib/components/ui/SectionLabel.svelte';
-	import { initPostHog, posthog } from '$lib/posthog';
+	import { initPostHog, posthog } from '$lib/analytics/client-posthog';
 
 	const client = useConvexClient();
 	const user = useQuery(api.users.getMe, {});

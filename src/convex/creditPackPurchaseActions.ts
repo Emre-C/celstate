@@ -11,7 +11,7 @@ import {
   type RefundCanaryResult,
   type SettlementSummary,
 } from "./lib/creditPackPurchase/lifecycle.js";
-import { assertVerificationRunnerSecret } from "./lib/verificationRunnerSecret.js";
+import { assertVerificationRunnerSecret } from "./lib/verification/verificationRunnerSecret.js";
 
 /**
  * Node-runtime side of the credit-pack purchase module. Houses the only

@@ -41,7 +41,7 @@ import {
 	type LiveSettlementCanaryEvent,
 	type LiveSettlementCanaryEvidence,
 	type LiveSettlementCanaryState,
-} from "./production-confidence.js";
+} from "./index.js";
 
 const authEvidenceBase = (partial: Partial<AuthCanaryEvidence> = {}): AuthCanaryEvidence => ({
 	authPageHealthy: true,

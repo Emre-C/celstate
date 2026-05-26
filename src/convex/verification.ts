@@ -8,8 +8,8 @@ import {
   verificationEvidenceValidator,
   verificationReleaseDecisionValidator,
   verificationTriggerValidator,
-} from "./lib/validators.js";
-import { assertVerificationRunnerSecret } from "./lib/verificationRunnerSecret.js";
+} from "./lib/validation/validators.js";
+import { assertVerificationRunnerSecret } from "./lib/verification/verificationRunnerSecret.js";
 import {
   CANARY_PRINCIPAL_CONFIG,
   DEFAULT_GATE_CONFIG,
@@ -17,7 +17,7 @@ import {
   evaluateReleaseDecision,
   type FeatureDomain,
   type GateConfig,
-} from "../lib/production-confidence.js";
+} from "../lib/production-confidence/index.js";
 
 export const getCanaryPrincipalById = internalQuery({
   args: { principalId: canaryPrincipalIdValidator },

@@ -3,12 +3,12 @@ import { internalQuery } from "./_generated/server.js";
 import {
   transparentQaDecisionValidator,
   transparentQaReasonCodeValidator,
-} from "./lib/validators.js";
+} from "./lib/validation/validators.js";
 import {
   TRANSPARENT_QA_NUMERIC_METRIC_KEYS,
   type TransparentQaNumericMetricKey,
   type TransparentQaReasonCode,
-} from "./lib/transparentQa.js";
+} from "./lib/qa/transparentQa.js";
 
 type GenerationStatusFilter = "complete" | "generating" | "failed";
 

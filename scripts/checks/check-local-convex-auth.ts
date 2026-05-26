@@ -11,7 +11,7 @@
  * Uses `PUBLIC_SITE_URL` as the fetch origin (the Celstate web app, not `*.convex.site`).
  */
 
-import { mergedEnvForScripts } from "./lib/env-files.js";
+import { mergedEnvForScripts } from "../lib/env-files.js";
 
 async function checkSession(base: URL): Promise<void> {
 	const sessionUrl = new URL("/api/auth/session", base);

@@ -1,4 +1,4 @@
-import { GENERATION_CONFIG } from "./config.js";
+import { GENERATION_CONFIG } from "../config.js";
 
 export interface ValidationResult {
   valid: boolean;
