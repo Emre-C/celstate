@@ -26,4 +26,4 @@ jobs:
           node-version: 22
 
       - name: Run auth canary
-        run: node scripts/check-auth-health.mjs
+        run: node scripts/checks/check-auth-health.mjs

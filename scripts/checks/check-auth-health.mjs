@@ -4,10 +4,10 @@ import {
 	formatAuthCanaryResponseDiagnostics,
 	formatAuthCanaryProbeFailure,
 	isFinalGetSessionProbeOk
-} from './auth-canary-probe.mjs';
+} from '../canary/auth-canary-probe.mjs';
 
-/** @typedef {import('./auth-canary-probe.mjs').AuthCanaryProbeDefinition} AuthCanaryProbeDefinition */
-/** @typedef {import('./auth-canary-probe.mjs').AuthCanaryProbeResult} AuthCanaryProbeResult */
+/** @typedef {import('../canary/auth-canary-probe.mjs').AuthCanaryProbeDefinition} AuthCanaryProbeDefinition */
+/** @typedef {import('../canary/auth-canary-probe.mjs').AuthCanaryProbeResult} AuthCanaryProbeResult */
 
 const baseUrl = process.env.AUTH_CANARY_BASE_URL?.trim();
 const webhookUrl = process.env.OPS_ALERT_WEBHOOK_URL?.trim();
