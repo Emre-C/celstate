@@ -2,7 +2,7 @@
  * Verifies the SvelteKit auth endpoints are healthy on the app origin.
  *
  * Checks:
- *   1. /api/auth/session — returns valid WorkOS session JSON
+ *   1. /api/auth/session — returns valid Clerk session JSON
  *   2. /api/auth/convex-ready — Convex auth boundary is reachable and responds
  *
  * Usage: `pnpm check:convex-auth`

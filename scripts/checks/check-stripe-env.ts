@@ -1,5 +1,5 @@
 /**
- * Validates Stripe + WorkOS-related environment variables in the **current**
+ * Validates Stripe-related environment variables in the **current**
  * process environment (names and formats only — values are never printed).
  *
  * Intended usage with Doppler (recommended):
@@ -54,16 +54,10 @@ const checks: EnvCheck[] = [
 		validate: (v) =>
 			v.startsWith("whsec_") ? null : `Expected whsec_ prefix, got "${v.slice(0, 12)}..."`,
 	},
-	{
-		name: "WORKOS_CLIENT_ID",
-		required: true,
-		validate: (v) =>
-			v.startsWith("client_") ? null : `Expected client_ prefix, got "${v.slice(0, 12)}..."`,
-	},
 ];
 
 function main() {
-	console.log("🔍 Checking Stripe + WorkOS env vars in the current environment…\n");
+	console.log("🔍 Checking Stripe env vars in the current environment…\n");
 
 	let failures = 0;
 
@@ -96,7 +90,7 @@ function main() {
 		process.exit(1);
 	}
 
-	console.log("✅ All Stripe + WorkOS production environment checks passed.");
+	console.log("✅ All Stripe production environment checks passed.");
 }
 
 main();

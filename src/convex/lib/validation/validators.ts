@@ -237,7 +237,7 @@ export const canaryPrincipalBindingFields = {
   destructive: v.boolean(),
   email: v.string(),
   name: v.string(),
-  workosUserId: v.string(),
+  clerkUserId: v.string(),
   minimumCredits: v.number(),
   appUserId: v.union(v.id("users"), v.null()),
 };

@@ -27,11 +27,11 @@ function createTest() {
   return t;
 }
 
-describe("WorkOS provisioning — users.storeUser", () => {
-  it("inserts a new user and binds workosUserId from identity.subject", async () => {
+describe("Clerk provisioning — users.storeUser", () => {
+  it("inserts a new user and binds clerkUserId from identity.subject", async () => {
     const t = createTest();
     const asUser = t.withIdentity({
-      tokenIdentifier: "https://api.workos.com/|user_new_1",
+      tokenIdentifier: "https://clerk.test/|user_new_1",
       subject: "user_new_1",
       email: "new-user@celstate.test",
       emailVerified: true,
@@ -39,11 +39,11 @@ describe("WorkOS provisioning — users.storeUser", () => {
 
     const doc = await asUser.mutation(api.users.storeUser, {});
     expect(doc.email).toBe("new-user@celstate.test");
-    expect(doc.workosUserId).toBe("user_new_1");
-    expect(doc.tokenIdentifier).toBe("https://api.workos.com/|user_new_1");
+    expect(doc.clerkUserId).toBe("user_new_1");
+    expect(doc.tokenIdentifier).toBe("https://clerk.test/|user_new_1");
   });
 
-  it("adopts an existing row matched by email and updates token + workosUserId", async () => {
+  it("adopts an existing row matched by email and updates token + clerkUserId", async () => {
     const t = createTest();
     const legacyId = await t.run(async (ctx) => {
       return await ctx.db.insert("users", {
@@ -54,22 +54,22 @@ describe("WorkOS provisioning — users.storeUser", () => {
     });
 
     const asUser = t.withIdentity({
-      tokenIdentifier: "https://api.workos.com/|user_workos_2",
-      subject: "user_workos_2",
+      tokenIdentifier: "https://clerk.test/|user_clerk_2",
+      subject: "user_clerk_2",
       email: "legacy@celstate.test",
       emailVerified: true,
     });
 
     const doc = await asUser.mutation(api.users.storeUser, {});
     expect(doc._id).toEqual(legacyId);
-    expect(doc.workosUserId).toBe("user_workos_2");
-    expect(doc.tokenIdentifier).toBe("https://api.workos.com/|user_workos_2");
+    expect(doc.clerkUserId).toBe("user_clerk_2");
+    expect(doc.tokenIdentifier).toBe("https://clerk.test/|user_clerk_2");
     expect(doc.credits).toBe(42);
   });
 
-  it("patches workosUserId when the same token returns a new subject (re-bind)", async () => {
+  it("patches clerkUserId when the same token returns a new subject (re-bind)", async () => {
     const t = createTest();
-    const tokenId = "https://api.workos.com/|stable_token";
+    const tokenId = "https://clerk.test/|stable_token";
 
     const asFirst = t.withIdentity({
       tokenIdentifier: tokenId,
@@ -86,17 +86,17 @@ describe("WorkOS provisioning — users.storeUser", () => {
       emailVerified: true,
     });
     const doc = await asSecond.mutation(api.users.storeUser, {});
-    expect(doc.workosUserId).toBe("user_sub_b");
+    expect(doc.clerkUserId).toBe("user_sub_b");
   });
 
-  it("prefers by_workos_user over email when both could apply", async () => {
+  it("prefers by_clerk_user over email when both could apply", async () => {
     const t = createTest();
-    const workosRow = await t.run(async (ctx) => {
+    const clerkRow = await t.run(async (ctx) => {
       return await ctx.db.insert("users", {
-        workosUserId: "user_stable_w",
+        clerkUserId: "user_stable_w",
         email: "first@celstate.test",
         credits: 100,
-        tokenIdentifier: "https://api.workos.com/|t_a",
+        tokenIdentifier: "https://clerk.test/|t_a",
       });
     });
 
@@ -109,40 +109,40 @@ describe("WorkOS provisioning — users.storeUser", () => {
     });
 
     const asUser = t.withIdentity({
-      tokenIdentifier: "https://api.workos.com/|t_b",
+      tokenIdentifier: "https://clerk.test/|t_b",
       subject: "user_stable_w",
       email: "second@celstate.test",
       emailVerified: true,
     });
 
     const doc = await asUser.mutation(api.users.storeUser, {});
-    expect(doc._id).toEqual(workosRow);
+    expect(doc._id).toEqual(clerkRow);
     expect(doc.credits).toBe(100);
     expect(doc.email).toBe("second@celstate.test");
-    expect(doc.tokenIdentifier).toBe("https://api.workos.com/|t_b");
+    expect(doc.tokenIdentifier).toBe("https://clerk.test/|t_b");
   });
 
-  it("updates token on returning workos subject even when token changes", async () => {
+  it("updates token on returning Clerk subject even when token changes", async () => {
     const t = createTest();
     await t.run(async (ctx) => {
       await ctx.db.insert("users", {
-        workosUserId: "user_rot",
+        clerkUserId: "user_rot",
         email: "rot@celstate.test",
         credits: 3,
-        tokenIdentifier: "https://api.workos.com/|old_jti",
+        tokenIdentifier: "https://clerk.test/|old_jti",
       });
     });
 
     const asUser = t.withIdentity({
-      tokenIdentifier: "https://api.workos.com/|new_jti",
+      tokenIdentifier: "https://clerk.test/|new_jti",
       subject: "user_rot",
       email: "rot@celstate.test",
       emailVerified: true,
     });
 
     const doc = await asUser.mutation(api.users.storeUser, {});
-    expect(doc.workosUserId).toBe("user_rot");
-    expect(doc.tokenIdentifier).toBe("https://api.workos.com/|new_jti");
+    expect(doc.clerkUserId).toBe("user_rot");
+    expect(doc.tokenIdentifier).toBe("https://clerk.test/|new_jti");
   });
 
   it("normalizes email to lowercase for storage and adoption", async () => {
@@ -156,7 +156,7 @@ describe("WorkOS provisioning — users.storeUser", () => {
     });
 
     const asUser = t.withIdentity({
-      tokenIdentifier: "https://api.workos.com/|sub_m",
+      tokenIdentifier: "https://clerk.test/|sub_m",
       subject: "sub_m",
       email: "MiXeD@Celstate.TEST",
       emailVerified: true,
@@ -170,19 +170,19 @@ describe("WorkOS provisioning — users.storeUser", () => {
   it("allows provisioning when email and emailVerified are absent from identity", async () => {
     const t = createTest();
     const asUser = t.withIdentity({
-      tokenIdentifier: "https://api.workos.com/user_management/client_x|bare_sub",
+      tokenIdentifier: "https://clerk.test/user_management/client_x|bare_sub",
       subject: "bare_sub",
     });
 
     const doc = await asUser.mutation(api.users.storeUser, {});
-    expect(doc.workosUserId).toBe("bare_sub");
+    expect(doc.clerkUserId).toBe("bare_sub");
     expect(doc.email).toBeUndefined();
   });
 
   it("rejects identity with explicit emailVerified false", async () => {
     const t = createTest();
     const asUser = t.withIdentity({
-      tokenIdentifier: "https://api.workos.com/|unverified",
+      tokenIdentifier: "https://clerk.test/|unverified",
       subject: "unverified",
       email: "u@celstate.test",
       emailVerified: false,
@@ -195,12 +195,12 @@ describe("WorkOS provisioning — users.storeUser", () => {
 
   /**
    * Security contract: email-based adoption is allowed when emailVerified is
-   * absent or true, but NOT when explicitly false. This supports WorkOS social
+   * absent or true, but NOT when explicitly false. This supports Clerk social
    * account linking (which is email-based) while blocking takeover of rows by
    * unverified identities. A newly-provisioned user that adopts an existing row
    * inherits its credits and other state.
    */
-  it("allows email adoption when emailVerified is absent (WorkOS minimal token)", async () => {
+  it("allows email adoption when emailVerified is absent (Clerk minimal token)", async () => {
     const t = createTest();
     const legacyId = await t.run(async (ctx) => {
       return await ctx.db.insert("users", {
@@ -210,9 +210,9 @@ describe("WorkOS provisioning — users.storeUser", () => {
       });
     });
 
-    // WorkOS default access tokens may omit email/emailVerified entirely.
+    // Clerk default access tokens may omit email/emailVerified entirely.
     const asUser = t.withIdentity({
-      tokenIdentifier: "https://api.workos.com/|adopter",
+      tokenIdentifier: "https://clerk.test/|adopter",
       subject: "adopter",
       email: "adopt@celstate.test",
       // emailVerified intentionally absent
@@ -221,7 +221,7 @@ describe("WorkOS provisioning — users.storeUser", () => {
     const doc = await asUser.mutation(api.users.storeUser, {});
     expect(doc._id).toEqual(legacyId);
     expect(doc.credits).toBe(42);
-    expect(doc.workosUserId).toBe("adopter");
+    expect(doc.clerkUserId).toBe("adopter");
   });
 });
 
@@ -234,8 +234,8 @@ describe("canary principal bootstrap — verification.upsertCanaryPrincipal", ()
       await ctx.db.insert("users", {
         email,
         credits: 1,
-        workosUserId: "canary_workos_subject",
-        tokenIdentifier: "https://api.workos.com/|canary_workos_subject",
+        clerkUserId: "user_canary_clerk_subject",
+        tokenIdentifier: "https://clerk.test/|user_canary_clerk_subject",
       });
     });
 
@@ -246,7 +246,7 @@ describe("canary principal bootstrap — verification.upsertCanaryPrincipal", ()
 
     const row = await t.run(async (ctx) => ctx.db.get(id));
     expect(row?.principalId).toBe("CANARY_AUTH");
-    expect(row?.workosUserId).toBe("canary_workos_subject");
+    expect(row?.clerkUserId).toBe("user_canary_clerk_subject");
   });
 
   it("rejects duplicate app users with the canary email", async () => {
@@ -257,13 +257,13 @@ describe("canary principal bootstrap — verification.upsertCanaryPrincipal", ()
       await ctx.db.insert("users", {
         email,
         credits: 1,
-        workosUserId: "w1",
+        clerkUserId: "w1",
         tokenIdentifier: "t1",
       });
       await ctx.db.insert("users", {
         email,
         credits: 1,
-        workosUserId: "w2",
+        clerkUserId: "w2",
         tokenIdentifier: "t2",
       });
     });
@@ -276,18 +276,18 @@ describe("canary principal bootstrap — verification.upsertCanaryPrincipal", ()
     ).rejects.toThrow(/Multiple app users matched/);
   });
 
-  it("falls back to workosUserId lookup when user row lacks email and patches email", async () => {
+  it("falls back to clerkUserId lookup when user row lacks email and patches email", async () => {
     const t = createTest();
     const email = CANARY_PRINCIPAL_CONFIG.CANARY_AUTH.email;
-    const workosUserId = "canary_no_email";
+    const clerkUserId = "canary_no_email";
 
     // First provisioning requires the user to have an email.
     await t.run(async (ctx) => {
       await ctx.db.insert("users", {
         email,
-        workosUserId,
+        clerkUserId,
         credits: 1,
-        tokenIdentifier: "https://api.workos.com/|" + workosUserId,
+        tokenIdentifier: "https://clerk.test/|" + clerkUserId,
       });
     });
 
@@ -300,14 +300,14 @@ describe("canary principal bootstrap — verification.upsertCanaryPrincipal", ()
     await t.run(async (ctx) => {
       const user = await ctx.db
         .query("users")
-        .withIndex("by_workos_user", (q) => q.eq("workosUserId", workosUserId))
+        .withIndex("by_clerk_user", (q) => q.eq("clerkUserId", clerkUserId))
         .first();
       if (user) {
         await ctx.db.patch(user._id, { email: undefined });
       }
     });
 
-    // Second provisioning should succeed via workosUserId fallback and patch email.
+    // Second provisioning should succeed via clerkUserId fallback and patch email.
     const secondId = await t.mutation(internal.verification.upsertCanaryPrincipal, {
       runnerSecret: RUNNER,
       principalId: "CANARY_AUTH",
@@ -317,7 +317,7 @@ describe("canary principal bootstrap — verification.upsertCanaryPrincipal", ()
     const userAfter = await t.run(async (ctx) => {
       return await ctx.db
         .query("users")
-        .withIndex("by_workos_user", (q) => q.eq("workosUserId", workosUserId))
+        .withIndex("by_clerk_user", (q) => q.eq("clerkUserId", clerkUserId))
         .first();
     });
     expect(userAfter?.email).toBe(email);

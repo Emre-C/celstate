@@ -32,10 +32,7 @@ export default defineSchema({
 
   users: defineTable({
     tokenIdentifier: v.optional(v.string()),
-    /** Prior Convex auth subjects (e.g. Better Auth era); retained for rollback forensics. */
-    legacyAuthSubjects: v.optional(v.array(v.string())),
-    /** WorkOS User Management subject (`sub`); stable provider-side user id. */
-    workosUserId: v.optional(v.string()),
+    clerkUserId: v.optional(v.string()),
     name: v.optional(v.string()),
     image: v.optional(v.string()),
     email: v.optional(v.string()),
@@ -45,7 +42,7 @@ export default defineSchema({
   })
     .index("email", ["email"])
     .index("by_token", ["tokenIdentifier"])
-    .index("by_workos_user", ["workosUserId"]),
+    .index("by_clerk_user", ["clerkUserId"]),
 
   generations: defineTable({
     userId: v.id("users"),

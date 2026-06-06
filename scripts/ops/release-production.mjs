@@ -2,7 +2,7 @@
 /**
  * Single production release gate (local operator machine):
  *   1. Sync Doppler → Convex prod + Vercel production env
- *   2. Validate Doppler prd has WorkOS AuthKit (+ optional Sentry) values
+ *   2. Validate Doppler prd has Clerk (+ optional Sentry) values
  *   3. Deploy Convex production
  *   4. Deploy Vercel production
  *   5. Run production verification (`pnpm verify:production`)
@@ -28,7 +28,7 @@ function run(label, command, args) {
 
 run("Secrets → Convex prod", "pnpm", ["secrets:sync:convex"]);
 run("Secrets → Vercel production", "pnpm", ["secrets:sync:vercel"]);
-run("Validate Doppler WorkOS kit env", "node", ["scripts/checks/verify-doppler-kit-env.mjs"]);
+run("Validate Doppler Clerk env", "node", ["scripts/checks/verify-doppler-kit-env.mjs"]);
 run("Convex deploy (prod)", "pnpm", ["exec", "convex", "deploy", "--yes"]);
 run("Vercel deploy (prod)", "pnpm", ["exec", "vercel", "deploy", "--prod", "--yes"]);
 run("Production verification", "pnpm", ["verify:production"]);

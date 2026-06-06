@@ -112,8 +112,8 @@ async function deleteAnimationGenerationsForUser(
  * Wipes an allowlisted email from the Celstate app database.
  * Does not delete Stripe customers or payment history in Stripe itself.
  *
- * WorkOS AuthKit sessions / refresh tokens are owned by WorkOS — revoke the user
- * from the WorkOS dashboard if you must invalidate remote SSO state.
+ * Clerk sessions / refresh tokens are owned by Clerk — revoke the user
+ * from the Clerk dashboard if you must invalidate remote tokens.
  *
  * Configure Convex env:
  * - `QA_USER_RESET_SECRET` — shared secret for this mutation’s `secret` arg
@@ -130,7 +130,7 @@ export const resetAllowlistedTestUser = internalMutation({
     appUserDeleted: v.boolean(),
     animationGenerationsRemoved: v.number(),
     generationsRemoved: v.number(),
-    workosSessionsNote: v.string(),
+    clerkSessionsNote: v.string(),
   }),
   handler: async (ctx, args) => {
     assertQaUserResetSecret(args.secret);
@@ -185,8 +185,8 @@ export const resetAllowlistedTestUser = internalMutation({
       appUserDeleted: appUser != null,
       animationGenerationsRemoved,
       generationsRemoved,
-      workosSessionsNote:
-        "WorkOS AuthKit sessions are not deleted from this mutation — revoke or delete the user in the WorkOS dashboard if remote SSO tokens must be invalidated.",
+      clerkSessionsNote:
+        "Clerk sessions are not deleted from this mutation — revoke or delete the user in the Clerk dashboard if remote tokens must be invalidated.",
     };
   },
 });

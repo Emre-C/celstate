@@ -239,7 +239,7 @@ async function probeAuthSmoke(baseUrl: string): Promise<{
   return { authPageHealthy: true, sessionEndpointHealthy: true };
 }
 
-async function probeWorkOsProtectedRoute(
+async function probeClerkProtectedRoute(
   baseUrl: string,
   storageStatePath: string,
 ): Promise<{
@@ -297,7 +297,7 @@ async function probeWorkOsProtectedRoute(
 }
 
 /**
- * Lightweight sign-out smoke test that does NOT burn a persistent WorkOS session.
+ * Lightweight sign-out smoke test that does NOT burn a persistent Clerk session.
  * It verifies the /sign-out endpoint returns a redirect (302) and the logout URL
  * is well-formed, without invalidating any server-side session state.
  */
@@ -311,7 +311,7 @@ async function probeAuthSignOutSmoke(baseUrl: string): Promise<boolean> {
       redirect: "manual",
       signal: ac.signal,
     });
-    // /sign-out should always redirect (302 to WorkOS logout, or via SDK)
+    // /sign-out should always redirect (302 to home or Clerk sign-out flow)
     if (res.status !== 302) {
       throw new Error(`[sign_out_smoke] expected 302, got ${res.status}`);
     }
@@ -460,7 +460,7 @@ async function main(): Promise<void> {
   if (!authFailureStage) {
     try {
       if (storagePath && existsSync(storagePath)) {
-        const routeBundle = await probeWorkOsProtectedRoute(siteUrl, storagePath);
+        const routeBundle = await probeClerkProtectedRoute(siteUrl, storagePath);
         protectedRouteReachable = routeBundle.protectedRouteReachable;
         convexAuthenticatedQueryHealthy = routeBundle.convexAuthenticatedQueryHealthy;
       } else if (requireProtected) {
@@ -477,7 +477,7 @@ async function main(): Promise<void> {
   }
 
   // Sign-out smoke test runs independently so it never burns the persistent
-  // WorkOS session used for protected-route proof.
+  // Clerk session used for protected-route proof.
   if (!authFailureStage) {
     try {
       signOutHealthy = await probeAuthSignOutSmoke(siteUrl);

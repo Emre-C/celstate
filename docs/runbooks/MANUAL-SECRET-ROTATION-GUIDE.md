@@ -5,7 +5,7 @@ rotate a secret that has no programmatic CLI rotation path. As of 2026-Q2
 that's four secrets: two Stripe keys, the Google OAuth client secret, and
 the Discord ops webhook URL.
 
-For everything else (JWT / signing keys, WorkOS kit secrets, Verification
+For everything else (JWT / signing keys, Clerk secrets, Verification
 Runner, Vertex service account), use the scripts described in
 [`SECRETS-MANAGEMENT.md`](./SECRETS-MANAGEMENT.md). Those don't require
 clicking through any vendor UI.
@@ -102,7 +102,7 @@ older standalone "Webhooks" page.
 
 ## 3. Google — OAuth client secret
 
-Rotates `AUTH_GOOGLE_SECRET` for the **Google OAuth client** used by your **WorkOS AuthKit** Google connection (pair with `AUTH_GOOGLE_ID` in Doppler). Update the secret in Google Cloud and Doppler whenever the client secret is rotated.
+Rotates `AUTH_GOOGLE_SECRET` for the **Google OAuth client** used by your **Clerk** Google connection (pair with `AUTH_GOOGLE_ID` in Doppler). Update the secret in Google Cloud and Doppler whenever the client secret is rotated.
 
 The Google Cloud UI was reorganized in 2025: OAuth client management moved
 from **APIs & Services → Credentials** to the **Google Auth Platform**.
@@ -248,7 +248,7 @@ Invoke-WebRequest -Uri "https://www.celstate.com/" `
   -SkipHttpErrorCheck | ForEach-Object { "Status: $($_.StatusCode); Length: $($_.RawContentLength)" }
 ```
 
-Then sign in to <https://www.celstate.com/auth> with Google (via **WorkOS AuthKit**). If sign-in
+Then sign in to <https://www.celstate.com/auth> with Google (via **Clerk**). If sign-in
 succeeds, the rotated vendor secrets propagated correctly (Stripe webhooks, Google client secret in Doppler, etc.).
 
 If sign-in fails with `redirect_uri_mismatch` or `invalid_client`, the

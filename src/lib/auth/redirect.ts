@@ -11,7 +11,7 @@ export const buildProtectedReturnPath = (pathname: string, search: string) =>
 	`${pathname}${search}`;
 
 /**
- * Starts AuthKit immediately (WorkOS hosted UI or custom AuthKit domain).
+ * Starts authentication immediately.
  * Used when an unauthenticated user hits a protected route or the marketing CTA.
  */
 export const buildAuthInitiateTarget = (pathname: string, search: string) => {

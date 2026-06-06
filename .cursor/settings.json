@@ -15,7 +15,7 @@
     "sentry": {
       "enabled": true
     },
-    "workos": {
+    "clerk": {
       "enabled": true
     }
   }

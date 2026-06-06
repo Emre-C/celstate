@@ -126,9 +126,9 @@ export interface CanaryPrincipalDefinition extends CanaryPrincipal {
 }
 
 // All four canary principals bind to the same shared QA identity
-// (ycoklar@gmail.com). Users authenticate via WorkOS AuthKit (Google, etc.).
-// canaryPrincipals rows remain distinct by principalId; they share workosUserId
-// / appUserId once the QA account has completed at least one WorkOS sign-in.
+// (ycoklar@gmail.com). Users authenticate via Clerk (Google, etc.).
+// canaryPrincipals rows remain distinct by principalId; they share clerkUserId
+// / appUserId once the QA account has completed at least one Clerk sign-in.
 const CANARY_SHARED_QA_EMAIL = "ycoklar@gmail.com" as const;
 
 export const CANARY_PRINCIPAL_CONFIG: Record<CanaryPrincipalId, CanaryPrincipalDefinition> = {

@@ -20,8 +20,7 @@ const userDoc = v.object({
   _id: v.id("users"),
   _creationTime: v.number(),
   tokenIdentifier: v.optional(v.string()),
-  legacyAuthSubjects: v.optional(v.array(v.string())),
-  workosUserId: v.optional(v.string()),
+  clerkUserId: v.optional(v.string()),
   email: v.optional(v.string()),
   name: v.optional(v.string()),
   image: v.optional(v.string()),
@@ -29,22 +28,6 @@ const userDoc = v.object({
   stripeCustomerId: v.optional(v.string()),
 });
 
-const mergeLegacySubjects = (
-  previousTokenIdentifier: string | undefined,
-  existingLegacy: string[] | undefined,
-  nextTokenIdentifier: string,
-): string[] | undefined => {
-  if (!previousTokenIdentifier || previousTokenIdentifier === nextTokenIdentifier) {
-    return existingLegacy;
-  }
-  const base = existingLegacy ? [...existingLegacy] : [];
-  if (!base.includes(previousTokenIdentifier)) {
-    base.push(previousTokenIdentifier);
-  }
-  return base;
-};
-
-/** Lowercase / trim for index lookups; WorkOS JWT may omit `email` entirely. */
 const normalizeOptionalEmail = (email: string | undefined): string | undefined => {
   const t = email?.trim().toLowerCase();
   return t && t.length > 0 ? t : undefined;
@@ -92,7 +75,7 @@ const upsertUserRecord = async (
   ctx: MutationCtx,
   profile: {
     tokenIdentifier: string;
-    workosUserId: string;
+    clerkUserId: string;
     email?: string;
     name?: string;
     image?: string;
@@ -105,7 +88,6 @@ const upsertUserRecord = async (
     existingId: Id<"users">,
     existing: {
       tokenIdentifier?: string;
-      legacyAuthSubjects?: string[];
       email?: string;
       name?: string;
       image?: string;
@@ -113,26 +95,21 @@ const upsertUserRecord = async (
   ) => {
     await ctx.db.patch(existingId, {
       tokenIdentifier: profile.tokenIdentifier,
-      workosUserId: profile.workosUserId,
+      clerkUserId: profile.clerkUserId,
       email: email ?? existing.email,
       name: profile.name ?? existing.name,
       image: profile.image ?? existing.image,
-      legacyAuthSubjects: mergeLegacySubjects(
-        existing.tokenIdentifier,
-        existing.legacyAuthSubjects,
-        profile.tokenIdentifier,
-      ),
     });
     return (await ctx.db.get(existingId))!;
   };
 
-  const byWorkos = await ctx.db
+  const byClerk = await ctx.db
     .query("users")
-    .withIndex("by_workos_user", (q) => q.eq("workosUserId", profile.workosUserId))
+    .withIndex("by_clerk_user", (q) => q.eq("clerkUserId", profile.clerkUserId))
     .first();
 
-  if (byWorkos) {
-    return await patchFromExisting(byWorkos._id, byWorkos);
+  if (byClerk) {
+    return await patchFromExisting(byClerk._id, byClerk);
   }
 
   const byToken = await ctx.db
@@ -157,7 +134,7 @@ const upsertUserRecord = async (
 
   const userId = await ctx.db.insert("users", {
     tokenIdentifier: profile.tokenIdentifier,
-    workosUserId: profile.workosUserId,
+    clerkUserId: profile.clerkUserId,
     email,
     name: profile.name,
     image: profile.image,
@@ -193,13 +170,11 @@ export const upsertCurrentUser = async (ctx: MutationCtx) => {
     throw new Error("Unauthorized");
   }
 
-  const workosUserId = identity.subject?.trim();
-  if (!workosUserId) {
-    throw new Error("Missing auth subject (WorkOS sub).");
+  const clerkUserId = identity.subject?.trim();
+  if (!clerkUserId) {
+    throw new Error("Missing auth subject (Clerk sub).");
   }
 
-  // Convex maps OIDC `email_verified` when present; WorkOS access tokens often omit it unless the
-  // JWT template includes standard OIDC claims — only block on an explicit false.
   if (identity.emailVerified === false) {
     throw new Error("Email must be verified before using Celstate.");
   }
@@ -208,7 +183,7 @@ export const upsertCurrentUser = async (ctx: MutationCtx) => {
 
   return await upsertUserRecord(ctx, {
     tokenIdentifier: identity.tokenIdentifier,
-    workosUserId,
+    clerkUserId,
     email: identity.email ?? undefined,
     name: identity.name ?? undefined,
     image: identity.pictureUrl ?? undefined,
@@ -346,3 +321,4 @@ export const grantWeeklyCredit = internalAction({
     return null;
   },
 });
+

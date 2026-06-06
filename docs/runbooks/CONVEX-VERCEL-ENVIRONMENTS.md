@@ -28,7 +28,7 @@ Every Convex **project** has separate **development** and **production** deploym
 - **Development** — what `pnpm exec convex dev` syncs to; default target for `convex env`, `convex run`, `convex logs` (without flags).
 - **Production** — what users rely on; only change when you intend to ship backend changes or prod-specific config.
 
-Stripe, Vertex, WorkOS (`WORKOS_CLIENT_ID` for JWT validation), and hosting metadata such as `SITE_URL` are **per deployment**. See also [STRIPE-CONVEX-ENVIRONMENTS.md](./STRIPE-CONVEX-ENVIRONMENTS.md) and [Authentication](../product/authentication.md) (local dev).
+Stripe, Vertex, Clerk (`CLERK_JWT_ISSUER_DOMAIN` for JWT validation), and hosting metadata such as `SITE_URL` are **per deployment**. See also [STRIPE-CONVEX-ENVIRONMENTS.md](./STRIPE-CONVEX-ENVIRONMENTS.md) and [Authentication](../product/authentication.md) (local dev).
 
 ---
 
@@ -56,7 +56,7 @@ Stripe, Vertex, WorkOS (`WORKOS_CLIENT_ID` for JWT validation), and hosting meta
 
 This repo follows **split deploys** (see [VERCEL-DEPLOYMENT.md](./VERCEL-DEPLOYMENT.md)):
 
-- **Vercel** — SvelteKit frontend. `PUBLIC_*` for the browser **plus** the `WORKOS_*` / optional `SENTRY_DSN` allowlist for AuthKit (synced from Doppler). Stripe/Vertex secrets stay on Convex only.
+- **Vercel** — SvelteKit frontend. `PUBLIC_*` for the browser **plus** `CLERK_SECRET_KEY` / optional `SENTRY_DSN` for Clerk (synced from Doppler). Stripe/Vertex secrets stay on Convex only.
 - **Convex** — All backend secrets, webhooks, and HTTP actions.
 
 Convex’s Vercel guide also describes an **integrated** workflow: build command `npx convex deploy --cmd 'npm run build'` plus `CONVEX_DEPLOY_KEY` on Vercel ([Using Convex with Vercel](https://docs.convex.dev/production/hosting/vercel)). Celstate may still deploy Convex **manually** from the machine; the same **prod vs preview vs dev** separation rules apply.

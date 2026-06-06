@@ -1,5 +1,5 @@
 /**
- * Validates WorkOS AuthKit + optional server Sentry env for SvelteKit (Vercel runtime).
+ * Validates Clerk Auth + optional server Sentry env for SvelteKit (Vercel runtime).
  *
  * Usage (recommended before prod deploy):
  *   doppler run --project celstate --config prd -- pnpm check:kit-server-env
@@ -12,31 +12,28 @@
 import { mergedEnvForScripts } from "../lib/env-files.js";
 
 const REQUIRED_KIT = [
-	"WORKOS_CLIENT_ID",
-	"WORKOS_API_KEY",
-	"WORKOS_REDIRECT_URI",
-	"WORKOS_COOKIE_PASSWORD",
+	"CLERK_SECRET_KEY",
+	"PUBLIC_CLERK_PUBLISHABLE_KEY",
+	"CLERK_JWT_ISSUER_DOMAIN",
 ] as const;
 
 function assertNonEmpty(name: string, value: string | undefined): string | null {
 	const v = value?.trim();
 	if (!v) return `missing ${name}`;
-	if (name === "WORKOS_CLIENT_ID" && !v.startsWith("client_")) {
-		return `${name} must start with client_`;
+	if (name === "CLERK_SECRET_KEY" && !v.startsWith("sk_test_") && !v.startsWith("sk_live_")) {
+		return `${name} must start with sk_test_ or sk_live_`;
 	}
-	if (name === "WORKOS_API_KEY" && !v.startsWith("sk_")) {
-		return `${name} must start with sk_ (test or live)`;
+	if (name === "PUBLIC_CLERK_PUBLISHABLE_KEY" && !v.startsWith("pk_test_") && !v.startsWith("pk_live_")) {
+		return `${name} must start with pk_test_ or pk_live_`;
 	}
-	if (name === "WORKOS_REDIRECT_URI") {
+	if (name === "CLERK_JWT_ISSUER_DOMAIN") {
 		try {
 			const u = new URL(v);
+			if (u.protocol !== "https:") return `${name}: must use https://`;
 			if (u.username || u.password || u.hash) return `${name}: must not include userinfo or hash`;
 		} catch {
 			return `${name}: not a valid URL`;
 		}
-	}
-	if (name === "WORKOS_COOKIE_PASSWORD" && v.length < 32) {
-		return `${name}: must be at least 32 characters`;
 	}
 	return null;
 }
@@ -63,13 +60,13 @@ function main() {
 	}
 
 	if (errors.length > 0) {
-		console.error("❌ SvelteKit server env (WorkOS AuthKit) validation failed:\n");
+		console.error("❌ SvelteKit server env (Clerk) validation failed:\n");
 		for (const e of errors) console.error(`   - ${e}`);
 		console.error("\n   Set names in Doppler, then `pnpm secrets:sync:vercel`.\n");
 		process.exit(1);
 	}
 
-	console.log("✅ WorkOS AuthKit server env OK (required WORKOS_* present; SENTRY_DSN optional).\n");
+	console.log("✅ Clerk server env OK (required CLERK_* present; SENTRY_DSN optional).\n");
 }
 
 main();

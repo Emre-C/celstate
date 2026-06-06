@@ -1,34 +1,32 @@
 #!/usr/bin/env node
 /**
- * Validate Doppler **prd** contains the WorkOS AuthKit server secrets before a prod release.
+ * Validate Doppler **prd** contains the Clerk Auth server secrets before a prod release.
  * Reads vault JSON in-memory only (never prints values). Used by `scripts/release-production.mjs`.
  *
  * Usage:
  *   node scripts/verify-doppler-kit-env.mjs [--project=celstate] [--config=prd]
  */
 
-import { downloadSecrets, findDopplerBinary } from "./secrets/lib/doppler.mjs";
+import { downloadSecrets, findDopplerBinary } from "../secrets/lib/doppler.mjs";
 
 /** @param {string} name @param {string | undefined} value @returns {string | null} */
 function assertNonEmpty(name, value) {
   const v = value?.trim();
   if (!v) return `missing ${name}`;
-  if (name === "WORKOS_CLIENT_ID" && !v.startsWith("client_")) {
-    return `${name} must start with client_`;
+  if (name === "CLERK_SECRET_KEY" && !v.startsWith("sk_test_") && !v.startsWith("sk_live_")) {
+    return `${name} must start with sk_test_ or sk_live_`;
   }
-  if (name === "WORKOS_API_KEY" && !v.startsWith("sk_")) {
-    return `${name} must start with sk_`;
+  if (name === "PUBLIC_CLERK_PUBLISHABLE_KEY" && !v.startsWith("pk_test_") && !v.startsWith("pk_live_")) {
+    return `${name} must start with pk_test_ or pk_live_`;
   }
-  if (name === "WORKOS_REDIRECT_URI") {
+  if (name === "CLERK_JWT_ISSUER_DOMAIN") {
     try {
       const u = new URL(v);
+      if (u.protocol !== "https:") return `${name}: must use https://`;
       if (u.username || u.password || u.hash) return `${name}: must not include userinfo or hash`;
     } catch {
       return `${name}: not a valid URL`;
     }
-  }
-  if (name === "WORKOS_COOKIE_PASSWORD" && v.length < 32) {
-    return `${name}: must be at least 32 characters`;
   }
   return null;
 }
@@ -52,10 +50,9 @@ function parseArgs(argv) {
 }
 
 const REQUIRED_KIT = /** @type {const} */ ([
-  "WORKOS_CLIENT_ID",
-  "WORKOS_API_KEY",
-  "WORKOS_REDIRECT_URI",
-  "WORKOS_COOKIE_PASSWORD",
+  "CLERK_SECRET_KEY",
+  "PUBLIC_CLERK_PUBLISHABLE_KEY",
+  "CLERK_JWT_ISSUER_DOMAIN",
 ]);
 
 function main() {
@@ -100,14 +97,14 @@ function main() {
   }
 
   if (errors.length > 0) {
-    console.error(`❌ Doppler kit env (${project}/${config}) validation failed:\n`);
+    console.error(`❌ Doppler Clerk env (${project}/${config}) validation failed:\n`);
     for (const e of errors) console.error(`   - ${e}`);
     console.error("\n   Fix names in Doppler, then re-run release.\n");
     process.exit(1);
   }
 
   console.error(
-    `✅ Doppler ${project}/${config}: WorkOS AuthKit server secrets present (SENTRY_DSN optional).\n`,
+    `✅ Doppler ${project}/${config}: Clerk Auth server secrets present (SENTRY_DSN optional).\n`,
   );
 }
 

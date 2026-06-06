@@ -18,8 +18,8 @@
 //   - Temp file is mode 0o600, deleted in a `finally` block.
 //
 // What ends up in Doppler dev:
-//   * Auto-rotated names (JWT, WorkOS cookie password, Verification Runner,
-//     QA Reset) are SKIPPED here. Run `pnpm secrets:rotate:dev` afterwards.
+//   * Auto-rotated names (JWT, Verification Runner, QA Reset) are SKIPPED here.
+//     Run `pnpm secrets:rotate:dev` afterwards.
 //   * Apple OAuth credentials are NOT required for SITE_URL=http://localhost,
 //     so they are SKIPPED.
 //   * Legacy `.env` names are renamed to canonical names where applicable.
@@ -40,7 +40,6 @@ const dryRun = process.argv.includes("--dry-run");
 const AUTO_ROTATED = new Set([
   "JWT_PRIVATE_KEY",
   "JWKS",
-  "WORKOS_COOKIE_PASSWORD",
   "VERIFICATION_RUNNER_SECRET",
   "QA_USER_RESET_SECRET",
 ]);
@@ -85,9 +84,9 @@ const DROP_NAMES = new Set([
 // flag remaining gaps after bootstrap so the operator knows what to add by
 // hand. Auto-rotated names are excluded because the rotate step handles them.
 const REQUIRED_FOR_DEV = [
-  "WORKOS_CLIENT_ID",
-  "WORKOS_API_KEY",
-  "WORKOS_REDIRECT_URI",
+  "CLERK_SECRET_KEY",
+  "PUBLIC_CLERK_PUBLISHABLE_KEY",
+  "CLERK_JWT_ISSUER_DOMAIN",
   "PUBLIC_CONVEX_URL",
   "PUBLIC_POSTHOG_HOST",
   "PUBLIC_POSTHOG_KEY",
@@ -179,7 +178,7 @@ for (const [name, value] of Object.entries(legacy)) {
 }
 
 // 3c. Dev-specific overrides. SITE_URL must be the local origin so the app
-// and WorkOS AuthKit redirect URI match.
+// and Clerk sign-in URLs match PUBLIC_SITE_URL.
 devPayload.SITE_URL = "http://localhost:5173";
 devPayload.PUBLIC_SITE_URL = "http://localhost:5173";
 

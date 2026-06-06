@@ -1,8 +1,8 @@
-import type { ServerLoadEvent } from "@sveltejs/kit";
-import { getProtectedSessionBootstrap } from "$lib/auth/protected-session.js";
+import { buildClerkProps } from "svelte-clerk/server";
+import type { LayoutServerLoad } from "./$types";
 
-export const load = async ({ locals }: ServerLoadEvent) => {
+export const load: LayoutServerLoad = ({ locals }) => {
   return {
-    authState: getProtectedSessionBootstrap(locals.token),
+    ...buildClerkProps(locals.auth()),
   };
 };

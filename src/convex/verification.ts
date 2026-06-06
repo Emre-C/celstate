@@ -38,7 +38,7 @@ export const getCanaryPrincipalById = internalQuery({
       destructive: principal.destructive,
       email: principal.email,
       name: principal.name,
-      workosUserId: principal.workosUserId,
+      clerkUserId: principal.clerkUserId,
       minimumCredits: principal.minimumCredits,
       appUserId: principal.appUserId,
     };
@@ -72,25 +72,20 @@ export const upsertCanaryPrincipal = internalMutation({
       );
     }
 
-    // Fallback: if the canary principal was previously provisioned it stores
-    // the bound workosUserId. Use that when email is missing from the user
-    // row (e.g., WorkOS default JWT templates omit the email claim).
     if (!appUser) {
       const existingPrincipal = await ctx.db
         .query("canaryPrincipals")
         .withIndex("by_principal_id", (q) => q.eq("principalId", args.principalId))
         .first();
 
-      if (existingPrincipal?.workosUserId) {
+      if (existingPrincipal?.clerkUserId) {
         appUser = await ctx.db
           .query("users")
-          .withIndex("by_workos_user", (q) =>
-            q.eq("workosUserId", existingPrincipal.workosUserId),
+          .withIndex("by_clerk_user", (q) =>
+            q.eq("clerkUserId", existingPrincipal.clerkUserId),
           )
           .first();
 
-        // If we recovered by workosUserId but the user row lacks an email,
-        // patch it now so future email lookups succeed.
         if (appUser && !appUser.email) {
           await ctx.db.patch(appUser._id, { email: cfg.email });
           appUser = { ...appUser, email: cfg.email };
@@ -101,13 +96,13 @@ export const upsertCanaryPrincipal = internalMutation({
     if (!appUser) {
       throw new Error(
         `Canonical app user not found for ${cfg.email}` +
-          " (and no existing canary principal workosUserId to fallback).",
+          " (and no existing canary principal clerkUserId to fallback).",
       );
     }
 
-    if (!appUser.workosUserId) {
+    if (!appUser.clerkUserId) {
       throw new Error(
-        `Canary user ${cfg.email} has no workosUserId — complete one WorkOS AuthKit sign-in so Convex can bind provider subject.`,
+        `Canary user ${cfg.email} has no clerkUserId — complete one Clerk sign-in so Convex can bind provider subject.`,
       );
     }
     if ((appUser.credits ?? 0) < cfg.minimumCredits) {
@@ -132,7 +127,7 @@ export const upsertCanaryPrincipal = internalMutation({
         destructive: cfg.destructive,
         email: cfg.email,
         name: cfg.name,
-        workosUserId: appUser.workosUserId,
+        clerkUserId: appUser.clerkUserId,
         minimumCredits: cfg.minimumCredits,
         appUserId: appUser._id,
         updatedAt: now,
@@ -147,7 +142,7 @@ export const upsertCanaryPrincipal = internalMutation({
       email: cfg.email,
       name: cfg.name,
       minimumCredits: cfg.minimumCredits,
-      workosUserId: appUser.workosUserId,
+      clerkUserId: appUser.clerkUserId,
       appUserId: appUser._id,
       createdAt: now,
       updatedAt: now,

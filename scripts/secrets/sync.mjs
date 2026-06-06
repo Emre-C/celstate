@@ -13,7 +13,7 @@
 //
 // Vercel target:
 //   Syncs every PUBLIC_* name plus a fixed allowlist of SvelteKit **server** secrets
-//   (WorkOS AuthKit + optional SENTRY_DSN). Backend-only secrets stay on Convex.
+//   (Clerk Auth + optional SENTRY_DSN). Backend-only secrets stay on Convex.
 //   Production / development: `vercel env rm` then `vercel env add --value …`.
 //   Preview: REST POST /v10/projects/{id}/env?upsert=true with gitBranch=null (CLI
 //   cannot target all Preview branches non-interactively on Windows — see #15763).
@@ -32,12 +32,9 @@ import { randomUUID } from "node:crypto";
 
 import { downloadSecrets, findDopplerBinary } from "./lib/doppler.mjs";
 
-/** Non-PUBLIC secrets required on Vercel for `@workos/authkit-sveltekit` + server Sentry. */
+/** Non-PUBLIC secrets required on Vercel for Clerk Auth + server Sentry. */
 const VERCEL_SERVER_SECRET_ALLOWLIST = /** @type {const} */ ([
-  "WORKOS_CLIENT_ID",
-  "WORKOS_API_KEY",
-  "WORKOS_REDIRECT_URI",
-  "WORKOS_COOKIE_PASSWORD",
+  "CLERK_SECRET_KEY",
   "SENTRY_DSN",
 ]);
 

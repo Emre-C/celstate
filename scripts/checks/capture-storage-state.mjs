@@ -5,7 +5,7 @@
  * etc.) and blocked at OAuth. Real Chrome with --remote-debugging-port enabled looks
  * like a normal browser to web pages — the CDP port is server-side and invisible.
  * We attach Playwright after sign-in completes and dump cookies + origins in the exact
- * shape `probeWorkOsAuthenticatedBundle` (scripts/production-verification.ts) expects.
+ * shape `probeClerkProtectedRoute` (scripts/ops/production-verification.ts) expects.
  *
  * Usage:
  *   1. Launch Chrome with: --remote-debugging-port=9222 --user-data-dir=<throwaway dir>
@@ -56,7 +56,7 @@ for (const o of celstateOrigins) {
 await browser.close(); // CDP: disconnects Playwright client, Chrome stays running
 
 const sessionCookieCandidates = celstateCookies.filter((c) =>
-  /workos|session|auth/i.test(c.name),
+  /__session|session|clerk|auth/i.test(c.name),
 );
 if (celstateCookies.length === 0) {
   console.error("\n[capture] FATAL: no cookies found for celstate.com — sign-in did not happen in this Chrome instance.");
@@ -64,7 +64,7 @@ if (celstateCookies.length === 0) {
 }
 if (sessionCookieCandidates.length === 0) {
   console.error("\n[capture] WARNING: no session-shaped cookie found among celstate.com cookies.");
-  console.error("[capture] WorkOS AuthKit typically sets HTTP-only session cookies (names vary by kit version).");
+  console.error("[capture] Clerk typically sets HTTP-only session cookies (e.g. __session; names vary by SDK version).");
   console.error("[capture] The file was still written; verify it works before trusting it.");
   process.exit(3);
 }

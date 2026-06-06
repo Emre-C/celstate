@@ -8,7 +8,7 @@ Use this when you need the QA account to behave like a brand-new user again for 
 
 The shipped reset path deletes the QA user's:
 
-- app user row (`users` — Convex data only; **WorkOS** sessions and hosted users are **not** deleted here)
+- app user row (`users` — Convex data only; **Clerk** sessions and hosted users are **not** deleted here)
 - generations and generation ops events
 - MCP API keys
 - credit grants, pending checkouts, and purchase settlements
@@ -57,7 +57,7 @@ Set these on the **production** deployment only:
 
 1. reads `QA_USER_RESET_SECRET` from `convex env get ... --prod`
 2. sends the secret plus the hardcoded QA email to `qaUserReset:resetAllowlistedTestUser`
-3. prints a completion message telling you to sign in again via **WorkOS AuthKit** (e.g. Google through WorkOS)
+3. prints a completion message telling you to sign in again via **Clerk** (e.g. Google)
 
 The internal mutation refuses to run when:
 
@@ -77,7 +77,7 @@ You can also invoke it from the Convex dashboard if needed.
 
 ## After Reset
 
-1. Sign in again through **WorkOS AuthKit** for the QA account (e.g. Google).
+1. Sign in again through **Clerk** for the QA account (e.g. Google).
 2. Confirm the app creates a fresh user row.
 3. Re-run the flow you are validating, such as initial credits, Stripe checkout, or MCP API key creation.
 

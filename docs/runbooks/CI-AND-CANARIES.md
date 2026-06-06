@@ -25,7 +25,7 @@ Other notes:
 - **Playwright:** The workflow runs `pnpm exec playwright install chromium --with-deps` so E2E can launch Chromium on the runner.
 - **Public env in CI:** The workflow sets placeholder `PUBLIC_*` values so `pnpm verify` can build without real Convex/PostHog secrets. **`PUBLIC_SITE_URL` is `http://127.0.0.1:4174`** so the built canonical origin matches the preview URL used by Playwright (see [PUBLIC-ENV-CHECKLIST.md](./PUBLIC-ENV-CHECKLIST.md), rule **4. CI**).
 - **E2E:** `playwright.config.ts` starts **`vite preview`** on port **4174**; `e2e/marketing-landing.spec.ts` loads `/` and fails if the console reports Svelte **`hydration_mismatch`** or if primary hero CTAs are missing.
-- **Auth-boundary PRs** — CI does not validate live WorkOS JWT claim shape. Use the checklist in [`authentication.md`](../product/authentication.md) (real sign-in, token inspection, `pnpm check:kit-server-env`) before merging auth changes.
+- **Auth-boundary PRs** — CI does not validate live Clerk JWT claim shape. Use the checklist in [`authentication.md`](../product/authentication.md) (real sign-in, token inspection, `pnpm check:kit-server-env`) before merging auth changes.
 
 ## Auth Canary (`/.github/workflows/auth-canary.yml`)
 
@@ -43,7 +43,7 @@ If the bare domain (`https://example.com`) **308-redirects** to `https://www.exa
 
 ### Auth route resilience
 
-`/api/auth/*` is served by **SvelteKit** (WorkOS AuthKit). Operational notes:
+`/api/auth/*` is served by **SvelteKit** (Clerk). Operational notes:
 
 - Prefer **stable 200 / 401** final statuses for `/api/auth/session` JSON probes after redirects.
 - Repeated **5xx** on auth paths should raise via `src/lib/server/auth-alerts.ts` (Sentry + ops webhook when configured).
@@ -79,7 +79,7 @@ Machine-evaluable **release evidence** for production: runner `scripts/productio
 - **Variables (optional)**
   - **`AUTH_CANARY_REQUIRE_PROTECTED_ROUTE`** — Repository variable; aligns with the runner’s default (protected-route proof expected for deploy/scheduled triggers).
 
-- **External setup** — Vercel (or similar) **deployment protection** can gate promotion on this workflow’s check status; WorkOS canary users and one-time principal bootstrap are described in the [formal spec §10.3](../product/production-confidence.md#103-remaining-external-configuration).
+- **External setup** — Vercel (or similar) **deployment protection** can gate promotion on this workflow’s check status; Clerk canary users and one-time principal bootstrap are described in the [formal spec §10.3](../product/production-confidence.md#103-remaining-external-configuration).
 
 ## Optional hardening (not in repo by default)
 

@@ -66,7 +66,7 @@ Vercel env vars are managed in Doppler (`celstate/prd` config, names starting
 with `PUBLIC_`). To set or change them:
 
 1. Edit the value in the [Doppler dashboard](https://dashboard.doppler.com/workplace/996778d64be8993d9993/projects/celstate/configs/prd) or via `doppler secrets set NAME=value`.
-2. Run `pnpm secrets:sync:vercel` to push `PUBLIC_*` **and** the WorkOS/Sentry server allowlist from Doppler `prd` into Vercel production.
+2. Run `pnpm secrets:sync:vercel` to push `PUBLIC_*` **and** the Clerk/Sentry server allowlist from Doppler `prd` into Vercel production.
 
 Required `PUBLIC_*` names (see [PUBLIC-ENV-CHECKLIST.md](./PUBLIC-ENV-CHECKLIST.md)):
 - `PUBLIC_CONVEX_URL` — origin-only Convex prod URL (e.g. `https://foo-bar-123.convex.cloud` — no trailing slash, no path).
@@ -75,7 +75,7 @@ Required `PUBLIC_*` names (see [PUBLIC-ENV-CHECKLIST.md](./PUBLIC-ENV-CHECKLIST.
 
 **Verify**: `vercel env ls` shows the expected names for Production. Initial onboarding may use `vercel env add NAME production` once if Doppler is empty; thereafter, Doppler is the source of truth.
 
-No Convex-only secrets (Stripe, Vertex, verification runner, etc.) in Vercel except the **`WORKOS_*` / `SENTRY_DSN` allowlist** required by `@workos/authkit-sveltekit` (synced from Doppler via `pnpm secrets:sync:vercel`).
+No Convex-only secrets (Stripe, Vertex, verification runner, etc.) in Vercel except the **`CLERK_SECRET_KEY` / `SENTRY_DSN` allowlist** required by Clerk (synced from Doppler via `pnpm secrets:sync:vercel`).
 
 ### 4. Add custom domain
 
@@ -89,7 +89,7 @@ No Convex-only secrets (Stripe, Vertex, verification runner, etc.) in Vercel exc
 - `vercel --prod`
 - **Verify**:  
   - Site loads at `https://celstate.com`.  
-  - Auth (WorkOS / Convex) and Stripe redirects work.  
+  - Auth (Clerk / Convex) and Stripe redirects work.  
   - Convex prod has `HOSTING_URL=https://celstate.com` so checkout return URLs are correct.
 
 ### 6. Optional: Skew protection

@@ -3,7 +3,6 @@ import {
 	AUTH_SESSION_RECOVERY_GRACE_PERIOD_MS,
 	beginUserSyncAttempt,
 	createInitialUserSyncStatus,
-	getProtectedSessionBootstrap,
 	getProtectedSessionRedirectPlan,
 	getProtectedSessionViewState,
 	getUserSyncAutoRetryDelayMs,
@@ -12,52 +11,14 @@ import {
 	isUserSyncInFlight,
 	markUserSyncFailure,
 	markUserSyncSuccess,
-	resolveProtectedSessionRequest,
 	shouldAutoRetryUserSync,
+	shouldSurfaceUserSyncError,
 	USER_SYNC_BACKOFF_BASE_MS,
 	USER_SYNC_MAX_AUTO_ATTEMPTS,
 	type UserSyncStatus
 } from './protected-session.js';
 
 describe('protected session', () => {
-	it('derives the server bootstrap snapshot from the request token', () => {
-		expect(getProtectedSessionBootstrap(undefined)).toEqual({
-			isAuthenticated: false
-		});
-
-		expect(getProtectedSessionBootstrap('token-123')).toEqual({
-			isAuthenticated: true
-		});
-	});
-
-	it('redirects unauthenticated protected routes to /auth with a redirect target', () => {
-		expect(
-			resolveProtectedSessionRequest({
-				pathname: '/app/credits',
-				search: '?plan=starter&source=nav',
-				token: undefined
-			})
-		).toEqual({
-			kind: 'redirect',
-			location: '/api/auth/initiate?returnTo=%2Fapp%2Fcredits%3Fplan%3Dstarter%26source%3Dnav'
-		});
-	});
-
-	it('returns the protected bootstrap snapshot when the server token exists', () => {
-		expect(
-			resolveProtectedSessionRequest({
-				pathname: '/app',
-				search: '',
-				token: 'token-123'
-			})
-		).toEqual({
-			kind: 'ready',
-			bootstrap: {
-				isAuthenticated: true
-			}
-		});
-	});
-
 	it('keeps the app visible while auth is revalidating after an authenticated session', () => {
 		expect(
 			getProtectedSessionViewState({
@@ -185,6 +146,7 @@ describe('user sync state machine', () => {
 		});
 		expect(hasUserSyncError(failed)).toBe(true);
 		expect(shouldAutoRetryUserSync(failed)).toBe(true);
+		expect(shouldSurfaceUserSyncError(failed)).toBe(false);
 		expect(getUserSyncErrorMessage(failed)).toBe('network blip');
 	});
 
@@ -215,6 +177,7 @@ describe('user sync state machine', () => {
 			autoRetryDelayMs: null
 		});
 		expect(shouldAutoRetryUserSync(exhausted)).toBe(false);
+		expect(shouldSurfaceUserSyncError(exhausted)).toBe(true);
 	});
 
 	it('lets a manual retry replace an exhausted error with a fresh running attempt', () => {

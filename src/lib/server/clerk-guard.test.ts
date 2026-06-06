@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { requireAuthKitSession } from "./authkit-guard.js";
+import { requireClerkSession } from "./clerk-guard.js";
 
-describe("requireAuthKitSession", () => {
+describe("requireClerkSession", () => {
 	it("redirects unauthenticated browser flows with pathname + query preserved", () => {
 		const event = {
 			url: new URL("https://celstate.test/app/team?invite=abc"),
 			locals: {
-				auth: { user: null },
+				auth: () => ({ userId: null }),
 			},
-		} as Parameters<typeof requireAuthKitSession>[0];
+		} as Parameters<typeof requireClerkSession>[0];
 
 		try {
-			requireAuthKitSession(event);
+			requireClerkSession(event);
 			expect.fail("expected redirect");
 		} catch (e: unknown) {
 			expect(e).toMatchObject({
@@ -21,16 +21,14 @@ describe("requireAuthKitSession", () => {
 		}
 	});
 
-	it("allows requests when AuthKit user is present", () => {
+	it("allows requests when Clerk user is present", () => {
 		const event = {
 			url: new URL("https://celstate.test/app"),
 			locals: {
-				auth: {
-					user: { id: "user_1" },
-				},
+				auth: () => ({ userId: "user_1" }),
 			},
-		} as Parameters<typeof requireAuthKitSession>[0];
+		} as Parameters<typeof requireClerkSession>[0];
 
-		expect(() => requireAuthKitSession(event)).not.toThrow();
+		expect(() => requireClerkSession(event)).not.toThrow();
 	});
 });

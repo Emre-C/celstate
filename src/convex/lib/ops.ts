@@ -61,7 +61,7 @@ export interface SecretRotationReminderContext {
 }
 
 export interface AuthAlertContext {
-	alertType: 'auth_endpoint_5xx' | 'auth_kit_api_error';
+	alertType: 'auth_endpoint_5xx' | 'clerk_api_error';
 	severity: Exclude<OpsAlertSeverity, 'info'>;
 	pathname?: string;
 	method?: string;
@@ -297,8 +297,8 @@ function buildSignupAlertFacts(context: SignupAlertContext): string[] {
 
 function buildAuthAlertTitle(context: AuthAlertContext): string {
 	switch (context.alertType) {
-		case 'auth_kit_api_error':
-			return 'Celstate WorkOS AuthKit API error';
+		case 'clerk_api_error':
+			return 'Celstate Clerk Auth API error';
 		default:
 			return 'Celstate auth endpoint returned repeated 5xx responses';
 	}

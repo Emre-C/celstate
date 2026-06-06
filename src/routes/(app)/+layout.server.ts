@@ -1,8 +1,8 @@
 import type { ServerLoadEvent } from "@sveltejs/kit";
-import { requireAuthKitSession } from "$lib/server/authkit-guard.js";
+import { requireClerkSession } from "$lib/server/clerk-guard.js";
 
 export const load = async (event: ServerLoadEvent) => {
-	requireAuthKitSession(event);
+	requireClerkSession(event);
 
 	return {
 		protectedSession: { isAuthenticated: true as const },

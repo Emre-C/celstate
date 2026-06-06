@@ -845,7 +845,7 @@ G9   CLOSED — creditPackPurchaseActions.refundCheckoutForCanary provides autom
 
 ```text
 EC1  Vercel deployment protection rules referencing the production-verification check status (external to repo).
-EC2  Canary WorkOS user accounts + app user rows must exist before first provisioning succeeds (one-time manual bootstrap).
+EC2  Canary Clerk user accounts + app user rows must exist before first provisioning succeeds (one-time manual bootstrap).
 EC3  GitHub secrets (VERIFICATION_RUNNER_SECRET, CONVEX_URL, AUTH_CANARY_BASE_URL, AUTH_CANARY_STORAGE_JSON) must be configured.
 ```
 

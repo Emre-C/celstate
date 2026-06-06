@@ -1,19 +1,21 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { PUBLIC_CONVEX_URL } from '$env/static/public';
 	import { setupConvex, setupAuth, useAuth, useConvexClient } from '@mmailaender/convex-svelte';
+	import { useClerkContext } from 'svelte-clerk';
 	import {
 		beginUserSyncAttempt,
 		createInitialUserSyncStatus,
 		getProtectedSessionRedirectPlan,
 		getProtectedSessionViewState,
 		getUserSyncErrorMessage,
-		hasUserSyncError,
 		isUserSyncInFlight,
 		markUserSyncFailure,
 		markUserSyncSuccess,
 		shouldAutoRetryUserSync,
+		shouldSurfaceUserSyncError,
 		type UserSyncStatus
 	} from '$lib/auth/protected-session.js';
 	import { api } from '../../convex/_generated/api.js';
@@ -23,22 +25,17 @@
 	setupConvex(PUBLIC_CONVEX_URL);
 
 	const serverAuthenticated = $derived(data.protectedSession.isAuthenticated);
+	const clerk = useClerkContext();
 
 	setupAuth(
 		() => ({
-			isLoading: false,
-			isAuthenticated: serverAuthenticated,
-			fetchAccessToken: async (_args) => {
-				// Token rotation is handled by `authKitHandle` on each server request — no refresh query flag.
-				const res = await fetch('/api/auth/access-token', { credentials: 'include' });
-				if (!res.ok) return null;
-				const body = (await res.json()) as { token?: string | null };
-				return body.token ?? null;
-			}
+			isLoading: !clerk.isLoaded,
+			isAuthenticated: clerk.auth.userId != null,
+			fetchAccessToken: async () => clerk.session?.getToken({ template: 'convex' }) ?? null
 		}),
 		// Convex `setupAuth` needs a one-shot SSR snapshot; not a reactive binding.
 		// svelte-ignore state_referenced_locally
-		{ initialState: { isAuthenticated: serverAuthenticated } }
+		browser ? undefined : { initialState: { isAuthenticated: serverAuthenticated } }
 	);
 
 	const auth = useAuth();
@@ -52,7 +49,7 @@
 			authIsAuthenticated: auth.isAuthenticated,
 			authIsLoading: auth.isLoading,
 			hasAuthenticatedSession,
-			hasSyncError: hasUserSyncError(userSyncStatus),
+			hasSyncError: shouldSurfaceUserSyncError(userSyncStatus),
 			redirectScheduled
 		})
 	);
@@ -102,7 +99,7 @@
 	});
 
 	$effect(() => {
-		if (!auth.isAuthenticated) {
+		if (auth.isLoading || !auth.isAuthenticated) {
 			return;
 		}
 		if (userSyncStatus.kind !== 'idle') {
@@ -113,7 +110,7 @@
 	});
 
 	$effect(() => {
-		if (!auth.isAuthenticated) {
+		if (auth.isLoading || !auth.isAuthenticated) {
 			return;
 		}
 		if (userSyncStatus.kind !== 'error' || userSyncStatus.autoRetryDelayMs === null) {

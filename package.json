@@ -13,7 +13,7 @@
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"test": "vitest run",
 		"test:watch": "vitest",
-		"test:auth": "vitest run scripts/canary/auth-canary-probe.test.ts src/convex/users.provisioning.test.ts src/lib/server/auth-alerts.test.ts src/lib/server/response.test.ts src/lib/server/canonical-site.test.ts src/lib/auth/redirect.test.ts src/lib/auth/protected-session.test.ts src/lib/server/authkit-guard.test.ts src/lib/server/access-token-response.test.ts src/lib/production-confidence/index.test.ts",
+		"test:auth": "vitest run scripts/canary/auth-canary-probe.test.ts src/convex/users.provisioning.test.ts src/lib/server/auth-alerts.test.ts src/lib/server/response.test.ts src/lib/server/canonical-site.test.ts src/lib/auth/redirect.test.ts src/lib/auth/protected-session.test.ts src/lib/server/clerk-guard.test.ts src/lib/production-confidence/index.test.ts",
 		"check:stripe-env": "tsx scripts/checks/check-stripe-env.ts",
 		"check:posthog-env": "tsx scripts/checks/check-posthog-env.ts",
 		"check:growth-tooling": "tsx scripts/ops/growth-ops.ts check",
@@ -82,11 +82,11 @@
 		"@posthog/convex": "^0.1.13",
 		"@sentry/sveltekit": "^10.45.0",
 		"@tailwindcss/vite": "^4.2.1",
-		"@workos/authkit-sveltekit": "^0.3.0",
 		"convex": "^1.38.0",
 		"posthog-js": "^1.363.1",
 		"sharp": "^0.34.5",
 		"stripe": "^20.4.1",
+		"svelte-clerk": "^1.1.9",
 		"tailwindcss": "^4.2.1",
 		"zod": "^3.25.76"
 	}

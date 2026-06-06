@@ -1,5 +1,5 @@
 /**
- * Validates public/env contract for SvelteKit + Convex + WorkOS AuthKit.
+ * Validates public/env contract for SvelteKit + Convex + Clerk.
  *
  * - Local: run `pnpm check:public-env` (reads `.env` / `.env.local` + shell).
  * - CI: same script; GitHub Actions must set the same PUBLIC_* names as Vercel

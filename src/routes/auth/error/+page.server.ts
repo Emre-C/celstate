@@ -4,15 +4,9 @@ import type { PageServerLoad } from "./$types";
 import * as Sentry from "@sentry/sveltekit";
 
 /**
- * WorkOS AuthKit SDK redirects callback failures to /auth/error?code=UPPERCASE_CODE.
- * This route maps those SDK codes to our product-facing lowercase error keys and
+ * Generic auth error recovery page.
+ * Maps upstream error codes to product-facing lowercase error keys and
  * redirects to /auth?error=... so the user sees a coherent recovery page.
- *
- * SDK codes observed from @workos/authkit-sveltekit:
- *   STATE_MISMATCH      — CSRF/state validation failed (often origin/callback mismatch)
- *   PKCE_COOKIE_MISSING — PKCE verifier cookie was not present at callback time
- *   ACCESS_DENIED       — User cancelled or denied the OAuth prompt
- *   AUTH_FAILED         — Generic authentication failure during callback handling
  */
 
 const SDK_CODE_TO_PRODUCT_CODE: Record<string, string> = {
@@ -51,7 +45,7 @@ export const load: PageServerLoad = async ({ url, request }) => {
 
 	if (severity === "error") {
 		console.error(JSON.stringify(logPayload));
-		Sentry.captureMessage("AuthKit callback failure", {
+		Sentry.captureMessage("Auth callback failure", {
 			level: "warning",
 			tags: {
 				auth_callback: "true",

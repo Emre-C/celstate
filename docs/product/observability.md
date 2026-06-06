@@ -332,7 +332,7 @@ upsertUserRecord(ctx, profile):
   RETURN user
 
 getAuthProviderFromConvexIdentity:
-  derive from WorkOS JWT identity fields (connection type / email heuristics in users.ts)
+  derive from Clerk JWT identity fields (connection type / email heuristics in users.ts)
 ```
 
 ---
@@ -606,7 +606,7 @@ rate_limit_scope: "process-local in-memory; not durable across instances or cold
 
 #### Convex auth / JWT
 
-Convex validates WorkOS JWTs in `auth.config.ts`. Session and OAuth UX live in SvelteKit (`@workos/authkit-sveltekit`).
+Convex validates Clerk JWTs in `auth.config.ts`. Session and OAuth UX live in SvelteKit (`svelte-clerk`).
 
 ---
 
@@ -689,7 +689,7 @@ convex:
   merge_duplicate_users: "src/convex/ops.ts" # mergeDuplicateUsers
   ops_queries_actions: "src/convex/ops.ts"
   ops_pure: "src/convex/lib/ops.ts"
-  auth_server_logs: "src/hooks.server.ts (WorkOS AuthKit)"
+  auth_server_logs: "src/hooks.server.ts (Clerk)"
   stripe_webhook_posthog_discord: "src/convex/http.ts"
   posthog_component_wrapper: "src/convex/posthog.ts"
   app_config: "src/convex/convex.config.ts"

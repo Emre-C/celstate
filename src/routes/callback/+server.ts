@@ -1,7 +1,6 @@
-import { authKit } from "@workos/authkit-sveltekit";
+import { redirect } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
 
-export const GET: RequestHandler = async (event) => {
-	const handler = authKit.handleCallback();
-	return handler(event);
+export const GET: RequestHandler = () => {
+	throw redirect(302, "/auth");
 };

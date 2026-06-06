@@ -41,7 +41,7 @@ That keeps client-built absolute URLs for SEO and Open Graph consistent with the
 | `pnpm check:public-env` | Validates URL shapes and Convex site derivation (no network). |
 | `pnpm check:ui-contracts` | Static guard for known-bad patterns (e.g. JSON-LD in `(marketing)/+page.svelte` that caused Svelte hydration mismatch). |
 | `pnpm check:convex-auth` | GETs `/api/auth/session` on `PUBLIC_SITE_URL` (needs a running SvelteKit server, e.g. `pnpm dev`). |
-| `pnpm check:kit-server-env` | Validates `WORKOS_*` (+ optional `SENTRY_DSN`) for AuthKit. |
+| `pnpm check:kit-server-env` | Validates `CLERK_*` (+ optional `SENTRY_DSN`) for Clerk. |
 | `pnpm test:e2e` | Playwright: production build + `vite preview`; asserts marketing `/` hydrates without `hydration_mismatch` (see `e2e/`). |
 | `pnpm verify` | Full gate: `check:public-env`, `check:ui-contracts`, `svelte-check`, Knip, jscpd, ESLint, Vitest, `vite build`, `test:e2e`. Wrapped with `PUBLIC_SITE_URL=http://127.0.0.1:4174` in `package.json` so the build matches E2E preview. |
 | `vercel env ls` | Confirm Preview **and** Production have `PUBLIC_*`. |

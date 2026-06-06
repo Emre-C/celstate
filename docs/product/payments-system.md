@@ -32,7 +32,7 @@ Supporting docs:
 
 ### 1. Sign-up (New Users)
 
-On first sign-in (e.g. Google via WorkOS AuthKit):
+On first sign-in (e.g. Google via Clerk):
 
 1. The app upserts the Convex `users` document (`upsertCurrentUser` → `upsertUserRecord` in `src/convex/users.ts`).
 2. On **insert** (brand-new user), the row is created with `credits: GENERATION_CONFIG.initialCredits` (3).

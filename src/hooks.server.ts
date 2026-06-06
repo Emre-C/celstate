@@ -1,35 +1,26 @@
 import { sequence } from "@sveltejs/kit/hooks";
 import * as Sentry from "@sentry/sveltekit";
 import type { Handle } from "@sveltejs/kit";
-import { authKitHandle, configureAuthKit } from "@workos/authkit-sveltekit";
+import { withClerkHandler } from "svelte-clerk/server";
 import { building, dev } from "$app/environment";
 import { PUBLIC_SITE_URL } from "$env/static/public";
 import { env } from "$env/dynamic/private";
+import { env as publicEnv } from "$env/dynamic/public";
 import { recordRepeatedAuthEndpoint5xx } from "$lib/server/auth-alerts.js";
 import {
 	createCanonicalRedirectResponse,
 	getCanonicalRedirectUrl,
 } from "$lib/server/canonical-site.js";
 import { withResponseHeader } from "$lib/server/response.js";
-import { AUTHKIT_SESSION_COOKIE } from "$lib/server/authkit-constants.js";
 
-const kitClientId = env.WORKOS_CLIENT_ID?.trim() ?? "";
-const kitApiKey = env.WORKOS_API_KEY?.trim() ?? "";
-const kitRedirectUri = env.WORKOS_REDIRECT_URI?.trim() ?? "";
-const kitCookiePassword = env.WORKOS_COOKIE_PASSWORD?.trim() ?? "";
+const clerkSecretKey = env.CLERK_SECRET_KEY?.trim() ?? "";
+const clerkPublishableKey = publicEnv.PUBLIC_CLERK_PUBLISHABLE_KEY?.trim() ?? "";
 
-if (!building && !dev && (!kitClientId || !kitApiKey || !kitRedirectUri || !kitCookiePassword)) {
+if (!building && !dev && (!clerkSecretKey || !clerkPublishableKey)) {
 	throw new Error(
-		"WorkOS AuthKit env missing: set WORKOS_CLIENT_ID, WORKOS_API_KEY, WORKOS_REDIRECT_URI, WORKOS_COOKIE_PASSWORD on the server runtime.",
+		"Clerk env missing: set CLERK_SECRET_KEY and PUBLIC_CLERK_PUBLISHABLE_KEY on the server runtime.",
 	);
 }
-
-configureAuthKit({
-	clientId: kitClientId,
-	apiKey: kitApiKey,
-	redirectUri: kitRedirectUri,
-	cookiePassword: kitCookiePassword,
-});
 
 const AUTH_LOG_SCOPE = "auth";
 
@@ -105,7 +96,7 @@ const celstateHandle: Handle = async ({ event, resolve }) => {
 		return createCanonicalRedirectResponse(canonicalRedirectUrl, event.locals.requestId);
 	}
 
-	event.locals.token = event.locals.auth?.accessToken;
+	const auth = event.locals.auth();
 	const observedRequest = isAuthObservedRequest(event.url);
 	const alertableRequest = isAuthAlertableRequest(event.url);
 
@@ -118,8 +109,8 @@ const celstateHandle: Handle = async ({ event, resolve }) => {
 			origin: event.request.headers.get("origin") ?? undefined,
 			referer: event.request.headers.get("referer") ?? undefined,
 			error: event.url.searchParams.get("error") ?? undefined,
-			hasAccessToken: event.locals.token !== undefined,
-			authUserPresent: event.locals.auth?.user != null,
+			authUserPresent: auth.userId != null,
+			sessionPresent: auth.sessionId != null,
 		});
 	}
 
@@ -174,62 +165,8 @@ const celstateHandle: Handle = async ({ event, resolve }) => {
 	}
 };
 
-/**
- * WorkOS AuthKit's `authKitHandle` validates the session at request start and,
- * if near expiry, refreshes it (`refreshedSessionData`). After the route handler
- * resolves (e.g. `/sign-out` clearing the cookie), `authKitHandle` appends the
- * refreshed session cookie to the response — overwriting the clear-cookie.
- *
- * This outermost hook runs *after* `authKitHandle` on the response path and
- * strips any re-set `wos-session` cookies when the route already emitted a
- * clear-cookie for the same name.
- */
-const signOutPostProcessHandle: Handle = async ({ event, resolve }) => {
-	const response = await resolve(event);
-
-	if (event.url.pathname !== "/sign-out" || response.status !== 302) {
-		return response;
-	}
-
-	const cookies = response.headers.getSetCookie?.() ?? [];
-	const sessionCookies = cookies.filter((c) => c.startsWith(`${AUTHKIT_SESSION_COOKIE}=`));
-	const clearCookies = sessionCookies.filter(
-		(c) => c.includes("Max-Age=0") || c.includes("Expires=Thu, 01 Jan 1970"),
-	);
-
-	// No conflict — pass through
-	if (clearCookies.length === 0 || sessionCookies.length === clearCookies.length) {
-		return response;
-	}
-
-	// Keep only non-session cookies + session clear-cookies (drop re-sets)
-	const cleaned = cookies.filter(
-		(c) =>
-			!c.startsWith(`${AUTHKIT_SESSION_COOKIE}=`) ||
-			c.includes("Max-Age=0") ||
-			c.includes("Expires=Thu, 01 Jan 1970"),
-	);
-
-	const headers = new Headers();
-	for (const [key, value] of response.headers) {
-		if (key.toLowerCase() !== "set-cookie") {
-			headers.set(key, value);
-		}
-	}
-	for (const c of cleaned) {
-		headers.append("Set-Cookie", c);
-	}
-
-	return new Response(response.body, {
-		status: response.status,
-		statusText: response.statusText,
-		headers,
-	});
-};
-
 export const handle: Handle = sequence(
-	signOutPostProcessHandle,
-	authKitHandle(),
+	withClerkHandler(),
 	Sentry.sentryHandle(),
 	celstateHandle,
 );

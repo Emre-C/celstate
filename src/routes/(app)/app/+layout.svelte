@@ -4,12 +4,14 @@
 	import { growthEvents } from '$lib/analytics/growth-events.js';
 	import { initPostHog, posthog } from '$lib/analytics/client-posthog';
 	import { useQuery } from '@mmailaender/convex-svelte';
+	import { useClerkContext } from 'svelte-clerk';
 	import { api } from '../../../convex/_generated/api.js';
 	import NavBar from '$lib/components/ui/NavBar.svelte';
 	import ApiKeyDialog from '$lib/components/ApiKeyDialog.svelte';
 
 	let { children } = $props();
 	const user = useQuery(api.users.getMe, {});
+	const clerk = useClerkContext();
 	const credits = $derived(user.data?.credits ?? 0);
 	const creditColor = $derived(
 		credits === 0 ? 'text-red-700' : credits <= 2 ? 'text-accent' : 'text-dim'
@@ -40,7 +42,7 @@
 		signingOut = true;
 		initPostHog();
 		posthog.reset();
-		window.location.href = '/sign-out';
+		await clerk.clerk?.signOut({ redirectUrl: '/' });
 	}
 </script>
 

@@ -2,10 +2,6 @@ import { buildAuthInitiateTarget } from '$lib/auth/redirect.js';
 
 export const AUTH_SESSION_RECOVERY_GRACE_PERIOD_MS = 1000;
 
-export type ProtectedSessionBootstrap = {
-	isAuthenticated: boolean;
-};
-
 type ProtectedSessionStatus = {
 	authIsAuthenticated: boolean;
 	authIsLoading: boolean;
@@ -17,44 +13,10 @@ export type ProtectedSessionViewState = ProtectedSessionStatus & {
 	redirectScheduled: boolean;
 };
 
-export type ProtectedSessionRequestResult =
-	| { kind: 'ready'; bootstrap: ProtectedSessionBootstrap }
-	| { kind: 'redirect'; location: string };
-
 export type ProtectedSessionRedirectPlan =
 	| { kind: 'none' }
 	| { kind: 'immediate'; location: string }
 	| { kind: 'delayed'; location: string; delayMs: number };
-
-export const getProtectedSessionBootstrap = (
-	token: string | undefined
-): ProtectedSessionBootstrap => ({
-	isAuthenticated: token !== undefined
-});
-
-export const resolveProtectedSessionRequest = ({
-	pathname,
-	search,
-	token
-}: {
-	pathname: string;
-	search: string;
-	token: string | undefined;
-}): ProtectedSessionRequestResult => {
-	const bootstrap = getProtectedSessionBootstrap(token);
-
-	if (!bootstrap.isAuthenticated) {
-		return {
-			kind: 'redirect',
-			location: buildAuthInitiateTarget(pathname, search)
-		};
-	}
-
-	return {
-		kind: 'ready',
-		bootstrap
-	};
-};
 
 export const getProtectedSessionRedirectPlan = ({
 	pathname,
@@ -166,13 +128,21 @@ export const getUserSyncAutoRetryDelayMs = (nextAttempt: number): number | null 
 };
 
 const normalizeUserSyncErrorMessage = (error: unknown): string => {
-	if (error instanceof Error && error.message.trim().length > 0) {
-		return error.message;
+	const raw =
+		error instanceof Error ? error.message.trim()
+		: typeof error === 'string' ? error.trim()
+		: '';
+
+	if (!raw) {
+		return USER_SYNC_GENERIC_ERROR_MESSAGE;
 	}
-	if (typeof error === 'string' && error.trim().length > 0) {
-		return error;
+
+	// Clerk JWT template for Convex is missing or misconfigured.
+	if (/unauthorized/i.test(raw)) {
+		return 'Unable to initialize your account. Clerk JWT template for Convex may be missing — check dashboard configuration.';
 	}
-	return USER_SYNC_GENERIC_ERROR_MESSAGE;
+
+	return raw;
 };
 
 export const markUserSyncFailure = ({
@@ -197,6 +167,9 @@ export const isUserSyncInFlight = (status: UserSyncStatus): boolean => status.ki
 
 export const shouldAutoRetryUserSync = (status: UserSyncStatus): boolean =>
 	status.kind === 'error' && status.autoRetryDelayMs !== null;
+
+export const shouldSurfaceUserSyncError = (status: UserSyncStatus): boolean =>
+	status.kind === 'error' && status.autoRetryDelayMs === null;
 
 export const getUserSyncErrorMessage = (status: UserSyncStatus): string =>
 	status.kind === 'error' ? status.message : '';

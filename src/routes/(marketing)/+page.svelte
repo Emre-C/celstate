@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
-	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
+	import { useClerkContext } from 'svelte-clerk';
 	import { PUBLIC_SITE_URL } from '$env/static/public';
 	import { buildAuthInitiateTargetFromReturnTo } from '$lib/auth/redirect.js';
 	import { growthEvents } from '$lib/analytics/growth-events.js';
@@ -14,9 +14,10 @@
 	import SectionLabel from '$lib/components/ui/SectionLabel.svelte';
 
 	const heroImageSrc = '/images/celstate-a-majestic-phoenix-bird-in-midflight-win.png';
+	const clerk = useClerkContext();
 
 	const startHref = $derived(
-		$page.data.authState?.isAuthenticated
+		clerk.auth.userId != null
 			? '/app'
 			: buildAuthInitiateTargetFromReturnTo('/app')
 	);

@@ -44,18 +44,18 @@ from Doppler via the scripts in [`scripts/secrets/`](../../scripts/secrets/).
      local dev: `doppler run -- pnpm dev` reads dev directly
 ```
 
-- **Convex prod** receives all non-`PUBLIC_*` secrets (Stripe, Vertex, verification runner, `WORKOS_CLIENT_ID` for JWT validation, etc.) and reads them via `process.env.NAME`.
+- **Convex prod** receives all non-`PUBLIC_*` secrets (Stripe, Vertex, verification runner, `CLERK_JWT_ISSUER_DOMAIN` for JWT validation, etc.) and reads them via `process.env.NAME`.
 - **Convex dev** is the same shape but populated from Doppler `dev` and
   scoped to local development. Stripe is in test mode there.
 - **Vercel prod and Vercel preview** receive every `PUBLIC_*` name **plus** an
-  allowlisted set of **server** secrets required by `@workos/authkit-sveltekit`
-  (`WORKOS_*`) and optional `SENTRY_DSN`. Both targets are synced from Doppler
+  allowlisted set of **server** secrets required by Clerk
+  (`CLERK_SECRET_KEY`) and optional `SENTRY_DSN`. Both targets are synced from Doppler
   **`prd`** (preview deploys use prod Convex — see
   [Vercel: Preview vs Production](#vercel-preview-vs-production)). Other backend-only
   secrets stay on Convex only.
 - **GitHub Actions** receives the canary's `VERIFICATION_RUNNER_SECRET` so the
   scheduled auth-canary workflow can probe the live site. CI also sets **placeholder**
-  `WORKOS_*` values so `vite preview` can load `hooks.server.ts` during `pnpm verify`
+  `CLERK_*` values so `vite preview` can load `hooks.server.ts` during `pnpm verify`
   (see `.github/workflows/ci.yml`).
 - **Local development** never receives a synced bundle — `doppler run` reads
   Doppler `dev` directly into the process environment for `pnpm dev`.
@@ -72,7 +72,7 @@ All under [`scripts/secrets/`](../../scripts/secrets/) with `pnpm` shortcuts.
 | `pnpm secrets:rotate-gcp -- --service-account=… --project=… --old-key-id=…` | Rotate a GCP service-account key end-to-end: create new via `gcloud`, validate JSON, upload to Doppler, delete old. Reads the active `doppler setup`; run after `doppler setup --config prd` for prod rotations. |
 | `pnpm secrets:sync:convex` | Push all non-`PUBLIC_*` secrets from Doppler **`prd`** to Convex prod via `convex env set --from-file --force` (atomic). Convex env **prune** is not supported (listing env prints secret values — see AGENTS.md). |
 | `pnpm secrets:sync:convex:dev` | Same, from Doppler **`dev`** to Convex dev. |
-| `pnpm secrets:sync:vercel` | Push `PUBLIC_*` **and** the WorkOS/Sentry server allowlist from Doppler **`prd`** to Vercel **production**. |
+| `pnpm secrets:sync:vercel` | Push `PUBLIC_*` **and** the Clerk/Sentry server allowlist from Doppler **`prd`** to Vercel **production**. |
 | `pnpm secrets:sync:vercel:preview` | Same for Vercel **preview**. |
 | `pnpm secrets:sync:gh` | Push `VERIFICATION_RUNNER_SECRET` from Doppler **`prd`** to GitHub Actions secrets in this repo. |
 
@@ -139,7 +139,7 @@ pnpm secrets:sync:vercel
 pnpm secrets:sync:vercel:preview
 ```
 
-JWT, WorkOS cookie password, and other auth-related rotations invalidate active sessions. Plan for a
+JWT, Clerk secret-key rotation, and other auth-related rotations invalidate active sessions. Plan for a
 brief window where users are signed out. The dev rotation only affects local
 machines and CI dev probes; it does not interrupt prod users.
 
@@ -244,7 +244,6 @@ Names belong to one of three categories. **Never** put values in this doc.
 | Name | Generator | What it signs / authorizes |
 |---|---|---|
 | `JWT_PRIVATE_KEY` + `JWKS` | `pnpm secrets:rotate jwt` | Legacy RSA keypair (older auth stacks). Safe to skip when Convex no longer references these names. |
-| `WORKOS_COOKIE_PASSWORD` | `pnpm secrets:rotate workos-cookie-password` | AuthKit session cookie encryption (`@workos/authkit-sveltekit`). |
 | `VERIFICATION_RUNNER_SECRET` | `pnpm secrets:rotate verification-runner-secret` | Bearer for the production canary HTTP routes. |
 | `QA_USER_RESET_SECRET` | `pnpm secrets:rotate qa-user-reset-secret` | Bearer for the QA reset endpoint (dev/stg only). |
 
@@ -258,9 +257,9 @@ Names belong to one of three categories. **Never** put values in this doc.
 |---|---|---|
 | `STRIPE_SECRET_KEY` | [Stripe Dashboard → API keys](https://dashboard.stripe.com/apikeys) | No public API rotation endpoint for live secret keys. |
 | `STRIPE_WEBHOOK_SECRET` | [Stripe Workbench → Webhooks](https://dashboard.stripe.com/webhooks) | Same. |
-| `WORKOS_CLIENT_ID` | [WorkOS Dashboard](https://dashboard.workos.com/) | Must match AuthKit + Convex `auth.config.ts`. |
-| `WORKOS_API_KEY` | WorkOS Dashboard | Secret key (`sk_…`). |
-| `WORKOS_REDIRECT_URI` | Your hosting config | Exact callback URL registered in WorkOS. |
+| `CLERK_SECRET_KEY` | [Clerk Dashboard](https://dashboard.clerk.com/) | Server secret (`sk_test_` / `sk_live_`). Rotate via Clerk dashboard or API. |
+| `CLERK_JWT_ISSUER_DOMAIN` | Clerk Dashboard → JWT templates | Issuer URL for the `convex` template; must match `auth.config.ts`. |
+| `PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk Dashboard | Publishable key (`pk_test_` / `pk_live_`); synced to Vercel as `PUBLIC_*`. |
 | `AUTH_GOOGLE_SECRET` | [Google Auth Platform clients](https://console.developers.google.com/auth/clients) | Google API does not expose client-secret rotation. |
 | `OPS_ALERT_WEBHOOK_URL` | Discord channel settings | Discord webhook URLs are immutable; rotation = delete + recreate. |
 
@@ -273,7 +272,7 @@ Names belong to one of three categories. **Never** put values in this doc.
 | `POSTHOG_API_KEY`, `POSTHOG_HOST` | Public ingest key + region. |
 | `OPS_ALERT_WEBHOOK_KIND` | `discord`/`slack` discriminator. |
 | `VERTEX_AI_PROJECT_ID`, `VERTEX_AI_LOCATION` | GCP project + region for Gemini. |
-| `PUBLIC_*` | Browser-visible config; synced to Vercel with the WorkOS/Sentry server allowlist (see `scripts/secrets/sync.mjs`). |
+| `PUBLIC_*` | Browser-visible config; synced to Vercel with the Clerk/Sentry server allowlist (see `scripts/secrets/sync.mjs`). |
 
 ## Threat model and design choices
 
