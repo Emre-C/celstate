@@ -1,5 +1,7 @@
 # Transparent Animation R&D Spike
 
+> **Readable brief:** [TRANSPARENT-ANIMATION-RD-SPIKE.html](./TRANSPARENT-ANIMATION-RD-SPIKE.html) — consolidated operating view (June 2026). Use the HTML for day-to-day iteration; this Markdown retains full chronological history.
+
 > **Status:** current source of truth for transparent-animation R&D.
 > **Intent:** keep the durable context, shipped spike artifacts, known failures, and next exploration paths. This document is not a product spec or production worker plan.
 
@@ -30,32 +32,41 @@ This layer matters because individual upstream video models will keep changing. 
 
 ## 2. Current R&D Verdict
 
-We are **not blocked on video generation** for the first mascot wedge. Existing generated videos are good enough for transparency R&D. Do not generate new provider videos unless a local alpha experiment proves the current sources cannot answer the question.
+We are **not blocked on video generation** for the flagship wedge. Existing generated videos are good enough for transparency R&D. Do not generate new provider videos unless a local alpha experiment proves the current sources cannot answer the question.
 
-We are currently blocked on **matte quality and foreground RGB repair**:
+The Alpha Compiler thesis is now **credible on the flagship clip**. Matte quality, detached-element recovery, and foreground RGB repair are no longer the primary blocker for that source:
 
-- the alpha can be generated;
-- the exports can carry alpha;
-- the mascot motion and identity are usable;
-- the remaining visible defect is green fringe/edge contamination and occasional foreground damage from aggressive keying.
+- MatAnyone2 temporal prior + chroma detached-element fusion is the right architecture;
+- projection decontamination (v6) replaced channel-clamp despill and reconstructs mixed fringe RGB instead of desaturating it;
+- color-line alpha fusion + matting-equation recovery (v7) further improves detached recall, soft-alpha preservation, and fine-strand fidelity on synthetic truth;
+- detached-element interiors preserve source color exactly; edge bands only are repaired;
+- WebM / ProRes / APNG exports still verify correctly.
 
-The current promoted review artifact is still under:
+The current promoted review artifact is under:
 
 ```text
 tmp/transparent-animation-spike/review/test3-trim1-sampled-green-s20/
   transparent-still.png
   transparent-still-on-cream.png
   transparent-still-on-red.png
+  transparent-still-on-texture.png
   transparent-animation.webm
   transparent-animation-prores.mov
   animation-on-cream-preview.mp4
-  animation-on-cream-contact-sheet.jpg
+  spill-heatmap.png
+  report.json
 ```
 
-These files came from the existing source video:
+Source:
 
 ```text
 tmp/transparent-animation-spike/runs/test3-trim1-sampled-green-s20/source.mp4
+```
+
+Stage that produced the promotion:
+
+```text
+tmp/transparent-animation-spike/runs/test3-trim1-sampled-green-s20/celstate-alpha-v7/
 ```
 
 Verification from the promoted review candidate:
@@ -63,18 +74,18 @@ Verification from the promoted review candidate:
 - `transparent-still.png` is RGBA, 1280x720.
 - `transparent-animation.webm` is VP9 WebM with `alpha_mode=1`, 1280x720, 9 seconds.
 - `transparent-animation-prores.mov` is ProRes with alpha (`yuva444p12le`), 1280x720, 216 frames.
+- `report.json` includes residual spill, detached-color fidelity, temporal-alpha delta, and projected-coverage metrics plus `spill-heatmap.png`.
 
-The promoted review candidate is not final quality. It is a credible baseline with visible green outline that proves the next work should focus on alpha refinement, not more video generation.
+**Next blocker:** real-prior eval leg (MatAnyone2/BRIA on synthetic truth) before production worker wiring; then generalization beyond the three synthetic scenarios (different key colors, soft alpha, non-mascot content).
 
-The latest local prior-fusion candidate exists at:
+**Phase 1 (2026-06) shipped:** v7 core mechanisms (color-line alpha fusion, matting-equation foreground recovery, evidence-gated detached path) moved all target metrics on synthetic truth and updated the baseline. Quality is now measurable, reproducible, and regression-checkable via the synthetic ground-truth eval (`pnpm alpha-eval run` / `compare`, section 3.14) with a committed baseline and unit-tested numerical core.
 
-```text
-tmp/transparent-animation-spike/runs/test3-trim1-sampled-green-s20/celstate-alpha-v4-prior-fusion/
-```
+Historical baselines remain useful for comparison:
 
-It is the strongest local result so far and is ready for visual review, but it is **not automatically promoted** until reviewed side-by-side. It preserves the mascot and leaf ring better than `v3-core-fringe` and avoids the v3 cyan/pink ghost doubles, while still leaving a visible green rim around tail, leaves, fur, and motion-blurred detail.
-
-The previous `v3-core-fringe` experiment remains a negative result: protected-core / fringe-only RGB repair preserved the mascot interior, but heuristic fringe RGB recovery created visible color ghosting around leaves, tail, and motion-blurred edges.
+- `celstate-alpha-v4-prior-fusion/` — first strong per-frame BRIA prior; visible green rim.
+- `celstate-alpha-v5-video-prior/` — MatAnyone2 subject matte + clamp/pull despill; better edges, residual leaf desaturation and tail tinge.
+- `celstate-alpha-v6-projection/` — projection decontamination; flagship promoted, synthetic truth gaps remain.
+- `celstate-alpha-v3-core-fringe/` — negative; chroma-equation fringe recovery created ghost doubles.
 
 ---
 
@@ -207,6 +218,159 @@ Result: **positive but not final.** v4 is visibly better than v3 and avoids the 
 
 Operational lesson: CPU `rembg` with `bria-rmbg` works but is slow for 216 frames on Windows. Future full-clip prior experiments should use WSL/CUDA, a persistent service, or a video-native model rather than repeatedly spinning up per-frame or folder batch work.
 
+### 3.10 Ran `v5-video-prior` with MatAnyone2 temporal matting
+
+Shape:
+
+```text
+source.mp4
+  -> first-frame BRIA mask seeds MatAnyone2
+  -> MatAnyone2 pha/ supplies subject matte
+  -> sharp per-frame chroma re-adds detached elements outside guard band
+  -> inward-color spill pull + core/residual despill on fringe only
+  -> export still + WebM + ProRes MOV + APNG + preview composites
+```
+
+Verification:
+
+- `webm.webm` VP9 `alpha_mode=1`, 1280x720, 216 frames.
+- `prores.mov` ProRes 4444 `yuva444p12le`.
+- Leaf coverage ~3.9% via chroma guard-band recovery.
+
+Result: **positive architecture, not final RGB repair.** MatAnyone2 eliminated harsh v4 silhouettes and preserved fur/leaf motion. Remaining defects were all variants of channel-clamp despill: faint tail tinge, desaturated leaves, muddy detached sparkles.
+
+Negative finding: MatAnyone2 `fgr/` frames are **not** predicted clean foreground. They are source composited over a fixed pale-green plate (`#78FF9B`). Un-compositing reproduces source exactly; do not use `fgr` as an RGB prior.
+
+### 3.11 Ran `v6-projection` with projection decontamination
+
+Shape:
+
+```text
+source.mp4 + MatAnyone2 pha/ + sharp chroma alpha
+  -> per-frame sure-background plate (outward fill from empty pixels)
+  -> subject inward reference fill from deep core
+  -> detached interior reference fill from chroma-opaque interiors
+  -> projection decontamination: out = src - t*(bg-ref) along spill axis
+  -> subject fringe + core band use subject ref; detached edge band uses detached ref; interiors untouched
+  -> QA metrics + spill heatmap + export
+```
+
+Commands:
+
+```bash
+pnpm transparent-animation-spike video-prior --run-id <id>          # seed mask + MatAnyone2 (when available)
+pnpm transparent-animation-spike celstate-alpha-v6-projection --run-id <id> [--prior-alpha-dir <pha-dir>]
+pnpm transparent-animation-spike promote-review --run-id <id> --stage celstate-alpha-v6-projection
+```
+
+Result: **promoted on flagship clip.** Tail spill materially reduced on cream/red composites; leaf and sparkle color restored vs v5; olive jacket interior unchanged. Detached interiors measure 0 RGB delta vs source on frame 96. Synthetic truth still showed gaps: detached recall ~0.38, soft binarization ~0.79, residual spill ~0.22, edge alpha MAE ~0.21.
+
+### 3.12 Shipped `v7` with color-line alpha fusion + matting-equation recovery
+
+Shape:
+
+```text
+source.mp4 + MatAnyone2 pha/ + sharp chroma alpha
+  -> reference seeding from key-free observations (filtered by core proximity)
+  -> per-frame background plate filled to closure (outward from empty + eroded near fg evidence)
+  -> color-line alpha estimate per pixel: src = a*ref + (1-a)*bg
+  -> fuse baseline alpha with color-line estimate (weight capped, upward corrections gated)
+  -> matting-equation foreground recovery: fg = src + ((1-a)/a) * (src - bg), gain capped
+  -> evidence-gated detached path (color evidence, not hard distance)
+  -> QA metrics + spill heatmap + export
+```
+
+Commands:
+
+```bash
+pnpm transparent-animation-spike video-prior --run-id <id>
+pnpm transparent-animation-spike celstate-alpha-v7 --run-id <id> [--prior-alpha-dir <pha-dir>]
+pnpm transparent-animation-spike promote-review --run-id <id> --stage celstate-alpha-v7
+```
+
+Result: **promoted on flagship clip and synthetic truth.** Detached alpha recall improved from ~0.38 to ~0.61 on `gt-sparks`; soft binarization dropped from ~0.79 to ~0.52; residual spill on `gt-smoke` dropped from ~0.22 to ~0.024; edge alpha MAE on `gt-tassels` improved from ~0.21 to ~0.11. The v7 stage is now the default in the spike harness and the `promote-review` default.
+
+### 3.13 Added generalization probes (superseded as quality evidence)
+
+Synthetic ffmpeg probes (`GP-01` blue screen, `GP-02` green glow) exercise key-agnostic projection without new provider video:
+
+```bash
+pnpm transparent-animation-spike generalization-probes --probe-duration 1
+```
+
+Probe runs use `per-frame-prior` (BRIA via rembg) when MatAnyone2 is unavailable. The loop is idempotent: rerunning reuses existing probe runs instead of failing on the existing directory.
+
+**Honest limitations (2026-06 review):** these probes overclaim. GP-01 draws a hard-edged disc, not genuinely detached sparks — its `leafAddedCoverage` is 0, so the detached-element path is never exercised. GP-02 is a mostly binary circle, not genuine soft smoke. `detachedColorFidelity` measures unchanged pixels in a passthrough branch, so it is a regression tripwire, **not** independent quality evidence. Use the synthetic ground-truth eval (3.13) as the canonical generalization evidence; the probes remain only as cheap smoke tests of the full spike plumbing.
+
+### 3.14 Phase 1: synthetic ground-truth eval + regression baseline
+
+The measurement loop lives in `scripts/spikes/alpha-compiler/`:
+
+```text
+core.ts      pure numerical core extracted from the spike (projection decontamination,
+             distance transforms, fills, v6 frame compiler) — no I/O, unit-tested
+truth.ts     deterministic synthetic RGBA truth generators (seeded PRNG)
+metrics.ts   truth-referenced per-frame metrics + aggregation with worst-frame pointers
+baseline.ts  baseline build/compare logic with explicit per-metric tolerances
+eval-cli.ts  pipeline CLI (`pnpm alpha-eval`)
+baselines/synthetic-eval.json   committed regression baseline
+alpha-compiler.test.ts          unit tests for all of the above
+```
+
+Pipeline per scenario: generate RGBA truth frames → composite over a noisy chroma plate → H.264 yuv420p round trip (crf 23) → ffmpeg `colorkey` chroma alpha → simulated matting prior (truth alpha minus detached elements, gaussian-blurred) → `createV6RgbaFrame` → compare output against stored truth.
+
+Scenarios (640x360, 48 frames, all deterministic):
+
+- `gt-sparks` — opaque subject shedding genuinely detached fading sparks (detached-element path, small soft geometry, green key);
+- `gt-smoke` — drifting soft smoke plumes + glowing ember (genuine partial alpha, green key);
+- `gt-tassels` — scarf band with thin swinging 1.5–3 px strands (fine repeated structures, blue key).
+
+Commands:
+
+```bash
+pnpm alpha-eval run                  # full eval, writes tmp/alpha-compiler-eval/report.json (runScope: full)
+pnpm alpha-eval run --scenario gt-sparks --frames 24   # partial loop (runScope: partial; overwrites report.json)
+pnpm alpha-eval compare              # full-report gate: exit 1 on regression or incomplete/unbaselined coverage
+pnpm alpha-eval compare --scenario gt-sparks   # scoped compare (required after partial run)
+pnpm alpha-eval compare --allow-unbaselined    # exploratory only — permits scenarios/metrics missing from baseline
+pnpm alpha-eval update-baseline      # rewrite the committed baseline after accepted changes
+```
+
+Partial vs full reports: every `run` writes top-level `report.json` with `runScope` and `includedScenarioIds`. A partial run replaces any previous full report — `compare` without `--scenario` fails on partial reports so stale full baselines cannot be mistaken for a fresh partial loop. Full `compare` also requires all canonical scenarios (`gt-sparks`, `gt-smoke`, `gt-tassels`) in `includedScenarioIds`.
+
+Per-frame artifact split (do not confuse these):
+
+| Path | Purpose |
+|------|---------|
+| `tmp/alpha-compiler-eval/<scenario>/frames.json` | Truth-referenced eval metrics (canonical regression evidence) |
+| `tmp/.../celstate-alpha-v6-projection/per-frame-metrics.json` | Spike-stage compiler stats only (`residualSpill`, `temporalAlphaDelta`, etc.); not compared to baseline |
+
+Per-frame metrics are persisted in `tmp/alpha-compiler-eval/<scenario>/frames.json`; aggregates carry `worstFrame` pointers so "where did this fail?" is answerable by frame number. The committed baseline pins both mean and worst-frame values for each metric. Metrics: `alphaMae`, `edgeAlphaMae`, `edgeRgbMae`, `fgRgbMae`, `falseTransparentRate`, `falseOpaqueRate`, `residualSpill` (key-dominance excess vs truth), `softAlphaMae` + `softBinarizationRate`, `detachedAlphaRecall` + `detachedRgbMae`, `temporalAlphaInstability` (output alpha change not explained by truth motion), and `priorAlphaMae` as the context floor for prior quality.
+
+Honest limitations:
+
+- The matting prior is **simulated** from truth (blurred, detached elements removed), not MatAnyone2/BRIA output. This isolates the compiler's contribution deterministically but does not measure real prior failure modes.
+- Baseline tolerances (`max(0.005, 15%)`) apply to both metric means and worst-frame values to absorb ffmpeg/x264/sharp version drift; the baseline records toolchain versions so cross-machine drift is diagnosable.
+
+v7 baseline numbers (2026-06, committed in `baselines/synthetic-eval.json`):
+
+| Scenario | Metric | v6 mean | v7 mean | Direction |
+|----------|--------|---------|---------|-----------|
+| `gt-sparks` | `detachedAlphaRecall` | ~0.38 | **0.61** | ↑ significantly |
+| `gt-sparks` | `softBinarizationRate` | ~0.79 | **0.52** | ↓ significantly |
+| `gt-sparks` | `residualSpill` | — | **0.004** | ↓ (negligible) |
+| `gt-smoke` | `residualSpill` | ~0.22 | **0.024** | ↓ significantly |
+| `gt-smoke` | `softAlphaMae` | — | **0.008** | ↓ (preserved) |
+| `gt-tassels` | `edgeAlphaMae` | ~0.21 | **0.11** | ↓ significantly |
+| `gt-tassels` | `falseOpaqueRate` | ~0.012 | **0.006** | ↓ significantly |
+
+The v7 improvements came from:
+- **Color-line alpha fusion** — per-pixel two-color model estimates alpha where the prior is soft or missing, with confidence-weighted blending capped at `COLOR_LINE_MAX_WEIGHT`;
+- **Matting-equation foreground recovery** — inverts straight-alpha compositing against the per-frame background plate, with gain capping to prevent noise amplification at low alpha;
+- **Evidence-gated detached path** — re-adds detached elements based on color evidence (not hard distance), preserving soft alpha where the prior deleted particles;
+- **Reference seed filtering** — key-free observations are only used as reference seeds when sufficiently distant from the prior core, preventing contaminated thick-structure edges from polluting the fill;
+- **Background plate erosion** — sure-background seeds are eroded near foreground evidence so faint halos cannot pollute the background plate used for matting recovery.
+
 ---
 
 ## 4. Current Failure Taxonomy
@@ -244,6 +408,18 @@ The harness can produce WebM with alpha metadata and ProRes MOV with alpha. The 
 The `v4-prior-fusion` run showed that a stronger external matte prior is a real quality jump, but it does not automatically solve foreground RGB. The prior can decide “foreground” correctly while the RGB still carries green-screen contamination from the generated source.
 
 This reframes the next blocker: the matte is closer, but the edge color still needs a safer RGB repair method than chroma-matting equation recovery.
+
+### 4.8 Channel-clamp despill ceiling (v5)
+
+Pull-to-inward-color and dominant-channel despill can only **desaturate** mixed pixels. They cannot reconstruct white fur or yellow leaves contaminated by the plate. Raising spill gain damages legitimate green-adjacent interiors (olive sweater).
+
+### 4.9 MatAnyone2 fgr is not foreground RGB
+
+Treating `fgr/` as a clean foreground prior fails. MatAnyone2 outputs source-over-green composites, not decontaminated RGB.
+
+### 4.10 Video-prior environment fragility
+
+`video-prior` seeds masks via `rembg bria-rmbg` reliably. MatAnyone2 via `uvx` currently fails to build on Windows (hatchling wheel collision). Use an existing `pha/` tree, Linux/CUDA, or `per-frame-prior` for probes.
 
 ---
 
@@ -317,45 +493,47 @@ Benchmark native-RGBA or background-removal providers only as comparators. The q
 
 ## 6. Current Recommended Next Experiment
 
-Do **not** generate a new video yet.
+Do **not** default to new provider video for the flagship clip — v7 is promoted.
 
-Use:
+**Real-prior eval leg:**
 
-```text
-tmp/transparent-animation-spike/runs/test3-trim1-sampled-green-s20/source.mp4
+The synthetic baseline uses a simulated prior (truth alpha minus detached, blurred). Before production worker wiring, run the same three scenarios with actual MatAnyone2/BRIA prior output to confirm the compiler improvements hold when the prior is imperfect.
+
+**Generalize (canonical loop):**
+
+```bash
+pnpm alpha-eval run
+pnpm alpha-eval compare
 ```
 
-The previous recommended off-the-shelf prior experiment has now been tried with `rembg` + `bria-rmbg` and produced the best local result so far:
+Success criteria for generalization:
 
-```text
-tmp/transparent-animation-spike/runs/test3-trim1-sampled-green-s20/celstate-alpha-v4-prior-fusion/
+- `pnpm alpha-eval compare` passes against the committed v7 baseline after harness-only changes;
+- compiler changes that claim quality wins must move the truth-referenced metrics (detached recall, soft binarization, residual spill, edge alpha MAE) in the right direction and update the baseline deliberately via `update-baseline`;
+- mechanism fixes only — no clip-specific or scenario-specific tuning.
+
+The legacy ffmpeg probes (`generalization-probes`) remain as plumbing smoke tests only — see 3.13 for why they are not quality evidence.
+
+**Video-prior reproducibility:**
+
+```bash
+pnpm transparent-animation-spike video-prior --run-id <id>
 ```
 
-Next experiment:
+On Windows when MatAnyone2 `uvx` build fails, reuse an existing `pha/` tree or run inference on Linux/CUDA and pass `--prior-alpha-dir`.
 
-```text
-existing source video
-  -> seed a video-aware matting prior from the v4/BRIA first-frame mask or a SAM2/Sammie-Roto mask
-  -> run MatAnyone2 or equivalent temporal video matting
-  -> fuse video prior + chroma into protected core / uncertain fringe / sure background
-  -> repair edge RGB using conservative inward-color / spill-confidence logic, not partial-alpha chroma equation recovery
-  -> export still + WebM + ProRes MOV
-  -> compare over cream, red, dark, and textured backgrounds
+**Spike harness default stage:**
+
+```bash
+pnpm transparent-animation-spike celstate-alpha-v7 --run-id <id> [--prior-alpha-dir <pha-dir>]
+pnpm transparent-animation-spike promote-review --run-id <id>  # default stage is now v7
 ```
-
-Success criteria:
-
-- less visible green outline than both the promoted review candidate and `v4-prior-fusion`;
-- preserve the v4 leaf-ring coverage without reintroducing v3 cyan/pink/red-green ghost doubles;
-- no new red/cream leakage through the mascot body, face, jacket, fur, or leaves;
-- stable enough animation to judge over the full 9-second clip;
-- WebM and ProRes alpha exports still verify correctly.
 
 Escalation rule:
 
-- If MatAnyone2 or another video-aware prior materially improves edge stability, Celstate should own the prior-fusion, RGB repair, QA, and export layer around it.
-- If the video-aware prior fully solves the clip with no Celstate layer, shift R&D toward provider benchmarking, workflow UX, and export QA instead of custom matting.
-- If setup cost blocks iteration, first optimize the local prior pipeline by running the prior in WSL/CUDA or as a persistent service; the Windows CPU `rembg` path is valid but too slow for rapid sweeps.
+- Celstate owns prior-fusion, projection decontamination, color-line fusion, matting-equation recovery, QA metrics, and export hardening around video mattes.
+- If a future native-RGBA provider fully solves quality with no compiler layer, shift R&D toward benchmarking, workflow UX, and export QA.
+- Per-frame BRIA (`per-frame-prior`) remains the fallback for probes and environments without MatAnyone2.
 
 ---
 ## 7. Durable Product Thesis

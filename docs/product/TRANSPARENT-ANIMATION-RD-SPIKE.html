@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>Transparent Animation R&amp;D — Operating Brief</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com" />
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+	<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+	<style>
+		:root {
+			--bg: #F5F3ED;
+			--text: #1C1917;
+			--dim: #78716C;
+			--accent: #C2410C;
+			--border: #E2DED6;
+			--surface: #FAF8F4;
+			--pass: #166534;
+			--pass-bg: #F0FDF4;
+			--warn: #92400E;
+			--warn-bg: #FFFBEB;
+			--fail: #991B1B;
+			--fail-bg: #FEF2F2;
+			--code-bg: #EDEAE3;
+		}
+
+		* { box-sizing: border-box; }
+
+		body {
+			margin: 0;
+			background: var(--bg);
+			color: var(--text);
+			font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+			font-size: 16px;
+			line-height: 1.65;
+			-webkit-font-smoothing: antialiased;
+		}
+
+		.wrap {
+			max-width: 52rem;
+			margin: 0 auto;
+			padding: 3rem 1.5rem 5rem;
+		}
+
+		header {
+			margin-bottom: 2.5rem;
+			padding-bottom: 1.5rem;
+			border-bottom: 1px solid var(--border);
+		}
+
+		h1, h2, h3 {
+			font-family: "Instrument Serif", Georgia, serif;
+			font-weight: 400;
+			font-style: italic;
+			line-height: 1.2;
+			color: var(--text);
+		}
+
+		h1 { font-size: 2.25rem; margin: 0 0 0.5rem; }
+		h2 { font-size: 1.65rem; margin: 2.75rem 0 1rem; }
+		h3 { font-size: 1.15rem; font-style: normal; font-weight: 600; margin: 1.75rem 0 0.75rem; }
+
+		.meta {
+			color: var(--dim);
+			font-size: 0.9rem;
+			margin: 0;
+		}
+
+		.meta a { color: var(--accent); }
+
+		p { margin: 0 0 1rem; }
+
+		ul, ol { margin: 0 0 1rem; padding-left: 1.35rem; }
+		li { margin-bottom: 0.35rem; }
+
+		a { color: var(--accent); }
+
+		.state-box {
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-left: 4px solid var(--accent);
+			padding: 1.25rem 1.5rem;
+			margin: 1.5rem 0 2rem;
+		}
+
+		.state-box h2 {
+			margin: 0 0 0.75rem;
+			font-size: 1.35rem;
+		}
+
+		.state-grid {
+			display: grid;
+			gap: 0.65rem;
+			margin: 0;
+			padding: 0;
+			list-style: none;
+		}
+
+		.state-grid li {
+			display: grid;
+			grid-template-columns: 9rem 1fr;
+			gap: 0.75rem;
+			margin: 0;
+			padding: 0.35rem 0;
+			border-bottom: 1px solid var(--border);
+		}
+
+		.state-grid li:last-child { border-bottom: none; }
+
+		.state-grid .label {
+			font-weight: 600;
+			font-size: 0.85rem;
+			text-transform: uppercase;
+			letter-spacing: 0.04em;
+			color: var(--dim);
+		}
+
+		.tag {
+			display: inline-block;
+			font-size: 0.75rem;
+			font-weight: 600;
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+			padding: 0.15rem 0.5rem;
+			border-radius: 2px;
+			vertical-align: middle;
+		}
+
+		.tag-pass { background: var(--pass-bg); color: var(--pass); }
+		.tag-warn { background: var(--warn-bg); color: var(--warn); }
+		.tag-fail { background: var(--fail-bg); color: var(--fail); }
+
+		pre, code {
+			font-family: ui-monospace, "Cascadia Code", "Segoe UI Mono", monospace;
+			font-size: 0.875rem;
+		}
+
+		pre {
+			background: var(--code-bg);
+			border: 1px solid var(--border);
+			padding: 1rem 1.15rem;
+			overflow-x: auto;
+			margin: 0 0 1rem;
+			line-height: 1.5;
+		}
+
+		code {
+			background: var(--code-bg);
+			padding: 0.1rem 0.35rem;
+			border-radius: 2px;
+		}
+
+		pre code { background: none; padding: 0; }
+
+		table {
+			width: 100%;
+			border-collapse: collapse;
+			margin: 0 0 1.25rem;
+			font-size: 0.9rem;
+		}
+
+		th, td {
+			text-align: left;
+			padding: 0.55rem 0.75rem;
+			border-bottom: 1px solid var(--border);
+			vertical-align: top;
+		}
+
+		th {
+			font-weight: 600;
+			font-size: 0.8rem;
+			text-transform: uppercase;
+			letter-spacing: 0.04em;
+			color: var(--dim);
+			background: var(--surface);
+		}
+
+		tr:last-child td { border-bottom: none; }
+
+		.num { font-variant-numeric: tabular-nums; }
+
+		.callout {
+			padding: 1rem 1.15rem;
+			margin: 1rem 0 1.25rem;
+			border: 1px solid var(--border);
+			background: var(--surface);
+		}
+
+		.callout-warn { border-left: 3px solid var(--warn); }
+		.callout-note { border-left: 3px solid var(--dim); }
+
+		.callout strong { display: block; margin-bottom: 0.35rem; }
+
+		.toc {
+			background: var(--surface);
+			border: 1px solid var(--border);
+			padding: 1.25rem 1.5rem;
+			margin-bottom: 2rem;
+		}
+
+		.toc h2 { margin-top: 0; font-size: 1.2rem; }
+		.toc ol { margin-bottom: 0; }
+		.toc a { text-decoration: none; }
+		.toc a:hover { text-decoration: underline; }
+
+		footer {
+			margin-top: 3rem;
+			padding-top: 1.5rem;
+			border-top: 1px solid var(--border);
+			color: var(--dim);
+			font-size: 0.875rem;
+		}
+	</style>
+</head>
+<body>
+	<div class="wrap">
+		<header>
+			<h1>Transparent Animation R&amp;D</h1>
+			<p class="meta">
+				Operating brief · June 2026 ·
+				<a href="TRANSPARENT-ANIMATION-RD-SPIKE.md">Markdown source</a> ·
+				Not a product spec or production worker plan
+			</p>
+		</header>
+
+		<section class="state-box" id="current-state">
+			<h2>Current state</h2>
+			<ul class="state-grid">
+				<li>
+					<span class="label">Flagship</span>
+					<span><span class="tag tag-pass">Promoted</span> v7 on <code>test3-trim1-sampled-green-s20</code> — visual QA pass, exports verified (WebM VP9 alpha, ProRes 4444, APNG)</span>
+				</li>
+				<li>
+					<span class="label">Generalization</span>
+					<span><span class="tag tag-pass">Improved</span> v7 moved all target metrics on synthetic truth — detached recall ↑, soft binarization ↓, residual spill ↓, edge alpha MAE ↓</span>
+				</li>
+				<li>
+					<span class="label">Measurement</span>
+					<span><span class="tag tag-pass">Phase 1 shipped</span> <code>pnpm alpha-eval run</code> / <code>compare</code> — truth-referenced metrics, per-frame artifacts, regression baseline, unit-tested v7 core</span>
+				</li>
+				<li>
+					<span class="label">Next work</span>
+					<span>Real-prior eval leg (MatAnyone2/BRIA on synthetic truth) before production wiring; then broader scenario generalization</span>
+				</li>
+				<li>
+					<span class="label">Not evidence</span>
+					<span>GP-01 / GP-02 ffmpeg probes — plumbing smoke tests only (see <a href="#probes">Generalization probes</a>)</span>
+				</li>
+			</ul>
+		</section>
+
+		<nav class="toc">
+			<h2>Contents</h2>
+			<ol>
+				<li><a href="#thesis">Product thesis</a></li>
+				<li><a href="#verdict">R&amp;D verdict</a></li>
+				<li><a href="#architecture">v6 architecture</a></li>
+				<li><a href="#v7">v7 architecture (promoted)</a></li>
+				<li><a href="#eval">Synthetic ground-truth eval (Phase 1)</a></li>
+				<li><a href="#baseline">Baseline numbers (v7)</a></li>
+				<li><a href="#history">Version history (v0–v7)</a></li>
+				<li><a href="#failures">Failure taxonomy</a></li>
+				<li><a href="#closed">Closed experiments</a></li>
+				<li><a href="#v7results">v7 results</a></li>
+				<li><a href="#next">Recommended next steps</a></li>
+				<li><a href="#risks">Strategic risks</a></li>
+			</ol>
+		</nav>
+
+		<section id="thesis">
+			<h2>Product thesis</h2>
+			<p>
+				Celstate already creates transparent still assets. The animation opportunity is the same promise with motion: short transparent assets creators can drop into OBS, editors, social video, and websites without rotoscoping, chroma-key cleanup, or manual compositing.
+			</p>
+			<p>
+				Celstate should <strong>not</strong> own video generation broadly. Celstate should own the conversion of generated motion into trustworthy transparent motion assets — regardless of upstream model (Veo, Runway, Kling, native-RGBA, third-party matting APIs).
+			</p>
+			<pre><code>generated RGB / chroma video
+  + rough matte or native alpha
+  + temporal signals
+  → refined foreground RGB
+  → stable alpha video
+  → confidence / artifact report
+  → WebM / ProRes MOV / APNG / still exports</code></pre>
+			<p><strong>First wedge:</strong> A humanoid mascot crosses a transparent canvas, turns back with personality, and wind-blown leaves or particles move coherently — exported as OBS/editor-ready alpha video.</p>
+		</section>
+
+		<section id="verdict">
+			<h2>R&amp;D verdict</h2>
+			<p>
+				We are <strong>not blocked on video generation</strong> for the flagship wedge. Existing generated videos are good enough for transparency R&amp;D. Do not generate new provider videos unless a local experiment proves current sources cannot answer the question.
+			</p>
+			<p>
+				The Alpha Compiler thesis is <strong>credible on the flagship clip</strong>: MatAnyone2 temporal prior + chroma detached-element fusion, projection decontamination (v6), and export plumbing all work. That clip is no longer the primary unknown.
+			</p>
+			<p>
+				The primary unknown is <strong>generalization</strong>: detached particles, genuine soft partial alpha, and fine repeated structures. Phase 1 measurement confirms v6 still fails these cases even with an ideal simulated prior — the mechanism gaps are real, scoped, and now regression-checkable.
+			</p>
+
+			<h3>Promoted review artifact</h3>
+			<pre><code>tmp/transparent-animation-spike/review/test3-trim1-sampled-green-s20/
+  transparent-still.png · transparent-animation.webm · transparent-animation-prores.mov
+  still-on-cream/red/dark/texture · spill-heatmap.png · report.json
+
+Source:  tmp/.../runs/test3-trim1-sampled-green-s20/source.mp4
+Stage:   tmp/.../runs/.../celstate-alpha-v6-projection/</code></pre>
+
+			<div class="callout callout-note">
+				<strong>Ops note</strong>
+				MatAnyone2 <code>uvx</code> install fails on Windows (hatchling wheel collision). Reuse an existing <code>pha/</code> tree, run inference on Linux/CUDA, or use <code>per-frame-prior</code> (BRIA via rembg) for probes.
+			</div>
+		</section>
+
+		<section id="architecture">
+			<h2>v6 architecture</h2>
+			<pre><code>source.mp4 + MatAnyone2 pha/ + sharp chroma alpha
+  → per-frame sure-background plate (outward fill from empty pixels)
+  → subject inward reference fill from deep core
+  → detached interior reference fill from chroma-opaque interiors
+  → projection decontamination: out = src − t·(bg − ref)
+  → subject fringe + core band use subject ref; detached edge band uses detached ref
+  → QA metrics + spill heatmap + export</code></pre>
+
+			<p><strong>Key lessons baked into v6:</strong></p>
+			<ul>
+				<li>Projection decontamination replaces channel-clamp despill — reconstructs mixed fringe RGB instead of desaturating it.</li>
+				<li>Detached interiors preserve source color exactly; only edge bands are repaired.</li>
+				<li>MatAnyone2 <code>fgr/</code> is <strong>not</strong> clean foreground — it is source composited over a fixed pale-green plate. Do not use as an RGB prior.</li>
+			</ul>
+		</section>
+
+		<section id="v7">
+			<h2>v7 architecture (promoted)</h2>
+			<pre><code>source.mp4 + MatAnyone2 pha/ + sharp chroma alpha
+  → reference seeding from key-free observations (filtered by core proximity)
+  → per-frame background plate filled to closure (outward from empty + eroded near fg evidence)
+  → color-line alpha estimate per pixel: src = a·ref + (1−a)·bg
+  → fuse baseline alpha with color-line estimate (weight capped, upward corrections gated)
+  → matting-equation foreground recovery: fg = src + ((1−a)/a)·(src − bg), gain capped
+  → evidence-gated detached path (color evidence, not hard distance)
+  → QA metrics + spill heatmap + export</code></pre>
+
+			<p><strong>Key mechanisms added in v7:</strong></p>
+			<ul>
+				<li><strong>Color-line alpha fusion</strong> — per-pixel two-color model estimates alpha where the prior is soft or missing, with confidence-weighted blending capped at <code>COLOR_LINE_MAX_WEIGHT</code>.</li>
+				<li><strong>Matting-equation foreground recovery</strong> — inverts straight-alpha compositing against the per-frame background plate, with gain capping to prevent noise amplification at low alpha.</li>
+				<li><strong>Evidence-gated detached path</strong> — re-adds detached elements based on color evidence rather than hard distance, preserving soft alpha where the prior deleted particles.</li>
+				<li><strong>Reference seed filtering</strong> — key-free observations are only used as reference seeds when sufficiently distant from the prior core, preventing contaminated thick-structure edges from polluting the fill.</li>
+				<li><strong>Background plate erosion</strong> — sure-background seeds are eroded near foreground evidence so faint halos cannot pollute the background plate used for matting recovery.</li>
+			</ul>
+
+			<h3>Spike commands (flagship clip)</h3>
+			<pre><code>pnpm transparent-animation-spike video-prior --run-id &lt;id&gt;
+pnpm transparent-animation-spike celstate-alpha-v7 --run-id &lt;id&gt; [--prior-alpha-dir &lt;pha-dir&gt;]
+pnpm transparent-animation-spike promote-review --run-id &lt;id&gt;  # default stage is v7</code></pre>
+
+			<p>Harness: <code>scripts/spikes/transparent-animation-spike.ts</code> · runs under <code>tmp/transparent-animation-spike/runs/&lt;run-id&gt;/</code></p>
+		</section>
+
+		<section id="eval">
+			<h2>Synthetic ground-truth eval (Phase 1)</h2>
+			<p>
+				Canonical generalization evidence. Truth-referenced metrics compare compiler output against known RGBA ground truth — none are tautological.
+			</p>
+
+			<h3>Module layout</h3>
+			<pre><code>scripts/spikes/alpha-compiler/
+  core.ts              pure v6 numerical core (unit-tested, no I/O)
+  truth.ts             deterministic synthetic RGBA generators
+  metrics.ts           truth-referenced per-frame metrics + worst-frame aggregation
+  baseline.ts          baseline build / compare with explicit tolerances
+  eval-cli.ts          pipeline CLI (pnpm alpha-eval)
+  baselines/synthetic-eval.json   committed regression baseline
+  alpha-compiler.test.ts          49 unit tests</code></pre>
+
+			<h3>Pipeline (per scenario)</h3>
+			<ol>
+				<li>Generate RGBA truth frames (deterministic seeded PRNG)</li>
+				<li>Composite over noisy chroma plate</li>
+				<li>H.264 yuv420p round trip (CRF 23)</li>
+				<li>FFmpeg <code>colorkey</code> chroma alpha</li>
+				<li>Simulated matting prior (truth alpha minus detached elements, Gaussian-blurred)</li>
+				<li><code>createV6RgbaFrame</code></li>
+				<li>Compare output against stored truth</li>
+			</ol>
+
+			<h3>Scenarios (640×360, 48 frames)</h3>
+			<table>
+				<thead>
+					<tr>
+						<th>ID</th>
+						<th>Exercises</th>
+						<th>Key</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td><code>gt-sparks</code></td>
+						<td>Detached fading particles shed from opaque subject; small soft geometry</td>
+						<td>Green</td>
+					</tr>
+					<tr>
+						<td><code>gt-smoke</code></td>
+						<td>Drifting soft smoke plumes + glowing ember; genuine partial alpha</td>
+						<td>Green</td>
+					</tr>
+					<tr>
+						<td><code>gt-tassels</code></td>
+						<td>Scarf band with thin 1.5–3 px swinging strands; key-agnostic projection</td>
+						<td>Blue</td>
+					</tr>
+				</tbody>
+			</table>
+
+			<h3>Commands</h3>
+			<pre><code>pnpm alpha-eval run                                    # full eval → tmp/alpha-compiler-eval/report.json
+pnpm alpha-eval run --scenario gt-sparks --frames 24   # partial loop (runScope: partial)
+pnpm alpha-eval compare                                # full gate: exit 1 on regression
+pnpm alpha-eval compare --scenario gt-sparks           # scoped compare after partial run
+pnpm alpha-eval compare --allow-unbaselined            # exploratory only — not for CI
+pnpm alpha-eval update-baseline                        # rewrite baseline after accepted changes</code></pre>
+
+			<h3>Artifact paths (do not confuse)</h3>
+			<table>
+				<thead>
+					<tr>
+						<th>Path</th>
+						<th>Purpose</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td><code>tmp/alpha-compiler-eval/&lt;scenario&gt;/frames.json</code></td>
+						<td>Per-frame truth-referenced metrics — canonical regression evidence</td>
+					</tr>
+					<tr>
+						<td><code>tmp/alpha-compiler-eval/&lt;scenario&gt;/report.json</code></td>
+						<td>Scenario aggregates with <code>worstFrame</code> pointers</td>
+					</tr>
+					<tr>
+						<td><code>tmp/.../celstate-alpha-v6-projection/per-frame-metrics.json</code></td>
+						<td>Spike-stage compiler stats only (<code>temporalAlphaDelta</code>, etc.) — not baselined</td>
+					</tr>
+				</tbody>
+			</table>
+
+			<p>
+				Partial vs full: every <code>run</code> writes <code>report.json</code> with <code>runScope</code> and <code>includedScenarioIds</code>.
+				Full <code>compare</code> requires all three canonical scenarios. A partial run replaces any previous full report — unscoped <code>compare</code> fails on partial reports.
+			</p>
+
+			<h3>Metrics</h3>
+			<table>
+				<thead>
+					<tr>
+						<th>Metric</th>
+						<th>What it measures</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr><td><code>alphaMae</code></td><td>Mean |output α − truth α| over all pixels</td></tr>
+					<tr><td><code>edgeAlphaMae</code> / <code>edgeRgbMae</code></td><td>Alpha and RGB error in truth edge band</td></tr>
+					<tr><td><code>fgRgbMae</code></td><td>RGB error on solidly-opaque truth pixels</td></tr>
+					<tr><td><code>falseTransparentRate</code> / <code>falseOpaqueRate</code></td><td>Misclassification on opaque / transparent truth regions</td></tr>
+					<tr><td><code>residualSpill</code></td><td>Key-dominance excess of output vs truth (not tautological)</td></tr>
+					<tr><td><code>softAlphaMae</code> / <code>softBinarizationRate</code></td><td>Partial-alpha preservation and crush-to-0/255 rate</td></tr>
+					<tr><td><code>detachedAlphaRecall</code> / <code>detachedRgbMae</code></td><td>Detached-element alpha overlap and RGB fidelity</td></tr>
+					<tr><td><code>temporalAlphaInstability</code></td><td>Alpha change not explained by truth motion (frame-to-frame)</td></tr>
+					<tr><td><code>priorAlphaMae</code></td><td>Context floor — prior quality vs truth (not a compiler metric)</td></tr>
+				</tbody>
+			</table>
+
+			<p>Baseline pins both <strong>mean</strong> and <strong>worst-frame</strong> values. Tolerances: <code>max(0.005, 15%)</code> on each. Toolchain versions recorded in baseline file.</p>
+
+			<div class="callout callout-warn" id="simulated-prior">
+				<strong>Honest limitation: simulated prior</strong>
+				The matting prior is derived from truth (blurred, detached elements zeroed), not MatAnyone2/BRIA output. This isolates the compiler deterministically but does not measure real prior failure modes. A real-prior eval leg is required before production confidence.
+			</div>
+		</section>
+
+		<section id="baseline">
+			<h2>Baseline numbers (v7)</h2>
+			<p>Committed baseline from <code>scripts/spikes/alpha-compiler/baselines/synthetic-eval.json</code> (compiler: v7). These numbers moved from the v6 targets shown in <a href="#v7results">v7 results</a>.</p>
+			<table>
+				<thead>
+					<tr>
+						<th>Scenario</th>
+						<th>Key metric</th>
+						<th class="num">Mean</th>
+						<th class="num">Worst</th>
+						<th>Interpretation</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td><code>gt-sparks</code></td>
+						<td><code>detachedAlphaRecall</code></td>
+						<td class="num">0.61</td>
+						<td class="num">0.45 @f9</td>
+						<td>Detached recall improved from ~0.38; soft alpha better preserved</td>
+					</tr>
+					<tr>
+						<td><code>gt-sparks</code></td>
+						<td><code>softBinarizationRate</code></td>
+						<td class="num">0.52</td>
+						<td class="num">0.70 @f3</td>
+						<td>Soft pixels crushed to 0/255 reduced from ~0.79</td>
+					</tr>
+					<tr>
+						<td><code>gt-smoke</code></td>
+						<td><code>residualSpill</code></td>
+						<td class="num">0.024</td>
+						<td class="num">0.038 @f43</td>
+						<td>Green contamination on soft regions reduced from ~0.22</td>
+					</tr>
+					<tr>
+						<td><code>gt-tassels</code></td>
+						<td><code>edgeAlphaMae</code></td>
+						<td class="num">0.11</td>
+						<td class="num">0.12 @f19</td>
+						<td>Thin strand edge fidelity improved from ~0.21</td>
+					</tr>
+					<tr>
+						<td><code>gt-tassels</code></td>
+						<td><code>falseOpaqueRate</code></td>
+						<td class="num">0.006</td>
+						<td class="num">0.006 @f35</td>
+						<td>Background bleed on fine geometry halved from ~0.012</td>
+					</tr>
+				</tbody>
+			</table>
+			<p>Visual confirmation: detached sparks now show continuous soft alpha instead of hard green-ringed blobs. The same improvement class is visible on the flagship clip around frame ~210.</p>
+		</section>
+
+		<section id="history">
+			<h2>Version history (v0–v7)</h2>
+			<p>Condensed from chronological spike experiments. Full run artifacts remain under <code>tmp/transparent-animation-spike/runs/</code>.</p>
+			<table>
+				<thead>
+					<tr>
+						<th>Version</th>
+						<th>Approach</th>
+						<th>Result</th>
+						<th>Lesson</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td>v0</td>
+						<td>FFmpeg <code>colorkey</code> + temporal alpha smooth</td>
+						<td><span class="tag tag-fail">Baseline only</span></td>
+						<td>Single-color keying is experimental input, not exact alpha recovery</td>
+					</tr>
+					<tr>
+						<td>v1</td>
+						<td>Key-first despill (despill after keying)</td>
+						<td><span class="tag tag-warn">Reviewable</span></td>
+						<td>Despill-before-key breaks <code>colorkey</code>; global loose keying erodes foreground</td>
+					</tr>
+					<tr>
+						<td>v2</td>
+						<td>Temporal background plate + trimap</td>
+						<td><span class="tag tag-fail">Negative</span></td>
+						<td>Plate contaminated by moving foreground; needs stronger exclusion</td>
+					</tr>
+					<tr>
+						<td>v3</td>
+						<td>Core/fringe separation + chroma-equation RGB recovery</td>
+						<td><span class="tag tag-fail">Negative</span></td>
+						<td>Core/fringe split necessary; matting equation amplifies colored ghosts</td>
+					</tr>
+					<tr>
+						<td>v4</td>
+						<td>BRIA/rembg per-frame prior + conservative fringe despill</td>
+						<td><span class="tag tag-warn">Big jump</span></td>
+						<td>Stronger prior fixes matte; edge RGB spill remains; CPU per-frame is slow</td>
+					</tr>
+					<tr>
+						<td>v5</td>
+						<td>MatAnyone2 video prior + chroma leaf re-add + clamp/pull despill</td>
+						<td><span class="tag tag-warn">Architecture win</span></td>
+						<td>Temporal prior + detached fusion is right; channel-clamp despill hits a ceiling</td>
+					</tr>
+					<tr>
+						<td>v6</td>
+						<td>Projection decontamination along bg→ref axis</td>
+						<td><span class="tag tag-pass">Flagship promoted</span></td>
+						<td>Reconstructs mixed fringe RGB; generalization gaps remain on synthetic truth</td>
+					</tr>
+					<tr>
+						<td><strong>v7</strong></td>
+						<td>Color-line alpha fusion + matting-equation recovery + evidence-gated detached</td>
+						<td><span class="tag tag-pass">Promoted + metrics moved</span></td>
+						<td>Detached recall, soft alpha, fine strands all improved; real-prior eval leg next</td>
+					</tr>
+				</tbody>
+			</table>
+		</section>
+
+		<section id="failures">
+			<h2>Failure taxonomy</h2>
+			<p>Active defect classes — map to metrics and v7 levers.</p>
+			<table>
+				<thead>
+					<tr>
+						<th>Failure</th>
+						<th>Symptom</th>
+						<th>Metric / lever</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td>Green fringe / spill</td>
+						<td>Key-color contamination on silhouette, fur, leaves, motion blur</td>
+						<td><code>residualSpill</code>, <code>edgeRgbMae</code> · projection strength, ref fill</td>
+					</tr>
+					<tr>
+						<td>Foreground erosion</td>
+						<td>Loose keying deletes subject interior</td>
+						<td><code>falseTransparentRate</code> · do not solve via similarity sweeps alone</td>
+					</tr>
+					<tr>
+						<td>Detached binarization</td>
+						<td>Particles re-added as hard blobs with green rings</td>
+						<td><code>detachedAlphaRecall</code>, <code>softBinarizationRate</code> · leaf path, edge bands</td>
+					</tr>
+					<tr>
+						<td>Soft-alpha crush</td>
+						<td>Smoke/wisps pushed to 0 or 255</td>
+						<td><code>softAlphaMae</code>, <code>softBinarizationRate</code> · fringe alpha handling</td>
+					</tr>
+					<tr>
+						<td>Fine geometry blobbing</td>
+						<td>Tassels/hair merge into thick silhouettes</td>
+						<td><code>edgeAlphaMae</code>, <code>falseOpaqueRate</code> · sub-pixel edge preservation</td>
+					</tr>
+					<tr>
+						<td>Temporal alpha flicker</td>
+						<td>Frame-to-frame alpha breathing unrelated to motion</td>
+						<td><code>temporalAlphaInstability</code> · stabilization (post-v7 spatial fixes)</td>
+					</tr>
+					<tr>
+						<td>Prior vs compiler confusion</td>
+						<td>Good matte, bad RGB — or vice versa</td>
+						<td><code>priorAlphaMae</code> vs compiler metrics · separate eval legs</td>
+					</tr>
+				</tbody>
+			</table>
+			<p><strong>Solved for spike:</strong> export compatibility (WebM VP9 alpha, ProRes 4444, APNG). Remaining work is quality, not plumbing.</p>
+		</section>
+
+		<section id="closed">
+			<h2>Closed experiments</h2>
+			<p>These directions were tried and are not open work:</p>
+			<ul>
+				<li><strong>Global similarity / despill-mix sweeps</strong> — erodes foreground or leaves halos; rejected.</li>
+				<li><strong>Chroma matting equation on fringe (v3)</strong> — creates cyan/pink ghosts; rejected.</li>
+				<li><strong>Channel-clamp / pull-to-inward despill (v5)</strong> — desaturates instead of reconstructing; superseded by projection.</li>
+				<li><strong>MatAnyone2 <code>fgr/</code> as RGB prior</strong> — source-over-green composite, not decontaminated RGB; rejected.</li>
+				<li><strong>Per-frame BRIA-only mattes</strong> — useful fallback, not the architecture; MatAnyone2 + chroma fusion wins on flagship.</li>
+			</ul>
+		</section>
+
+		<section id="probes">
+			<h2>Generalization probes (legacy)</h2>
+			<p>
+				<code>pnpm transparent-animation-spike generalization-probes</code> — idempotent plumbing smoke test (GP-01 blue disc, GP-02 green glow).
+				<strong>Not quality evidence:</strong> GP-01 never exercises detached path (<code>leafAddedCoverage: 0</code>); GP-02 is mostly binary, not soft smoke;
+				<code>detachedColorFidelity</code> is a passthrough tripwire, not independent proof.
+			</p>
+		</section>
+
+		<section id="v7results">
+			<h2>v7 results</h2>
+			<p>All target metrics moved on synthetic truth after v7 mechanisms shipped. Baseline updated 2026-06.</p>
+			<table>
+				<thead>
+					<tr>
+						<th>Target</th>
+						<th>v6 baseline</th>
+						<th>v7 result</th>
+						<th>Mechanism</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td>Detached element preservation</td>
+						<td>Recall ~0.38, binarization ~0.79 on sparks</td>
+						<td><code>detachedAlphaRecall</code> 0.61, <code>softBinarizationRate</code> 0.52</td>
+						<td>Evidence-gated detached path + color-line fusion in soft band</td>
+					</tr>
+					<tr>
+						<td>Soft-alpha preservation</td>
+						<td>Spill ~0.22 on smoke</td>
+						<td><code>residualSpill</code> 0.024, <code>softAlphaMae</code> 0.008</td>
+						<td>Color-line alpha fusion preserves partial alpha; bg plate erosion prevents halo pollution</td>
+					</tr>
+					<tr>
+						<td>Fine strand fidelity</td>
+						<td>Edge alpha MAE ~0.21 on tassels</td>
+						<td><code>edgeAlphaMae</code> 0.11, <code>falseOpaqueRate</code> 0.006</td>
+						<td>Reference seed filtering + matting-equation recovery on confident estimates</td>
+					</tr>
+					<tr>
+						<td>Temporal stability</td>
+						<td>Flagship <code>temporalAlphaDelta</code> max ~218/255</td>
+						<td><code>temporalAlphaInstability</code> 0.003 (mean)</td>
+						<td>Spatial improvements carry through; dedicated temporal pass deferred</td>
+					</tr>
+				</tbody>
+			</table>
+			<p>Next: <strong>real-prior eval leg</strong> (same truth composites, actual MatAnyone2/BRIA prior) before production worker wiring.</p>
+		</section>
+
+		<section id="next">
+			<h2>Recommended next steps</h2>
+			<ol>
+				<li>
+					<strong>Add real-prior eval leg</strong>
+					<p>Run the same three synthetic scenarios with actual MatAnyone2/BRIA prior output. Confirm the compiler improvements hold when the prior is imperfect.</p>
+				</li>
+				<li>
+					<strong>Sanity-check flagship visually</strong> after each mechanism change (promote-review flow unchanged)
+				</li>
+				<li>
+					<strong>Iterate against synthetic truth</strong> for new mechanisms
+					<pre><code>pnpm alpha-eval run
+pnpm alpha-eval compare
+# on accepted improvement:
+pnpm alpha-eval update-baseline</code></pre>
+				</li>
+				<li>
+					<strong>Defer</strong> dedicated temporal stabilization until spatial quality is locked
+				</li>
+			</ol>
+
+			<h3>Escalation rule</h3>
+			<ul>
+				<li>Celstate owns prior-fusion, projection decontamination, color-line fusion, matting-equation recovery, QA metrics, and export hardening.</li>
+				<li>If a native-RGBA provider fully solves quality with no compiler layer, shift R&amp;D to benchmarking, workflow UX, and export QA.</li>
+				<li>Per-frame BRIA remains the fallback for probes and environments without MatAnyone2.</li>
+			</ul>
+		</section>
+
+		<section id="risks">
+			<h2>Strategic risks</h2>
+			<table>
+				<thead>
+					<tr>
+						<th>Risk</th>
+						<th>Mitigation</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td>Simulated prior hides real prior failures</td>
+						<td>Real-prior eval leg (planned post-v7 synthetic wins)</td>
+					</tr>
+					<tr>
+						<td>Native RGBA commoditizes conversion</td>
+						<td>Escalation rule — pivot to QA/export, not abandon transparent animation</td>
+					</tr>
+					<tr>
+						<td>Windows MatAnyone2 fragility</td>
+						<td>Reuse <code>pha/</code> tree, WSL/CUDA, or per-frame BRIA fallback</td>
+					</tr>
+					<tr>
+						<td>Overfitting one flagship clip</td>
+						<td>Synthetic truth + baseline gate prevents this — already in place</td>
+					</tr>
+				</tbody>
+			</table>
+		</section>
+
+		<footer>
+			<p>
+				Generated editorial brief · June 2026 ·
+				Supersedes the narrative structure of <a href="TRANSPARENT-ANIMATION-RD-SPIKE.md">TRANSPARENT-ANIMATION-RD-SPIKE.md</a> for day-to-day iteration.
+				Markdown remains the repo-tracked source; update both when strategy changes.
+			</p>
+		</footer>
+	</div>
+</body>
+</html>

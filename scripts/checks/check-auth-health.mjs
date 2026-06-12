@@ -5,6 +5,7 @@ import {
 	formatAuthCanaryProbeFailure,
 	isFinalGetSessionProbeOk
 } from '../canary/auth-canary-probe.mjs';
+import { probeClerkFapiScriptFromAuthPageHtml } from '../canary/auth-canary-clerk-fapi.mjs';
 
 /** @typedef {import('../canary/auth-canary-probe.mjs').AuthCanaryProbeDefinition} AuthCanaryProbeDefinition */
 /** @typedef {import('../canary/auth-canary-probe.mjs').AuthCanaryProbeResult} AuthCanaryProbeResult */
@@ -22,13 +23,19 @@ const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl
 /** @param {string} pathname */
 const joinUrl = (pathname) => `${normalizedBaseUrl}${pathname}`;
 
-/** @returns {Promise<number>} */
-const checkAuthPage = async () => {
+/** @type {string | null} */
+let cachedAuthPageHtml = null;
+
+/** @returns {Promise<string>} */
+const fetchAuthPageHtml = async () => {
+	if (cachedAuthPageHtml) {
+		return cachedAuthPageHtml;
+	}
+
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), AUTH_CANARY_PROBE_TIMEOUT_MS);
 
 	try {
-		// /auth is error-recovery only; healthy sign-in bypasses it. Probe the recovery UI.
 		const response = await fetch(joinUrl('/auth?error=access_denied'), {
 			headers: { accept: 'text/html' },
 			signal: controller.signal
@@ -41,14 +48,36 @@ const checkAuthPage = async () => {
 			);
 		}
 
-		if (!html.includes('data-testid="auth-page"')) {
-			throw new Error('/auth did not render the expected auth page marker');
-		}
-		if (!html.includes('data-testid="auth-sign-in"')) {
-			throw new Error('/auth did not render the sign-in marker');
-		}
+		cachedAuthPageHtml = html;
+		return html;
+	} finally {
+		clearTimeout(timeout);
+	}
+};
 
-		return response.status;
+/** @returns {Promise<number>} */
+const checkAuthPage = async () => {
+	const html = await fetchAuthPageHtml();
+
+	if (!html.includes('data-testid="auth-page"')) {
+		throw new Error('/auth did not render the expected auth page marker');
+	}
+	if (!html.includes('data-testid="auth-sign-in"')) {
+		throw new Error('/auth did not render the sign-in marker');
+	}
+
+	return 200;
+};
+
+/** @returns {Promise<number>} */
+const checkClerkFapi = async () => {
+	const controller = new AbortController();
+	const timeout = setTimeout(() => controller.abort(), AUTH_CANARY_PROBE_TIMEOUT_MS);
+
+	try {
+		const html = await fetchAuthPageHtml();
+		const result = await probeClerkFapiScriptFromAuthPageHtml(html, fetch, controller.signal);
+		return result.status;
 	} finally {
 		clearTimeout(timeout);
 	}
@@ -133,6 +162,7 @@ const main = async () => {
 	/** @type {readonly AuthCanaryProbeDefinition[]} */
 	const probes = [
 		{ name: AUTH_CANARY_PROBE.AUTH_PAGE, run: checkAuthPage },
+		{ name: AUTH_CANARY_PROBE.CLERK_FAPI, run: checkClerkFapi },
 		{ name: AUTH_CANARY_PROBE.GET_SESSION, run: checkSessionEndpoint }
 	];
 

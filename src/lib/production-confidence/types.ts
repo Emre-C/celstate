@@ -76,6 +76,10 @@ export interface DeploymentVerificationRun {
 export interface AuthCanaryEvidence {
 	readonly authPageHealthy: boolean;
 	readonly sessionEndpointHealthy: boolean;
+	/** Clerk custom-domain FAPI serves clerk.browser.js (DNS/TLS/script availability). */
+	readonly clerkFapiHealthy: boolean;
+	/** Browser renders Clerk <SignIn /> social controls (client SDK load). */
+	readonly clerkSignInWidgetHealthy: boolean;
 	readonly protectedRouteReachable: boolean;
 	readonly convexAuthenticatedQueryHealthy: boolean;
 	readonly signOutHealthy: boolean;

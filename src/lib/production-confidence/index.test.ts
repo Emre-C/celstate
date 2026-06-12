@@ -46,6 +46,8 @@ import {
 const authEvidenceBase = (partial: Partial<AuthCanaryEvidence> = {}): AuthCanaryEvidence => ({
 	authPageHealthy: true,
 	sessionEndpointHealthy: true,
+	clerkFapiHealthy: true,
+	clerkSignInWidgetHealthy: true,
 	protectedRouteReachable: false,
 	convexAuthenticatedQueryHealthy: true,
 	signOutHealthy: true,
@@ -320,6 +322,22 @@ describe("classifyAuthProbeVerdict", () => {
 		).toBe("FAILED");
 	});
 
+	it("fails when Clerk FAPI script probe is unhealthy", () => {
+		expect(
+			classifyAuthProbeVerdict(authEvidenceBase({ clerkFapiHealthy: false }), {
+				requireProtectedRoute: false,
+			}),
+		).toBe("FAILED");
+	});
+
+	it("fails when Clerk sign-in widget probe is unhealthy", () => {
+		expect(
+			classifyAuthProbeVerdict(authEvidenceBase({ clerkSignInWidgetHealthy: false }), {
+				requireProtectedRoute: false,
+			}),
+		).toBe("FAILED");
+	});
+
 	it("fails when preflight provisioning failed", () => {
 		expect(
 			classifyAuthProbeVerdict(authEvidenceBase({ preflightProvisioningHealthy: false }), {
@@ -492,6 +510,8 @@ describe("evidence contract conformance (§5.3)", () => {
 		const evidence: AuthCanaryEvidence = authEvidenceBase();
 		expect(Object.keys(evidence).sort()).toEqual([
 			"authPageHealthy",
+			"clerkFapiHealthy",
+			"clerkSignInWidgetHealthy",
 			"convexAuthenticatedQueryHealthy",
 			"preflightProvisioningHealthy",
 			"protectedRouteReachable",
@@ -500,6 +520,8 @@ describe("evidence contract conformance (§5.3)", () => {
 		]);
 		expect(typeof evidence.authPageHealthy).toBe("boolean");
 		expect(typeof evidence.sessionEndpointHealthy).toBe("boolean");
+		expect(typeof evidence.clerkFapiHealthy).toBe("boolean");
+		expect(typeof evidence.clerkSignInWidgetHealthy).toBe("boolean");
 		expect(typeof evidence.protectedRouteReachable).toBe("boolean");
 		expect(typeof evidence.convexAuthenticatedQueryHealthy).toBe("boolean");
 		expect(typeof evidence.signOutHealthy).toBe("boolean");

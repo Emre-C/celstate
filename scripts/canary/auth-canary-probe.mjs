@@ -5,7 +5,9 @@
 
 export const AUTH_CANARY_PROBE = /** @type {const} */ ({
 	AUTH_PAGE: 'auth_page',
-	GET_SESSION: 'get_session'
+	GET_SESSION: 'get_session',
+	CLERK_FAPI: 'clerk_fapi',
+	CLERK_SIGN_IN_WIDGET: 'clerk_sign_in_widget'
 });
 
 /** @typedef {(typeof AUTH_CANARY_PROBE)[keyof typeof AUTH_CANARY_PROBE]} AuthCanaryProbeName */

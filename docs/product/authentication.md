@@ -110,6 +110,7 @@ Production should use a **custom Clerk domain** (e.g. `accounts.celstate.com`) a
 - `src/lib/server/auth-alerts.test.ts`
 - `src/convex/users.provisioning.test.ts`
 - `scripts/canary/auth-canary-probe.test.ts` — session probe contract
+- `scripts/canary/auth-canary-clerk-fapi.test.ts` — Clerk FAPI host decode + script probe contract
 
 CI: `pnpm test:auth` then `pnpm verify`. Scheduled canary: `scripts/check-auth-health.mjs` (`/auth` + `/api/auth/session`). See [`CI-AND-CANARIES.md`](../runbooks/CI-AND-CANARIES.md).
 

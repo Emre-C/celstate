@@ -30,6 +30,7 @@ Other notes:
 ## Auth Canary (`/.github/workflows/auth-canary.yml`)
 
 - **Schedule:** Every **15 minutes** (not every 5). Reduces alert noise while still catching sustained outages.
+- **Probes:** `/auth` HTML markers, **Clerk FAPI** (`clerk.browser.js` on the custom domain decoded from `PUBLIC_CLERK_PUBLISHABLE_KEY` in page HTML), and `/api/auth/session` JSON.
 - **Secrets (repo → Settings → Actions → Secrets):**
   - `AUTH_CANARY_BASE_URL` — **HTTPS origin your customers use**, typically the **canonical** host (e.g. `www` if Vercel redirects apex → `www`).
   - `OPS_ALERT_WEBHOOK_URL` / `OPS_ALERT_WEBHOOK_KIND` — optional; used when the canary fails.
@@ -55,7 +56,7 @@ If the bare domain (`https://example.com`) **308-redirects** to `https://www.exa
 
 ### Interpreting failures (`scripts/check-auth-health.mjs`)
 
-- Failures are prefixed with **`[auth_page]`** (HTML `/auth` marker probe) or **`[get_session]`** (JSON `/api/auth/session` probe) so logs and ops webhooks name the failing step.
+- Failures are prefixed with **`[auth_page]`**, **`[clerk_fapi]`**, or **`[get_session]`** so logs and ops webhooks name the failing step.
 - Non-OK responses include safe diagnostics in the workflow log: final URL, selected response headers (`cf-ray`, `server`, `x-vercel-id`, `x-request-id`, `convex-usher`, `via`, `content-type`), and a small body prefix. Request cookies and `set-cookie` are never logged.
 - **`request timed out after …ms`** means the probe’s `fetch` hit the per-request abort budget (cold starts, edge/network blips, or GitHub runner egress). A single timeout with surrounding runs **green** usually points to **transience**, not a bad HTTP status from the app.
 - For sustained outages, expect explicit status / content-type / marker errors rather than only timeouts.
@@ -63,7 +64,7 @@ If the bare domain (`https://example.com`) **308-redirects** to `https://www.exa
 
 ## Production verification (`/.github/workflows/production-verification.yml`)
 
-Machine-evaluable **release evidence** for production: runner `scripts/production-verification.ts` exercises domains **AUTH**, **GENERATION**, **CHECKOUT_SESSION**, and (on the **weekly** schedule only) **LIVE_SETTLEMENT**, persists results to Convex (`verificationRuns`, `verificationEvidence`), and **exits non-zero** when the gate returns **DENY**.
+Machine-evaluable **release evidence** for production: runner `scripts/production-verification.ts` exercises domains **AUTH** (including Clerk FAPI script fetch and a Playwright check that the sign-in widget renders), **GENERATION**, **CHECKOUT_SESSION**, and (on the **weekly** schedule only) **LIVE_SETTLEMENT**, persists results to Convex (`verificationRuns`, `verificationEvidence`), and **exits non-zero** when the gate returns **DENY**.
 
 - **When it runs**
   - **`deployment_status`** — After a **successful** GitHub deployment to the **Production** environment (e.g. Vercel production deploys). Other deployment states/environments are skipped by workflow `if`.

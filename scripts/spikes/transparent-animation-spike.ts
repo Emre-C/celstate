@@ -16,6 +16,26 @@ import { GoogleGenAI, GenerateVideosOperation } from "@google/genai";
 import type { Image, Video } from "@google/genai";
 import sharp from "sharp";
 import {
+	chamferDistanceToMask,
+	clampByte,
+	colorDistanceSquared,
+	createV6RgbaFrame,
+	createV7RgbaFrame,
+	distanceToTransparent,
+	fillInwardCoreColors,
+	keyDominance,
+	normalizeHexColor,
+	parseRgbColor,
+	rgbToHex,
+	smoothStep,
+	summarizeMetric,
+	type RawGrayImage,
+	type RawRgbaImage,
+	type RawRgbImage,
+	type RgbColor,
+	type V6ProjectionSettings,
+} from "./alpha-compiler/core.js";
+import {
 	createChatSession,
 	createGeminiClient,
 	readGeminiRuntimeConfigFromEnv,
@@ -37,7 +57,7 @@ const DEFAULT_PROVIDER_DURATION_SECONDS = 8;
 const DEFAULT_PROVIDER_POLL_INTERVAL_MS = 10_000;
 const DEFAULT_PROVIDER_MAX_WAIT_MS = 30 * 60 * 1000;
 
-const STAGES = ["chroma-baseline", "matting-baseline", "celstate-alpha-v0", "celstate-alpha-v1-despill", "celstate-alpha-v2-trimap", "celstate-alpha-v3-core-fringe", "celstate-alpha-v4-prior-fusion"] as const;
+const STAGES = ["chroma-baseline", "matting-baseline", "celstate-alpha-v0", "celstate-alpha-v1-despill", "celstate-alpha-v2-trimap", "celstate-alpha-v3-core-fringe", "celstate-alpha-v4-prior-fusion", "celstate-alpha-v5-video-prior", "celstate-alpha-v6-projection", "celstate-alpha-v7", "video-prior"] as const;
 type Stage = typeof STAGES[number];
 
 const SOURCE_MODES = ["text-to-video", "image-to-video", "ingredients-to-video"] as const;
@@ -573,6 +593,38 @@ function promptForSourceMode(prompt: string, keyColor: string, sourceMode: Sourc
 	return chromaAdaptPrompt(prompt, keyColor);
 }
 
+function blueScreenProbePrompt(): PromptFixture {
+	const prompt =
+		"Wide shot. A dark terracotta medallion logo drifts left to right across a flat blue field while small amber sparks trail behind it with independent motion.";
+	return {
+		chromaPrompt: chromaAdaptPrompt(prompt, "#2040ff"),
+		expectedHardParts: "Non-green key color, detached particle motion, dark foreground on saturated blue.",
+		id: "GP-01",
+		passCriteria: "Compiler removes blue spill without crushing terracotta/amber foreground.",
+		prompt,
+		source: "docs/product/TRANSPARENT-ANIMATION-RD-SPIKE.md",
+		tests: "key-agnostic spill repair, detached element color fidelity",
+		title: "Blue-screen logo with amber sparks",
+		useCase: "generalization_probe",
+	};
+}
+
+function glowProbePrompt(): PromptFixture {
+	const prompt =
+		"Center frame. A soft white luminous orb breathes in and out while faint cream smoke wisps curl around it against a flat green field.";
+	return {
+		chromaPrompt: chromaAdaptPrompt(prompt),
+		expectedHardParts: "Semi-transparent glow core, soft fringe, detached wisp motion.",
+		id: "GP-02",
+		passCriteria: "Soft alpha fringe stays stable without cyan ghosts or core color loss.",
+		prompt,
+		source: "docs/product/TRANSPARENT-ANIMATION-RD-SPIKE.md",
+		tests: "soft alpha fringe, projection decontamination on glow edges",
+		title: "Green-screen glow orb with smoke wisps",
+		useCase: "generalization_probe",
+	};
+}
+
 function flagshipPrompt(): PromptFixture {
 	const prompt =
 		"Wide horizontal shot. A warm editorial humanoid fox mascot crosses the canvas from left to right, pauses near the right third, turns back toward the viewer with a confident playful expression, then gestures as wind-blown terracotta leaves swirl coherently around the body and trail behind. The mascot's hair tufts, jacket hem, tail fur, and leaves all move with the same wind direction but independent secondary motion. Premium studio mascot animation style with clean silhouettes and restrained charm.";
@@ -593,15 +645,21 @@ function flagshipPrompt(): PromptFixture {
 }
 
 async function selectedPromptSuite(): Promise<PromptFixture[]> {
-	return [flagshipPrompt()];
+	return [flagshipPrompt(), blueScreenProbePrompt(), glowProbePrompt()];
 }
 
 async function loadPromptSuite(root: string): Promise<PromptFixture[]> {
+	const defaults = await selectedPromptSuite();
 	const promptPath = path.join(root, "prompts.json");
-	if (existsSync(promptPath)) {
-		return readJson<PromptFixture[]>(promptPath);
+	if (!existsSync(promptPath)) {
+		return defaults;
 	}
-	return selectedPromptSuite();
+	const stored = await readJson<PromptFixture[]>(promptPath);
+	const byId = new Map<string, PromptFixture>();
+	for (const fixture of [...stored, ...defaults]) {
+		byId.set(fixture.id, fixture);
+	}
+	return [...byId.values()];
 }
 
 function scoringTemplate(): Record<MetricKey, string> {
@@ -693,15 +751,6 @@ function withChromaPrompt(prompt: PromptFixture, keyColor: string, sourceMode: S
 		...prompt,
 		chromaPrompt: promptForSourceMode(prompt.prompt, keyColor, sourceMode),
 	};
-}
-
-function normalizeHexColor(value: string): string {
-	const trimmed = value.trim().toLowerCase();
-	const match = trimmed.match(/^(?:#|0x)?([0-9a-f]{6})$/);
-	if (!match) {
-		throw new Error(`Expected a 6-digit RGB hex color. Got: ${value}`);
-	}
-	return `#${match[1]}`;
 }
 
 function ffmpegColor(value: string): string {
@@ -2131,30 +2180,6 @@ async function runCelstateAlphaV1Despill(args: ParsedArgs): Promise<void> {
 	console.log(`wrote Celstate alpha v1 despill for ${runId}`);
 }
 
-interface RgbColor {
-	readonly b: number;
-	readonly g: number;
-	readonly r: number;
-}
-
-interface RawRgbImage {
-	readonly data: Buffer;
-	readonly height: number;
-	readonly width: number;
-}
-
-interface RawGrayImage {
-	readonly data: Buffer;
-	readonly height: number;
-	readonly width: number;
-}
-
-interface RawRgbaImage {
-	readonly data: Buffer;
-	readonly height: number;
-	readonly width: number;
-}
-
 interface V2TrimapSettings {
 	readonly backgroundSampleCount: number;
 	readonly backgroundThreshold: number;
@@ -2188,28 +2213,33 @@ interface V4PriorFusionSettings {
 	readonly transparentCutoff: number;
 }
 
-function parseRgbColor(value: string): RgbColor {
-	const normalized = normalizeHexColor(value);
-	return {
-		b: parseInt(normalized.slice(5, 7), 16),
-		g: parseInt(normalized.slice(3, 5), 16),
-		r: parseInt(normalized.slice(1, 3), 16),
-	};
+interface V5VideoPriorSettings {
+	readonly chromaLeafDespillMix: number;
+	readonly coreAlphaThreshold: number;
+	readonly coreDespillBand: number;
+	readonly coreDespillMix: number;
+	readonly fringeRadius: number;
+	readonly guardRadius: number;
+	readonly keyColor: string;
+	readonly leafAlphaFloor: number;
+	readonly leafGateRamp: number;
+	readonly priorAlphaDir: string;
+	readonly residualDespillMix: number;
+	readonly selectedFrame: number;
+	readonly spillGain: number;
+	readonly spillPullMax: number;
+	readonly subjectAlphaThreshold: number;
+	readonly transparentCutoff: number;
 }
 
-function rgbToHex(color: RgbColor): string {
-	return `#${[color.r, color.g, color.b].map((channel) => clampByte(channel).toString(16).padStart(2, "0")).join("")}`;
-}
-
-function clampByte(value: number): number {
-	return Math.max(0, Math.min(255, Math.round(value)));
-}
-
-function colorDistanceSquared(r: number, g: number, b: number, color: RgbColor): number {
-	const dr = r - color.r;
-	const dg = g - color.g;
-	const db = b - color.b;
-	return dr * dr + dg * dg + db * db;
+interface VideoPriorSettings {
+	readonly matanyoneCommand: string;
+	readonly matanyonePackage: string;
+	readonly matanyoneViaWsl: boolean;
+	readonly maskThreshold: number;
+	readonly maxSize: number | undefined;
+	readonly priorModel: string;
+	readonly priorPackage: string;
 }
 
 async function readRgbImage(filePath: string): Promise<RawRgbImage> {
@@ -2299,6 +2329,26 @@ async function extractSourceFrames(source: string, framesDirectory: string, cont
 	await runFfmpeg(
 		["-y", "-i", source, "-vsync", "0", path.join(framesDirectory, "frame-%05d.png")],
 		"celstate alpha v2 source frame extraction",
+		context,
+	);
+	return listFrameFiles(framesDirectory);
+}
+
+async function extractSharpChromaAlphaFrames(source: string, framesDirectory: string, settings: ChromaSettings, context: RunContext): Promise<string[]> {
+	await rm(framesDirectory, { force: true, recursive: true });
+	await ensureDirectory(framesDirectory);
+	await runFfmpeg(
+		[
+			"-y",
+			"-i",
+			source,
+			"-vf",
+			`${keyFilter(settings)},alphaextract,format=gray`,
+			"-vsync",
+			"0",
+			path.join(framesDirectory, "frame-%05d.png"),
+		],
+		"celstate alpha v5 sharp chroma alpha extraction",
 		context,
 	);
 	return listFrameFiles(framesDirectory);
@@ -2453,22 +2503,6 @@ function connectedBackgroundMask(candidates: Uint8Array, width: number, height: 
 	return connected;
 }
 
-function smoothStep(value: number): number {
-	const t = Math.max(0, Math.min(1, value));
-	return t * t * (3 - 2 * t);
-}
-
-function summarizeMetric(values: readonly number[]): { readonly average: number; readonly max: number; readonly min: number } {
-	if (values.length === 0) {
-		return { average: 0, max: 0, min: 0 };
-	}
-	return {
-		average: Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(4)),
-		max: Number(Math.max(...values).toFixed(4)),
-		min: Number(Math.min(...values).toFixed(4)),
-	};
-}
-
 function recoverForegroundChannel(channel: number, background: number, alpha: number): number {
 	if (alpha <= 0.08) {
 		return 0;
@@ -2554,54 +2588,6 @@ function createV2RgbaFrame(frame: RawRgbImage, background: RawRgbImage, settings
 		alphaCoverage: alphaSum / (pixelCount * 255),
 		data: rgba,
 	};
-}
-
-function distanceToTransparent(alpha: RawGrayImage, transparentCutoff: number, maxDistance: number): Uint16Array {
-	const pixelCount = alpha.width * alpha.height;
-	const cap = maxDistance + 1;
-	const distances = new Uint16Array(pixelCount);
-	for (let pixel = 0; pixel < pixelCount; pixel += 1) {
-		distances[pixel] = alpha.data[pixel] <= transparentCutoff ? 0 : cap;
-	}
-	for (let y = 0; y < alpha.height; y += 1) {
-		for (let x = 0; x < alpha.width; x += 1) {
-			const pixel = y * alpha.width + x;
-			let best = distances[pixel];
-			if (x > 0) {
-				best = Math.min(best, distances[pixel - 1] + 1);
-			}
-			if (y > 0) {
-				best = Math.min(best, distances[pixel - alpha.width] + 1);
-				if (x > 0) {
-					best = Math.min(best, distances[pixel - alpha.width - 1] + 1);
-				}
-				if (x < alpha.width - 1) {
-					best = Math.min(best, distances[pixel - alpha.width + 1] + 1);
-				}
-			}
-			distances[pixel] = Math.min(best, cap);
-		}
-	}
-	for (let y = alpha.height - 1; y >= 0; y -= 1) {
-		for (let x = alpha.width - 1; x >= 0; x -= 1) {
-			const pixel = y * alpha.width + x;
-			let best = distances[pixel];
-			if (x < alpha.width - 1) {
-				best = Math.min(best, distances[pixel + 1] + 1);
-			}
-			if (y < alpha.height - 1) {
-				best = Math.min(best, distances[pixel + alpha.width] + 1);
-				if (x > 0) {
-					best = Math.min(best, distances[pixel + alpha.width - 1] + 1);
-				}
-				if (x < alpha.width - 1) {
-					best = Math.min(best, distances[pixel + alpha.width + 1] + 1);
-				}
-			}
-			distances[pixel] = Math.min(best, cap);
-		}
-	}
-	return distances;
 }
 
 function despillDominantChannel(r: number, g: number, b: number, keyColor: RgbColor, mix: number): { readonly color: RgbColor; readonly reduction: number } {
@@ -2825,6 +2811,166 @@ function createV4RgbaFrame(
 	};
 }
 
+async function writeSpillHeatmap(heatmap: Uint8Array, width: number, height: number, filePath: string): Promise<void> {
+	const data = Buffer.alloc(width * height * 3);
+	for (let pixel = 0; pixel < width * height; pixel += 1) {
+		const offset = pixel * 3;
+		const value = heatmap[pixel] ?? 0;
+		data[offset] = value;
+		data[offset + 1] = Math.round(value * 0.35);
+		data[offset + 2] = 0;
+	}
+	await writeRgbImage({ data, height, width }, filePath);
+}
+
+function createV5RgbaFrame(
+	frame: RawRgbImage,
+	priorAlpha: RawGrayImage,
+	chromaAlpha: RawGrayImage,
+	settings: V5VideoPriorSettings,
+): {
+	readonly alphaCoverage: number;
+	readonly averageSpillPull: number;
+	readonly coreCoverage: number;
+	readonly data: Buffer;
+	readonly fringeCoverage: number;
+	readonly leafAddedCoverage: number;
+	readonly priorCoverage: number;
+	readonly pulledFringeCoverage: number;
+} {
+	if (frame.width !== priorAlpha.width || frame.height !== priorAlpha.height) {
+		throw new Error("Frame and prior alpha dimensions do not match.");
+	}
+	if (frame.width !== chromaAlpha.width || frame.height !== chromaAlpha.height) {
+		throw new Error("Frame and chroma alpha dimensions do not match.");
+	}
+	const width = frame.width;
+	const height = frame.height;
+	const pixelCount = width * height;
+	const keyColor = parseRgbColor(settings.keyColor);
+	const distanceCap = Math.max(settings.fringeRadius, settings.coreDespillBand);
+	const distancesToTransparent = distanceToTransparent(priorAlpha, settings.transparentCutoff, distanceCap);
+	const subjectMask = new Uint8Array(pixelCount);
+	const coreMask = new Uint8Array(pixelCount);
+	for (let pixel = 0; pixel < pixelCount; pixel += 1) {
+		if (priorAlpha.data[pixel] > settings.subjectAlphaThreshold) {
+			subjectMask[pixel] = 1;
+		}
+		if (priorAlpha.data[pixel] >= settings.coreAlphaThreshold && distancesToTransparent[pixel] > settings.fringeRadius) {
+			coreMask[pixel] = 1;
+		}
+	}
+	const distancesToSubject = chamferDistanceToMask(subjectMask, width, height, settings.guardRadius + settings.leafGateRamp);
+	const inward = fillInwardCoreColors(frame, coreMask, settings.fringeRadius + 10);
+	const rgba = Buffer.alloc(pixelCount * 4);
+	let alphaSum = 0;
+	let priorSum = 0;
+	let leafAddedSum = 0;
+	let corePixels = 0;
+	let fringePixels = 0;
+	let pulledFringePixels = 0;
+	let spillPullSum = 0;
+	for (let pixel = 0; pixel < pixelCount; pixel += 1) {
+		const rgbOffset = pixel * 3;
+		const rgbaOffset = pixel * 4;
+		const prior = priorAlpha.data[pixel];
+		priorSum += prior;
+		const r = frame.data[rgbOffset];
+		const g = frame.data[rgbOffset + 1];
+		const b = frame.data[rgbOffset + 2];
+		if (prior > settings.transparentCutoff) {
+			const isCore = coreMask[pixel] === 1;
+			if (isCore) {
+				const bandDistance = distancesToTransparent[pixel];
+				let coreR = r;
+				let coreG = g;
+				let coreB = b;
+				if (bandDistance <= settings.coreDespillBand) {
+					const bandWeight = 1 - Math.max(0, bandDistance - settings.fringeRadius) / Math.max(1, settings.coreDespillBand - settings.fringeRadius);
+					const repairedCore = despillDominantChannel(r, g, b, keyColor, settings.coreDespillMix * smoothStep(bandWeight));
+					coreR = repairedCore.color.r;
+					coreG = repairedCore.color.g;
+					coreB = repairedCore.color.b;
+				}
+				rgba[rgbaOffset] = coreR;
+				rgba[rgbaOffset + 1] = coreG;
+				rgba[rgbaOffset + 2] = coreB;
+				rgba[rgbaOffset + 3] = 255;
+				corePixels += 1;
+				alphaSum += 255;
+				continue;
+			}
+			fringePixels += 1;
+			const distanceWeight = distancesToTransparent[pixel] <= settings.fringeRadius
+				? 1 - Math.max(0, distancesToTransparent[pixel] - 1) / Math.max(1, settings.fringeRadius)
+				: 0;
+			const partialWeight = prior < settings.coreAlphaThreshold
+				? 1 - prior / Math.max(1, settings.coreAlphaThreshold)
+				: 0;
+			const edgeWeight = smoothStep(Math.max(distanceWeight, partialWeight));
+			let outR = r;
+			let outG = g;
+			let outB = b;
+			let residualMix = settings.residualDespillMix;
+			if (inward.filled[pixel] === 1) {
+				const inwardOffset = pixel * 3;
+				const inwardR = inward.colors[inwardOffset];
+				const inwardG = inward.colors[inwardOffset + 1];
+				const inwardB = inward.colors[inwardOffset + 2];
+				const ownDominance = keyDominance(r, g, b, keyColor);
+				const inwardDominance = keyDominance(inwardR, inwardG, inwardB, keyColor);
+				const excess = Math.max(0, ownDominance - inwardDominance);
+				const pull = Math.min(settings.spillPullMax, (excess / 255) * settings.spillGain) * edgeWeight;
+				if (pull > 0) {
+					outR = r + (inwardR - r) * pull;
+					outG = g + (inwardG - g) * pull;
+					outB = b + (inwardB - b) * pull;
+					pulledFringePixels += 1;
+					spillPullSum += pull;
+				}
+			} else {
+				residualMix = 1;
+			}
+			const residual = despillDominantChannel(outR, outG, outB, keyColor, residualMix * edgeWeight);
+			rgba[rgbaOffset] = clampByte(residual.color.r);
+			rgba[rgbaOffset + 1] = clampByte(residual.color.g);
+			rgba[rgbaOffset + 2] = clampByte(residual.color.b);
+			rgba[rgbaOffset + 3] = prior;
+			alphaSum += prior;
+			continue;
+		}
+		const guardDistance = distancesToSubject[pixel];
+		if (guardDistance > settings.guardRadius) {
+			const leafGate = smoothStep((guardDistance - settings.guardRadius) / settings.leafGateRamp);
+			const leafAlpha = clampByte(chromaAlpha.data[pixel] * leafGate);
+			if (leafAlpha > settings.leafAlphaFloor) {
+				const repaired = despillDominantChannel(r, g, b, keyColor, settings.chromaLeafDespillMix);
+				rgba[rgbaOffset] = repaired.color.r;
+				rgba[rgbaOffset + 1] = repaired.color.g;
+				rgba[rgbaOffset + 2] = repaired.color.b;
+				rgba[rgbaOffset + 3] = leafAlpha;
+				alphaSum += leafAlpha;
+				leafAddedSum += leafAlpha;
+				continue;
+			}
+		}
+		rgba[rgbaOffset] = 0;
+		rgba[rgbaOffset + 1] = 0;
+		rgba[rgbaOffset + 2] = 0;
+		rgba[rgbaOffset + 3] = 0;
+	}
+	return {
+		alphaCoverage: alphaSum / (pixelCount * 255),
+		averageSpillPull: pulledFringePixels === 0 ? 0 : spillPullSum / pulledFringePixels,
+		coreCoverage: corePixels / pixelCount,
+		data: rgba,
+		fringeCoverage: fringePixels / pixelCount,
+		leafAddedCoverage: leafAddedSum / (pixelCount * 255),
+		priorCoverage: priorSum / (pixelCount * 255),
+		pulledFringeCoverage: pulledFringePixels / pixelCount,
+	};
+}
+
 function v2TrimapSettings(input: RunInput, args: ParsedArgs): V2TrimapSettings {
 	return {
 		backgroundSampleCount: Math.max(2, Math.round(getNumberOption(args, "background-samples", 24))),
@@ -2845,6 +2991,83 @@ function v3CoreFringeSettings(input: RunInput, args: ParsedArgs): V3CoreFringeSe
 		keyColor: normalizeHexColor(getOption(args, "key-color") ?? input.chroma.color),
 		selectedFrame: Math.max(1, Math.round(getNumberOption(args, "still-frame", 96))),
 		transparentCutoff: getNumberOption(args, "transparent-cutoff", 4),
+	};
+}
+
+function v5VideoPriorSettings(input: RunInput, args: ParsedArgs, stageDirectory: string): V5VideoPriorSettings {
+	return {
+		chromaLeafDespillMix: getNumberOption(args, "leaf-despill-mix", 0.55),
+		coreAlphaThreshold: getNumberOption(args, "core-alpha", 235),
+		coreDespillBand: Math.max(1, Math.round(getNumberOption(args, "core-despill-band", 20))),
+		coreDespillMix: getNumberOption(args, "core-despill-mix", 0.6),
+		fringeRadius: Math.max(1, Math.round(getNumberOption(args, "fringe-radius", 6))),
+		guardRadius: Math.max(1, Math.round(getNumberOption(args, "guard-radius", 8))),
+		keyColor: normalizeHexColor(getOption(args, "key-color") ?? input.chroma.color),
+		leafAlphaFloor: getNumberOption(args, "leaf-alpha-floor", 24),
+		leafGateRamp: Math.max(1, Math.round(getNumberOption(args, "leaf-gate-ramp", 4))),
+		priorAlphaDir: getOption(args, "prior-alpha-dir") ?? path.join(stageDirectory, "matanyone2", "source-frames", "pha"),
+		residualDespillMix: getNumberOption(args, "residual-despill-mix", 0.6),
+		selectedFrame: Math.max(1, Math.round(getNumberOption(args, "still-frame", 96))),
+		spillGain: getNumberOption(args, "spill-gain", 3),
+		spillPullMax: getNumberOption(args, "spill-pull-max", 0.85),
+		subjectAlphaThreshold: getNumberOption(args, "subject-alpha", 32),
+		transparentCutoff: getNumberOption(args, "transparent-cutoff", 2),
+	};
+}
+
+function resolvePriorAlphaDirectory(stageDirectory: string, runDirectory: string, args: ParsedArgs): string {
+	const explicit = getOption(args, "prior-alpha-dir");
+	if (explicit) {
+		return explicit;
+	}
+	const candidates = [
+		path.join(stageDirectory, "matanyone2"),
+		path.join(runDirectory, "video-prior", "matanyone2"),
+		path.join(runDirectory, "celstate-alpha-v5-video-prior", "matanyone2"),
+	];
+	for (const candidate of candidates) {
+		for (const suffix of ["source-frames/pha", "source/pha"]) {
+			const direct = path.join(candidate, ...suffix.split("/"));
+			if (existsSync(direct)) {
+				return direct;
+			}
+		}
+	}
+	return path.join(stageDirectory, "matanyone2", "source", "pha");
+}
+
+function v6ProjectionSettings(input: RunInput, args: ParsedArgs, stageDirectory: string, runDirectory: string): V6ProjectionSettings {
+	return {
+		bgPlateIterations: Math.max(4, Math.round(getNumberOption(args, "bg-plate-iterations", 24))),
+		chromaTransparentCutoff: getNumberOption(args, "chroma-transparent-cutoff", 8),
+		coreAlphaThreshold: getNumberOption(args, "core-alpha", 235),
+		coreProjectionBand: Math.max(1, Math.round(getNumberOption(args, "core-projection-band", 20))),
+		fringeRadius: Math.max(1, Math.round(getNumberOption(args, "fringe-radius", 6))),
+		guardRadius: Math.max(1, Math.round(getNumberOption(args, "guard-radius", 8))),
+		keyColor: normalizeHexColor(getOption(args, "key-color") ?? input.chroma.color),
+		leafAlphaFloor: getNumberOption(args, "leaf-alpha-floor", 24),
+		leafEdgeBand: Math.max(1, Math.round(getNumberOption(args, "leaf-edge-band", 4))),
+		leafGateRamp: Math.max(1, Math.round(getNumberOption(args, "leaf-gate-ramp", 4))),
+		leafInteriorMinDistance: Math.max(1, Math.round(getNumberOption(args, "leaf-interior-min-distance", 3))),
+		priorAlphaDir: resolvePriorAlphaDirectory(stageDirectory, runDirectory, args),
+		priorModel: getOption(args, "prior-model") ?? "bria-rmbg",
+		priorPackage: getOption(args, "prior-package") ?? "rembg[cpu,cli]",
+		selectedFrame: Math.max(1, Math.round(getNumberOption(args, "still-frame", 96))),
+		subjectAlphaThreshold: getNumberOption(args, "subject-alpha", 32),
+		transparentCutoff: getNumberOption(args, "transparent-cutoff", 2),
+	};
+}
+
+function videoPriorSettings(args: ParsedArgs): VideoPriorSettings {
+	const maxSizeOption = getOption(args, "max-size");
+	return {
+		maskThreshold: getNumberOption(args, "mask-threshold", 16),
+		matanyoneCommand: getOption(args, "matanyone-command") ?? "matanyone2",
+		matanyonePackage: getOption(args, "matanyone-package") ?? "matanyone2@git+https://github.com/pq-yang/MatAnyone2.git",
+		matanyoneViaWsl: getOption(args, "matanyone-via-wsl") === "true",
+		maxSize: maxSizeOption === undefined ? undefined : Math.max(64, Math.round(Number(maxSizeOption))),
+		priorModel: getOption(args, "prior-model") ?? "bria-rmbg",
+		priorPackage: getOption(args, "prior-package") ?? "rembg[cpu,cli]",
 	};
 }
 
@@ -3409,6 +3632,810 @@ async function runCelstateAlphaV4PriorFusion(args: ParsedArgs): Promise<void> {
 	console.log(`wrote Celstate alpha v4 prior fusion for ${runId}`);
 }
 
+async function discoverPriorAlphaDirectory(matanyoneRoot: string): Promise<string | undefined> {
+	if (!existsSync(matanyoneRoot)) {
+		return undefined;
+	}
+	const entries = await readdir(matanyoneRoot, { withFileTypes: true });
+	for (const entry of entries) {
+		if (!entry.isDirectory()) {
+			continue;
+		}
+		const phaDirectory = path.join(matanyoneRoot, entry.name, "pha");
+		if (!existsSync(phaDirectory)) {
+			continue;
+		}
+		const files = await readdir(phaDirectory);
+		if (files.some((file) => /\.png$/iu.test(file))) {
+			return phaDirectory;
+		}
+	}
+	return undefined;
+}
+
+async function listPriorAlphaFiles(directory: string): Promise<string[]> {
+	if (!existsSync(directory)) {
+		throw new Error(
+			`Missing prior alpha directory: ${directory}. Run video-prior or MatAnyone2 with --save-image, then pass --prior-alpha-dir if the alpha frames live elsewhere.`,
+		);
+	}
+	const files = await readdir(directory);
+	return files
+		.filter((file) => /\.png$/iu.test(file))
+		.sort()
+		.map((file) => path.join(directory, file));
+}
+
+async function runCelstateAlphaV5VideoPrior(args: ParsedArgs): Promise<void> {
+	const root = spikeRoot(args);
+	const runId = getRequiredOption(args, "run-id");
+	const { directory, input } = await requireRunInput(root, runId);
+	const context: RunContext = { directory, runId };
+	const stage: Stage = "celstate-alpha-v5-video-prior";
+	const requiredOutputs = ["alpha.mp4", "foreground.mov", "webm.webm", "prores.mov", "apng.png", "still.png", "report.json"] as const;
+	if (await skipCompletedStage(context, stage, requiredOutputs, forceRequested(args))) {
+		return;
+	}
+
+	const stageDirectory = path.join(directory, stage);
+	await ensureDirectory(stageDirectory);
+
+	await runDurableStep(context, stage, async () => {
+		const source = await requireSourceMp4(directory);
+		const chroma = chromaSettingsFromInputAndArgs(input, args);
+		const settings = v5VideoPriorSettings(input, args, stageDirectory);
+		const sourceProbe = await ffprobeJson(source, context);
+		const frameRate = frameRateFromProbe(sourceProbe);
+		const sourceFramesDirectory = path.join(stageDirectory, "fusion-source-frames");
+		const alphaFramesDirectory = path.join(stageDirectory, "rough-alpha-frames");
+		const rgbaFramesDirectory = path.join(stageDirectory, "rgba-frames");
+		const framePaths = await extractSourceFrames(source, sourceFramesDirectory, context);
+		const alphaPaths = await extractSharpChromaAlphaFrames(source, alphaFramesDirectory, chroma, context);
+		const priorPaths = await listPriorAlphaFiles(settings.priorAlphaDir);
+		if (framePaths.length !== alphaPaths.length) {
+			throw new Error(`Source frame count ${framePaths.length} does not match rough alpha frame count ${alphaPaths.length}.`);
+		}
+		if (framePaths.length !== priorPaths.length) {
+			throw new Error(
+				`Source frame count ${framePaths.length} does not match video prior alpha frame count ${priorPaths.length} in ${settings.priorAlphaDir}.`,
+			);
+		}
+		await rm(rgbaFramesDirectory, { force: true, recursive: true });
+		await ensureDirectory(rgbaFramesDirectory);
+		const alphaCoverages: number[] = [];
+		const coreCoverages: number[] = [];
+		const fringeCoverages: number[] = [];
+		const leafAddedCoverages: number[] = [];
+		const priorCoverages: number[] = [];
+		const pulledFringeCoverages: number[] = [];
+		const spillPulls: number[] = [];
+		let width = 0;
+		let height = 0;
+		const selectedFrameIndex = Math.min(framePaths.length - 1, settings.selectedFrame - 1);
+		for (let index = 0; index < framePaths.length; index += 1) {
+			const frame = await readRgbImage(framePaths[index]);
+			const priorAlpha = await readGrayImage(priorPaths[index]);
+			const chromaAlpha = await readGrayImage(alphaPaths[index]);
+			width = frame.width;
+			height = frame.height;
+			const rgba = createV5RgbaFrame(frame, priorAlpha, chromaAlpha, settings);
+			alphaCoverages.push(rgba.alphaCoverage);
+			coreCoverages.push(rgba.coreCoverage);
+			fringeCoverages.push(rgba.fringeCoverage);
+			leafAddedCoverages.push(rgba.leafAddedCoverage);
+			priorCoverages.push(rgba.priorCoverage);
+			pulledFringeCoverages.push(rgba.pulledFringeCoverage);
+			spillPulls.push(rgba.averageSpillPull);
+			const output = path.join(rgbaFramesDirectory, `frame-${String(index + 1).padStart(5, "0")}.png`);
+			await writeRgbaImage(rgba.data, frame.width, frame.height, output);
+			if (index === selectedFrameIndex) {
+				await copyFile(output, path.join(stageDirectory, "still.png"));
+				await copyFile(priorPaths[index], path.join(stageDirectory, "prior-alpha-still.png"));
+			}
+		}
+		const commandLogs = [
+			...await writeCompositeStill(stageDirectory, path.join(stageDirectory, "still.png"), width, height, context),
+			...await encodeRgbaFrameOutputs(stageDirectory, frameRate, width, height, context),
+		];
+		await writeStageReport(directory, stage, {
+			alphaCoverage: summarizeMetric(alphaCoverages),
+			chroma,
+			commandLogs,
+			coreCoverage: summarizeMetric(coreCoverages),
+			frameCount: framePaths.length,
+			frameRate,
+			fringeCoverage: summarizeMetric(fringeCoverages),
+			leafAddedCoverage: summarizeMetric(leafAddedCoverages),
+			note:
+				"Alpha Compiler v5: temporally propagated video matting prior (MatAnyone2 seeded from a first-frame mask) supplies the subject matte. Chroma evidence only re-adds detached secondary elements (falling leaves) away from the subject guard band. Fringe RGB is repaired by pulling toward inward core colors gated by key-channel spill confidence, plus a light residual despill; no partial-alpha chroma equation recovery.",
+			outputs: {
+				alpha: "alpha.mp4",
+				apng: "apng.png",
+				foreground: "foreground.mov",
+				previewOnCream: "preview-on-cream.mp4",
+				priorAlphaStill: "prior-alpha-still.png",
+				prores: "prores.mov",
+				still: "still.png",
+				stillOnCream: "still-on-cream.png",
+				stillOnDark: "still-on-dark.png",
+				stillOnRed: "still-on-red.png",
+				stillOnTexture: "still-on-texture.png",
+				textureBackground: "texture-background.png",
+				webm: "webm.webm",
+			},
+			priorAlphaDir: relativeToWorkspace(settings.priorAlphaDir),
+			priorCoverage: summarizeMetric(priorCoverages),
+			pulledFringeCoverage: summarizeMetric(pulledFringeCoverages),
+			settings,
+			sourceProbe,
+			spillPull: summarizeMetric(spillPulls),
+		});
+
+		return { commandLog: commandLogs[commandLogs.length - 1], outputs: requiredOutputs.map((output) => `${stage}/${output}`) };
+	});
+
+	console.log(`wrote Celstate alpha v5 video prior for ${runId}`);
+}
+
+async function createSeedMaskFromPrior(
+	priorRgbaPath: string,
+	maskPath: string,
+	threshold: number,
+): Promise<void> {
+	const prior = await readRgbaImage(priorRgbaPath);
+	const pixelCount = prior.width * prior.height;
+	const mask = Buffer.alloc(pixelCount);
+	for (let pixel = 0; pixel < pixelCount; pixel += 1) {
+		const alpha = prior.data[pixel * 4 + 3];
+		mask[pixel] = alpha >= threshold ? 255 : 0;
+	}
+	await sharp(mask, {
+		raw: {
+			channels: 1,
+			height: prior.height,
+			width: prior.width,
+		},
+	}).png().toFile(maskPath);
+}
+
+async function runVideoPrior(args: ParsedArgs): Promise<void> {
+	const root = spikeRoot(args);
+	const runId = getRequiredOption(args, "run-id");
+	const { directory, input } = await requireRunInput(root, runId);
+	const context: RunContext = { directory, runId };
+	const stage: Stage = "video-prior";
+	const requiredOutputs = ["first-frame-mask.png", "report.json"] as const;
+	if (await skipCompletedStage(context, stage, requiredOutputs, forceRequested(args))) {
+		return;
+	}
+
+	const stageDirectory = path.join(directory, stage);
+	await ensureDirectory(stageDirectory);
+
+	await runDurableStep(context, stage, async () => {
+		const source = await requireSourceMp4(directory);
+		const settings = videoPriorSettings(args);
+		const sourceProbe = await ffprobeJson(source, context);
+		const firstFramePath = path.join(stageDirectory, "first-frame.png");
+		const firstFramePriorPath = path.join(stageDirectory, "first-frame-prior.png");
+		const firstFrameMaskPath = path.join(stageDirectory, "first-frame-mask.png");
+		const matanyoneOutputRoot = path.join(stageDirectory, "matanyone2");
+		let priorAlphaDir = path.join(matanyoneOutputRoot, path.parse(source).name, "pha");
+		const commandLogs: string[] = [];
+
+		const firstFrameLog = await runFfmpeg(
+			["-y", "-i", source, "-frames:v", "1", firstFramePath],
+			"video prior first frame extraction",
+			context,
+		);
+		if (firstFrameLog) {
+			commandLogs.push(firstFrameLog);
+		}
+
+		const rembgResult = await runCommand(
+			"uvx",
+			["--from", settings.priorPackage, "rembg", "i", "-m", settings.priorModel, firstFramePath, firstFramePriorPath],
+			"video prior rembg first-frame seed",
+			context,
+		);
+		if (rembgResult.logPath) {
+			commandLogs.push(rembgResult.logPath);
+		}
+
+		await createSeedMaskFromPrior(firstFramePriorPath, firstFrameMaskPath, settings.maskThreshold);
+
+		const matanyoneCliArgs = [
+			"-i",
+			source,
+			"-m",
+			firstFrameMaskPath,
+			"-o",
+			matanyoneOutputRoot,
+			"--save-image",
+		];
+		if (settings.maxSize !== undefined) {
+			matanyoneCliArgs.push("--max-size", String(settings.maxSize));
+		}
+
+		let matanyoneStatus: "failed" | "skipped" | "succeeded" = "skipped";
+		let matanyoneError: string | undefined;
+		try {
+			const matanyoneResult = settings.matanyoneViaWsl
+				? await runCommand(
+						"powershell",
+						["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path.join(process.cwd(), "scripts", "wsl", "matanyone2.ps1"), ...matanyoneCliArgs],
+						"video prior matanyone2 inference (wsl)",
+						context,
+					)
+				: await runCommand(
+						"uvx",
+						["--from", settings.matanyonePackage, settings.matanyoneCommand, ...matanyoneCliArgs],
+						"video prior matanyone2 inference",
+						context,
+					);
+			if (matanyoneResult.logPath) {
+				commandLogs.push(matanyoneResult.logPath);
+			}
+			matanyoneStatus = "succeeded";
+		} catch (error: unknown) {
+			matanyoneStatus = "failed";
+			matanyoneError = error instanceof Error ? error.message : String(error);
+		}
+
+		const discoveredPriorAlphaDir = await discoverPriorAlphaDirectory(matanyoneOutputRoot);
+		if (discoveredPriorAlphaDir) {
+			priorAlphaDir = discoveredPriorAlphaDir;
+		}
+		const priorPaths = existsSync(priorAlphaDir) ? await listPriorAlphaFiles(priorAlphaDir) : [];
+		await writeStageReport(directory, stage, {
+			commandLogs,
+			frameCount: priorPaths.length,
+			matanyoneError,
+			matanyoneStatus,
+			note:
+				"Video prior stage: rembg bria-rmbg seeds a first-frame mask, then MatAnyone2 propagates alpha across the clip. Re-run with --force if MatAnyone2 was unavailable; pass --prior-alpha-dir to v6 when reusing an existing prior.",
+			outputs: {
+				firstFrame: "first-frame.png",
+				firstFrameMask: "first-frame-mask.png",
+				firstFramePrior: "first-frame-prior.png",
+				priorAlphaDir: existsSync(priorAlphaDir) ? relativeToWorkspace(priorAlphaDir) : undefined,
+			},
+			priorAlphaDir: existsSync(priorAlphaDir) ? relativeToWorkspace(priorAlphaDir) : undefined,
+			settings,
+			sourceProbe,
+		});
+
+		return {
+			commandLog: commandLogs[commandLogs.length - 1],
+			outputs: [
+				...requiredOutputs,
+				...(priorPaths.length > 0 ? ["matanyone2/"] : []),
+			],
+		};
+	});
+
+	console.log(`wrote video prior artifacts for ${runId}`);
+}
+
+async function extractPriorAlphaFromRgbaFrames(rgbaFramesDirectory: string, alphaFramesDirectory: string): Promise<string[]> {
+	await rm(alphaFramesDirectory, { force: true, recursive: true });
+	await ensureDirectory(alphaFramesDirectory);
+	const rgbaPaths = await listFrameFiles(rgbaFramesDirectory);
+	const alphaPaths: string[] = [];
+	for (const rgbaPath of rgbaPaths) {
+		const rgba = await readRgbaImage(rgbaPath);
+		const alpha = Buffer.alloc(rgba.width * rgba.height);
+		for (let pixel = 0; pixel < alpha.length; pixel += 1) {
+			alpha[pixel] = rgba.data[pixel * 4 + 3] ?? 0;
+		}
+		const output = path.join(alphaFramesDirectory, path.basename(rgbaPath));
+		await sharp(alpha, {
+			raw: {
+				channels: 1,
+				height: rgba.height,
+				width: rgba.width,
+			},
+		}).png().toFile(output);
+		alphaPaths.push(output);
+	}
+	return alphaPaths;
+}
+
+async function runPerFramePrior(args: ParsedArgs): Promise<void> {
+	const root = spikeRoot(args);
+	const runId = getRequiredOption(args, "run-id");
+	const { directory } = await requireRunInput(root, runId);
+	const context: RunContext = { directory, runId };
+	const stage: Stage = "video-prior";
+	const stageDirectory = path.join(directory, stage);
+	const priorSettings = videoPriorSettings(args);
+	const priorRgbaDirectory = path.join(stageDirectory, "per-frame-prior-rgba");
+	const priorAlphaDirectory = getOption(args, "prior-alpha-dir") ?? path.join(stageDirectory, "per-frame-prior-alpha");
+	const sourceFramesDirectory = path.join(stageDirectory, "source-frames");
+	const source = await requireSourceMp4(directory);
+	await ensureDirectory(stageDirectory);
+	const sourceFramePaths = await extractSourceFrames(source, sourceFramesDirectory, context);
+	await runRembgPriorFrames(
+		sourceFramesDirectory,
+		priorRgbaDirectory,
+		{
+			chromaBackgroundAlphaScale: 0.35,
+			chromaTransparentCutoff: 8,
+			coreAlphaThreshold: 244,
+			despillMix: 0.65,
+			fringeRadius: 3,
+			keyColor: DEFAULT_CHROMA_COLOR,
+			priorAlphaFloor: 4,
+			priorModel: priorSettings.priorModel,
+			priorPackage: priorSettings.priorPackage,
+			selectedFrame: 1,
+			transparentCutoff: 3,
+		},
+		context,
+		forceRequested(args),
+	);
+	const alphaPaths = await extractPriorAlphaFromRgbaFrames(priorRgbaDirectory, priorAlphaDirectory);
+	console.log(`wrote ${alphaPaths.length} per-frame prior alpha frames to ${relativeToWorkspace(priorAlphaDirectory)}`);
+}
+
+const GENERALIZATION_PROBE_BANNER =
+	"Plumbing smoke test only — not quality evidence. Use `pnpm alpha-eval run && pnpm alpha-eval compare` for regression gating.";
+
+async function generateProbeSources(args: ParsedArgs, options: { skipBanner?: boolean } = {}): Promise<void> {
+	if (!options.skipBanner) {
+		console.warn(GENERALIZATION_PROBE_BANNER);
+	}
+	const root = spikeRoot(args);
+	const probeDirectory = path.join(root, "probes");
+	await ensureDirectory(probeDirectory);
+	const context: RunContext = { directory: probeDirectory, runId: "probe-generation" };
+	const blueSource = path.join(probeDirectory, "probe-blue-screen.mp4");
+	const glowSource = path.join(probeDirectory, "probe-green-glow.mp4");
+	const durationSeconds = getNumberOption(args, "probe-duration", 1);
+	const frameRate = "24";
+	const size = "1280x720";
+	await runFfmpeg(
+		[
+			"-y",
+			"-f",
+			"lavfi",
+			"-i",
+			`color=c=0x2040ff:s=${size}:r=${frameRate}:d=${durationSeconds}`,
+			"-vf",
+			"geq=r='if(lt(hypot(X-320+mod(T*90\\,520)\\,Y-360)\\,88)\\,178\\,32)':g='if(lt(hypot(X-320+mod(T*90\\,520)\\,Y-360)\\,88)\\,88\\,64)':b='if(lt(hypot(X-320+mod(T*90\\,520)\\,Y-360)\\,88)\\,48\\,255)'",
+			"-c:v",
+			"libx264",
+			"-pix_fmt",
+			"yuv420p",
+			blueSource,
+		],
+		"generalization probe blue-screen source",
+		context,
+	);
+	await runFfmpeg(
+		[
+			"-y",
+			"-f",
+			"lavfi",
+			"-i",
+			`color=c=0x23af42:s=${size}:r=${frameRate}:d=${durationSeconds}`,
+			"-vf",
+			"geq=r='if(lt(hypot(X-640\\,Y-360)\\,120+40*sin(2*PI*T/2))\\,245\\,35)':g='if(lt(hypot(X-640\\,Y-360)\\,120+40*sin(2*PI*T/2))\\,245\\,175)':b='if(lt(hypot(X-640\\,Y-360)\\,120+40*sin(2*PI*T/2))\\,245\\,66)'",
+			"-c:v",
+			"libx264",
+			"-pix_fmt",
+			"yuv420p",
+			glowSource,
+		],
+		"generalization probe green-glow source",
+		context,
+	);
+	console.log(`wrote probe sources:\n  ${relativeToWorkspace(blueSource)}\n  ${relativeToWorkspace(glowSource)}`);
+}
+
+async function promoteReviewCandidate(args: ParsedArgs): Promise<void> {
+	const root = spikeRoot(args);
+	const runId = getRequiredOption(args, "run-id");
+	const stage = (getOption(args, "stage") ?? "celstate-alpha-v7") as Stage;
+	const { directory } = await requireRunInput(root, runId);
+	const stageDirectory = path.join(directory, stage);
+	const reviewDirectory = path.join(root, "review", runId);
+	await rm(reviewDirectory, { force: true, recursive: true });
+	await ensureDirectory(reviewDirectory);
+	const copyMap: Record<string, string> = {
+		"animation-on-cream-preview.mp4": "preview-on-cream.mp4",
+		"report.json": "report.json",
+		"spill-heatmap.png": "spill-heatmap.png",
+		"transparent-animation-prores.mov": "prores.mov",
+		"transparent-animation.webm": "webm.webm",
+		"transparent-still-on-cream.png": "still-on-cream.png",
+		"transparent-still-on-dark.png": "still-on-dark.png",
+		"transparent-still-on-red.png": "still-on-red.png",
+		"transparent-still-on-texture.png": "still-on-texture.png",
+		"transparent-still.png": "still.png",
+	};
+	const files = Object.keys(copyMap);
+	for (const destinationName of files) {
+		const sourceName = copyMap[destinationName];
+		const sourcePath = path.join(stageDirectory, sourceName);
+		if (!existsSync(sourcePath)) {
+			throw new Error(`Missing review source artifact: ${sourcePath}`);
+		}
+		await copyFile(sourcePath, path.join(reviewDirectory, destinationName));
+	}
+	console.log(`promoted ${stage} review candidate to ${relativeToWorkspace(reviewDirectory)}`);
+}
+
+async function runGeneralizationProbes(args: ParsedArgs): Promise<void> {
+	console.warn(GENERALIZATION_PROBE_BANNER);
+	await generateProbeSources(args, { skipBanner: true });
+	const root = spikeRoot(args);
+	const probeDirectory = path.join(root, "probes");
+	const blueRunId = getOption(args, "blue-run-id") ?? "probe-blue-screen-gp01";
+	const glowRunId = getOption(args, "glow-run-id") ?? "probe-green-glow-gp02";
+	const probes = [
+		{
+			keyColor: "#2040ff",
+			promptId: "GP-01",
+			runId: blueRunId,
+			source: path.join(probeDirectory, "probe-blue-screen.mp4"),
+		},
+		{
+			keyColor: "#23af42",
+			promptId: "GP-02",
+			runId: glowRunId,
+			source: path.join(probeDirectory, "probe-green-glow.mp4"),
+		},
+	] as const;
+	for (const probe of probes) {
+		const probeRunDirectory = path.join(runsRoot(root), probe.runId);
+		if (existsSync(path.join(probeRunDirectory, "input.json"))) {
+			console.log(`reusing existing probe run ${probe.runId}`);
+		} else {
+			await createRun({
+				command: "create-run",
+				options: new Map([
+					["prompt-id", [probe.promptId]],
+					["source-mode", ["text-to-video"]],
+					["key-color", [probe.keyColor]],
+					["run-id", [probe.runId]],
+				]),
+				positionals: [],
+			});
+		}
+		await attachSource({
+			command: "attach-source",
+			options: new Map([
+				["run-id", [probe.runId]],
+				["source", [probe.source]],
+				["force", ["true"]],
+			]),
+			positionals: [],
+		});
+		const probeArgs: ParsedArgs = {
+			command: "per-frame-prior",
+			options: new Map([
+				["run-id", [probe.runId]],
+				...(forceRequested(args) ? [["force", ["true"]] as const] : []),
+			]),
+			positionals: [],
+		};
+		await runPerFramePrior(probeArgs);
+		const priorAlphaDir = path.join(runsRoot(root), probe.runId, "video-prior", "per-frame-prior-alpha");
+		await runCelstateAlphaV6Projection({
+			command: "celstate-alpha-v6-projection",
+			options: new Map([
+				["run-id", [probe.runId]],
+				["key-color", [probe.keyColor]],
+				["prior-alpha-dir", [priorAlphaDir]],
+				["force", ["true"]],
+			]),
+			positionals: [],
+		});
+	}
+	console.log("generalization probes complete");
+}
+
+async function runCelstateAlphaV6Projection(args: ParsedArgs): Promise<void> {
+	const root = spikeRoot(args);
+	const runId = getRequiredOption(args, "run-id");
+	const { directory, input } = await requireRunInput(root, runId);
+	const context: RunContext = { directory, runId };
+	const stage: Stage = "celstate-alpha-v6-projection";
+	const requiredOutputs = ["alpha.mp4", "foreground.mov", "webm.webm", "prores.mov", "apng.png", "still.png", "report.json", "spill-heatmap.png"] as const;
+	if (await skipCompletedStage(context, stage, requiredOutputs, forceRequested(args))) {
+		return;
+	}
+
+	const stageDirectory = path.join(directory, stage);
+	await ensureDirectory(stageDirectory);
+
+	await runDurableStep(context, stage, async () => {
+		const source = await requireSourceMp4(directory);
+		const chroma = chromaSettingsFromInputAndArgs(input, args);
+		const settings = v6ProjectionSettings(input, args, stageDirectory, directory);
+		const sourceProbe = await ffprobeJson(source, context);
+		const frameRate = frameRateFromProbe(sourceProbe);
+		const sourceFramesDirectory = path.join(stageDirectory, "fusion-source-frames");
+		const alphaFramesDirectory = path.join(stageDirectory, "rough-alpha-frames");
+		const rgbaFramesDirectory = path.join(stageDirectory, "rgba-frames");
+		const framePaths = await extractSourceFrames(source, sourceFramesDirectory, context);
+		const alphaPaths = await extractSharpChromaAlphaFrames(source, alphaFramesDirectory, chroma, context);
+		const priorPaths = await listPriorAlphaFiles(settings.priorAlphaDir);
+		if (framePaths.length !== alphaPaths.length) {
+			throw new Error(`Source frame count ${framePaths.length} does not match rough alpha frame count ${alphaPaths.length}.`);
+		}
+		if (framePaths.length !== priorPaths.length) {
+			throw new Error(
+				`Source frame count ${framePaths.length} does not match video prior alpha frame count ${priorPaths.length} in ${settings.priorAlphaDir}.`,
+			);
+		}
+		await rm(rgbaFramesDirectory, { force: true, recursive: true });
+		await ensureDirectory(rgbaFramesDirectory);
+		const alphaCoverages: number[] = [];
+		const coreCoverages: number[] = [];
+		const fringeCoverages: number[] = [];
+		const leafAddedCoverages: number[] = [];
+		const priorCoverages: number[] = [];
+		const projectedCoverages: number[] = [];
+		const residualSpills: number[] = [];
+		const detachedColorFidelities: number[] = [];
+		const temporalAlphaDeltas: number[] = [];
+		const perFrameMetrics: Array<Record<string, number>> = [];
+		let width = 0;
+		let height = 0;
+		let previousAlpha: Uint8Array | undefined;
+		const selectedFrameIndex = Math.min(framePaths.length - 1, settings.selectedFrame - 1);
+		let selectedHeatmap: Uint8Array | undefined;
+		for (let index = 0; index < framePaths.length; index += 1) {
+			const frame = await readRgbImage(framePaths[index]);
+			const priorAlpha = await readGrayImage(priorPaths[index]);
+			const chromaAlpha = await readGrayImage(alphaPaths[index]);
+			width = frame.width;
+			height = frame.height;
+			const rgba = createV6RgbaFrame(
+				frame,
+				priorAlpha,
+				chromaAlpha,
+				settings,
+				previousAlpha,
+				index === selectedFrameIndex,
+			);
+			alphaCoverages.push(rgba.alphaCoverage);
+			coreCoverages.push(rgba.coreCoverage);
+			fringeCoverages.push(rgba.fringeCoverage);
+			leafAddedCoverages.push(rgba.leafAddedCoverage);
+			priorCoverages.push(rgba.priorCoverage);
+			projectedCoverages.push(rgba.projectedCoverage);
+			residualSpills.push(rgba.residualSpill);
+			detachedColorFidelities.push(rgba.detachedColorFidelity);
+			temporalAlphaDeltas.push(rgba.temporalAlphaDelta);
+			perFrameMetrics.push({
+				alphaCoverage: Number(rgba.alphaCoverage.toFixed(6)),
+				coreCoverage: Number(rgba.coreCoverage.toFixed(6)),
+				detachedColorFidelity: Number(rgba.detachedColorFidelity.toFixed(6)),
+				frame: index + 1,
+				fringeCoverage: Number(rgba.fringeCoverage.toFixed(6)),
+				leafAddedCoverage: Number(rgba.leafAddedCoverage.toFixed(6)),
+				priorCoverage: Number(rgba.priorCoverage.toFixed(6)),
+				projectedCoverage: Number(rgba.projectedCoverage.toFixed(6)),
+				residualSpill: Number(rgba.residualSpill.toFixed(6)),
+				temporalAlphaDelta: Number(rgba.temporalAlphaDelta.toFixed(6)),
+			});
+			const output = path.join(rgbaFramesDirectory, `frame-${String(index + 1).padStart(5, "0")}.png`);
+			await writeRgbaImage(rgba.data, frame.width, frame.height, output);
+			if (index === selectedFrameIndex) {
+				await copyFile(output, path.join(stageDirectory, "still.png"));
+				await copyFile(priorPaths[index], path.join(stageDirectory, "prior-alpha-still.png"));
+				selectedHeatmap = rgba.spillHeatmap;
+			}
+			previousAlpha = new Uint8Array(frame.width * frame.height);
+			for (let pixel = 0; pixel < previousAlpha.length; pixel += 1) {
+				previousAlpha[pixel] = rgba.data[pixel * 4 + 3] ?? 0;
+			}
+		}
+		if (selectedHeatmap) {
+			await writeSpillHeatmap(selectedHeatmap, width, height, path.join(stageDirectory, "spill-heatmap.png"));
+		}
+		const commandLogs = [
+			...await writeCompositeStill(stageDirectory, path.join(stageDirectory, "still.png"), width, height, context),
+			...await encodeRgbaFrameOutputs(stageDirectory, frameRate, width, height, context),
+		];
+		await writeJson(path.join(stageDirectory, "per-frame-metrics.json"), perFrameMetrics);
+		await writeStageReport(directory, stage, {
+			alphaCoverage: summarizeMetric(alphaCoverages),
+			chroma,
+			commandLogs,
+			coreCoverage: summarizeMetric(coreCoverages),
+			detachedColorFidelity: summarizeMetric(detachedColorFidelities),
+			frameCount: framePaths.length,
+			frameRate,
+			fringeCoverage: summarizeMetric(fringeCoverages),
+			leafAddedCoverage: summarizeMetric(leafAddedCoverages),
+			note:
+				"Alpha Compiler v6: MatAnyone2 subject matte plus sharp chroma detached elements. RGB repair uses projection decontamination along the local background-to-reference axis with per-frame background plates and dual inward reference fills. Detached interiors keep source color; only edge bands are repaired.",
+			outputs: {
+				alpha: "alpha.mp4",
+				apng: "apng.png",
+				foreground: "foreground.mov",
+				perFrameMetrics: "per-frame-metrics.json",
+				previewOnCream: "preview-on-cream.mp4",
+				priorAlphaStill: "prior-alpha-still.png",
+				prores: "prores.mov",
+				spillHeatmap: "spill-heatmap.png",
+				still: "still.png",
+				stillOnCream: "still-on-cream.png",
+				stillOnDark: "still-on-dark.png",
+				stillOnRed: "still-on-red.png",
+				stillOnTexture: "still-on-texture.png",
+				textureBackground: "texture-background.png",
+				webm: "webm.webm",
+			},
+			priorAlphaDir: relativeToWorkspace(settings.priorAlphaDir),
+			priorCoverage: summarizeMetric(priorCoverages),
+			projectedCoverage: summarizeMetric(projectedCoverages),
+			residualSpill: summarizeMetric(residualSpills),
+			settings,
+			sourceProbe,
+			temporalAlphaDelta: summarizeMetric(temporalAlphaDeltas),
+		});
+
+		return { commandLog: commandLogs[commandLogs.length - 1], outputs: requiredOutputs.map((output) => `${stage}/${output}`) };
+	});
+
+	console.log(`wrote Celstate alpha v6 projection for ${runId}`);
+}
+
+async function runCelstateAlphaV7(args: ParsedArgs): Promise<void> {
+	const root = spikeRoot(args);
+	const runId = getRequiredOption(args, "run-id");
+	const { directory, input } = await requireRunInput(root, runId);
+	const context: RunContext = { directory, runId };
+	const stage: Stage = "celstate-alpha-v7";
+	const requiredOutputs = ["alpha.mp4", "foreground.mov", "webm.webm", "prores.mov", "apng.png", "still.png", "report.json", "spill-heatmap.png"] as const;
+	if (await skipCompletedStage(context, stage, requiredOutputs, forceRequested(args))) {
+		return;
+	}
+
+	const stageDirectory = path.join(directory, stage);
+	await ensureDirectory(stageDirectory);
+
+	await runDurableStep(context, stage, async () => {
+		const source = await requireSourceMp4(directory);
+		const chroma = chromaSettingsFromInputAndArgs(input, args);
+		const settings = v6ProjectionSettings(input, args, stageDirectory, directory);
+		const sourceProbe = await ffprobeJson(source, context);
+		const frameRate = frameRateFromProbe(sourceProbe);
+		const sourceFramesDirectory = path.join(stageDirectory, "fusion-source-frames");
+		const alphaFramesDirectory = path.join(stageDirectory, "rough-alpha-frames");
+		const rgbaFramesDirectory = path.join(stageDirectory, "rgba-frames");
+		const framePaths = await extractSourceFrames(source, sourceFramesDirectory, context);
+		const alphaPaths = await extractSharpChromaAlphaFrames(source, alphaFramesDirectory, chroma, context);
+		const priorPaths = await listPriorAlphaFiles(settings.priorAlphaDir);
+		if (framePaths.length !== alphaPaths.length) {
+			throw new Error(`Source frame count ${framePaths.length} does not match rough alpha frame count ${alphaPaths.length}.`);
+		}
+		if (framePaths.length !== priorPaths.length) {
+			throw new Error(
+				`Source frame count ${framePaths.length} does not match video prior alpha frame count ${priorPaths.length} in ${settings.priorAlphaDir}.`,
+			);
+		}
+		await rm(rgbaFramesDirectory, { force: true, recursive: true });
+		await ensureDirectory(rgbaFramesDirectory);
+		const alphaCoverages: number[] = [];
+		const coreCoverages: number[] = [];
+		const fringeCoverages: number[] = [];
+		const leafAddedCoverages: number[] = [];
+		const priorCoverages: number[] = [];
+		const projectedCoverages: number[] = [];
+		const residualSpills: number[] = [];
+		const detachedColorFidelities: number[] = [];
+		const temporalAlphaDeltas: number[] = [];
+		const perFrameMetrics: Array<Record<string, number>> = [];
+		let width = 0;
+		let height = 0;
+		let previousAlpha: Uint8Array | undefined;
+		const selectedFrameIndex = Math.min(framePaths.length - 1, settings.selectedFrame - 1);
+		let selectedHeatmap: Uint8Array | undefined;
+		for (let index = 0; index < framePaths.length; index += 1) {
+			const frame = await readRgbImage(framePaths[index]);
+			const priorAlpha = await readGrayImage(priorPaths[index]);
+			const chromaAlpha = await readGrayImage(alphaPaths[index]);
+			width = frame.width;
+			height = frame.height;
+			const rgba = createV7RgbaFrame(
+				frame,
+				priorAlpha,
+				chromaAlpha,
+				settings,
+				previousAlpha,
+				index === selectedFrameIndex,
+			);
+			alphaCoverages.push(rgba.alphaCoverage);
+			coreCoverages.push(rgba.coreCoverage);
+			fringeCoverages.push(rgba.fringeCoverage);
+			leafAddedCoverages.push(rgba.leafAddedCoverage);
+			priorCoverages.push(rgba.priorCoverage);
+			projectedCoverages.push(rgba.projectedCoverage);
+			residualSpills.push(rgba.residualSpill);
+			detachedColorFidelities.push(rgba.detachedColorFidelity);
+			temporalAlphaDeltas.push(rgba.temporalAlphaDelta);
+			perFrameMetrics.push({
+				alphaCoverage: Number(rgba.alphaCoverage.toFixed(6)),
+				coreCoverage: Number(rgba.coreCoverage.toFixed(6)),
+				detachedColorFidelity: Number(rgba.detachedColorFidelity.toFixed(6)),
+				frame: index + 1,
+				fringeCoverage: Number(rgba.fringeCoverage.toFixed(6)),
+				leafAddedCoverage: Number(rgba.leafAddedCoverage.toFixed(6)),
+				priorCoverage: Number(rgba.priorCoverage.toFixed(6)),
+				projectedCoverage: Number(rgba.projectedCoverage.toFixed(6)),
+				residualSpill: Number(rgba.residualSpill.toFixed(6)),
+				temporalAlphaDelta: Number(rgba.temporalAlphaDelta.toFixed(6)),
+			});
+			const output = path.join(rgbaFramesDirectory, `frame-${String(index + 1).padStart(5, "0")}.png`);
+			await writeRgbaImage(rgba.data, frame.width, frame.height, output);
+			if (index === selectedFrameIndex) {
+				await copyFile(output, path.join(stageDirectory, "still.png"));
+				await copyFile(priorPaths[index], path.join(stageDirectory, "prior-alpha-still.png"));
+				selectedHeatmap = rgba.spillHeatmap;
+			}
+			previousAlpha = new Uint8Array(frame.width * frame.height);
+			for (let pixel = 0; pixel < previousAlpha.length; pixel += 1) {
+				previousAlpha[pixel] = rgba.data[pixel * 4 + 3] ?? 0;
+			}
+		}
+		if (selectedHeatmap) {
+			await writeSpillHeatmap(selectedHeatmap, width, height, path.join(stageDirectory, "spill-heatmap.png"));
+		}
+		const commandLogs = [
+			...await writeCompositeStill(stageDirectory, path.join(stageDirectory, "still.png"), width, height, context),
+			...await encodeRgbaFrameOutputs(stageDirectory, frameRate, width, height, context),
+		];
+		await writeJson(path.join(stageDirectory, "per-frame-metrics.json"), perFrameMetrics);
+		await writeStageReport(directory, stage, {
+			alphaCoverage: summarizeMetric(alphaCoverages),
+			chroma,
+			commandLogs,
+			coreCoverage: summarizeMetric(coreCoverages),
+			detachedColorFidelity: summarizeMetric(detachedColorFidelities),
+			frameCount: framePaths.length,
+			frameRate,
+			fringeCoverage: summarizeMetric(fringeCoverages),
+			leafAddedCoverage: summarizeMetric(leafAddedCoverages),
+			note:
+				"Alpha Compiler v7: Color-line alpha fusion + matting-equation foreground recovery + evidence-gated detached path. Per-pixel alpha is fused from the prior with a two-color line estimate; RGB is recovered by inverting straight-alpha compositing against a per-frame background plate. Detached elements are gated by color evidence rather than hard distance. Reference seeds are filtered by core proximity to prevent contaminated edges from polluting the fill.",
+			outputs: {
+				alpha: "alpha.mp4",
+				apng: "apng.png",
+				foreground: "foreground.mov",
+				perFrameMetrics: "per-frame-metrics.json",
+				previewOnCream: "preview-on-cream.mp4",
+				priorAlphaStill: "prior-alpha-still.png",
+				prores: "prores.mov",
+				spillHeatmap: "spill-heatmap.png",
+				still: "still.png",
+				stillOnCream: "still-on-cream.png",
+				stillOnDark: "still-on-dark.png",
+				stillOnRed: "still-on-red.png",
+				stillOnTexture: "still-on-texture.png",
+				textureBackground: "texture-background.png",
+				webm: "webm.webm",
+			},
+			priorAlphaDir: relativeToWorkspace(settings.priorAlphaDir),
+			priorCoverage: summarizeMetric(priorCoverages),
+			projectedCoverage: summarizeMetric(projectedCoverages),
+			residualSpill: summarizeMetric(residualSpills),
+			settings,
+			sourceProbe,
+			temporalAlphaDelta: summarizeMetric(temporalAlphaDeltas),
+		});
+
+		return { commandLog: commandLogs[commandLogs.length - 1], outputs: requiredOutputs.map((output) => `${stage}/${output}`) };
+	});
+
+	console.log(`wrote Celstate alpha v7 for ${runId}`);
+}
+
 async function ingestMattingBaseline(args: ParsedArgs): Promise<void> {
 	const root = spikeRoot(args);
 	const runId = getRequiredOption(args, "run-id");
@@ -3687,6 +4714,14 @@ function printHelp(): void {
 		"  celstate-alpha-v2-trimap --run-id <id> [--key-color #00ff00] [--background-samples 24] [--background-threshold 28] [--foreground-threshold 76] [--still-frame 96] [--despill-mix 0.8]",
 		"  celstate-alpha-v3-core-fringe --run-id <id> [--key-color #00ff00] [--similarity 0.12] [--blend 0.08] [--core-alpha 242] [--fringe-radius 4] [--transparent-cutoff 4] [--still-frame 96] [--despill-mix 1.25]",
 		"  celstate-alpha-v4-prior-fusion --run-id <id> [--prior-model bria-rmbg] [--prior-package rembg[cpu,cli]] [--key-color #00ff00] [--similarity 0.12] [--blend 0.08] [--core-alpha 244] [--fringe-radius 3] [--transparent-cutoff 3] [--chroma-transparent-cutoff 8] [--still-frame 96] [--despill-mix 0.65]",
+		"  celstate-alpha-v5-video-prior --run-id <id> [--prior-alpha-dir <dir>] [--key-color #00ff00] [--similarity 0.12] [--blend 0.08] [--core-alpha 235] [--core-despill-band 20] [--core-despill-mix 0.6] [--fringe-radius 6] [--guard-radius 8] [--subject-alpha 32] [--transparent-cutoff 2] [--spill-gain 3] [--spill-pull-max 0.85] [--residual-despill-mix 0.6] [--leaf-despill-mix 0.55] [--leaf-alpha-floor 24] [--leaf-gate-ramp 4] [--still-frame 96]",
+		"  video-prior --run-id <id> [--prior-model bria-rmbg] [--prior-package rembg[cpu,cli]] [--mask-threshold 16] [--matanyone-package matanyone2@git+https://github.com/pq-yang/MatAnyone2.git] [--matanyone-command matanyone2] [--matanyone-via-wsl] [--max-size 1280] [--force]",
+		"  celstate-alpha-v6-projection --run-id <id> [--prior-alpha-dir <dir>] [--key-color #00ff00] [--similarity 0.12] [--blend 0.08] [--core-alpha 235] [--core-projection-band 20] [--fringe-radius 6] [--guard-radius 8] [--subject-alpha 32] [--transparent-cutoff 2] [--chroma-transparent-cutoff 8] [--leaf-alpha-floor 24] [--leaf-edge-band 4] [--leaf-interior-min-distance 3] [--leaf-gate-ramp 4] [--bg-plate-iterations 24] [--still-frame 96]",
+		"  celstate-alpha-v7 --run-id <id> [--prior-alpha-dir <dir>] [--key-color #00ff00] [--similarity 0.12] [--blend 0.08] [--core-alpha 235] [--core-projection-band 20] [--fringe-radius 6] [--guard-radius 8] [--subject-alpha 32] [--transparent-cutoff 2] [--chroma-transparent-cutoff 8] [--leaf-alpha-floor 24] [--leaf-edge-band 4] [--leaf-interior-min-distance 3] [--leaf-gate-ramp 4] [--bg-plate-iterations 24] [--still-frame 96]",
+		"  generate-probe-sources [--probe-duration 1]  (plumbing smoke test — not quality eval; see pnpm alpha-eval)",
+		"  per-frame-prior --run-id <id> [--prior-model bria-rmbg] [--prior-package rembg[cpu,cli]] [--prior-alpha-dir <dir>] [--force]",
+		"  generalization-probes [--probe-duration 1] [--blue-run-id probe-blue-screen-gp01] [--glow-run-id probe-green-glow-gp02] [--force]  (plumbing smoke test — not quality eval; see pnpm alpha-eval)",
+		"  promote-review --run-id <id> [--stage celstate-alpha-v7]",
 		"  score --run-id <id> --stage <stage> --alpha-usability 1..5 --temporal-coherence 1..5 --edge-spill-halo 1..5 --identity-stability 1..5 --internal-motion 1..5 --secondary-motion-coupling 1..5 --prompt-compliance 1..5 --editor-compatibility 1..5 --overall-awe 1..5 [--failure <name>] [--notes <text>]",
 		"  status --run-id <id> [--events 12]",
 		"  summary",
@@ -3746,6 +4781,30 @@ async function main(): Promise<void> {
 			return;
 		case "celstate-alpha-v4-prior-fusion":
 			await runCelstateAlphaV4PriorFusion(args);
+			return;
+		case "celstate-alpha-v5-video-prior":
+			await runCelstateAlphaV5VideoPrior(args);
+			return;
+		case "video-prior":
+			await runVideoPrior(args);
+			return;
+		case "celstate-alpha-v6-projection":
+			await runCelstateAlphaV6Projection(args);
+			return;
+		case "celstate-alpha-v7":
+			await runCelstateAlphaV7(args);
+			return;
+		case "generate-probe-sources":
+			await generateProbeSources(args);
+			return;
+		case "per-frame-prior":
+			await runPerFramePrior(args);
+			return;
+		case "generalization-probes":
+			await runGeneralizationProbes(args);
+			return;
+		case "promote-review":
+			await promoteReviewCandidate(args);
 			return;
 		case "score":
 			await scoreRun(args);

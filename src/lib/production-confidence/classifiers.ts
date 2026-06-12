@@ -60,7 +60,14 @@ export const classifyAuthProbeVerdict = (
 	config: { requireProtectedRoute: boolean },
 ): Verdict => {
 	if (!evidence.preflightProvisioningHealthy) return "FAILED";
-	if (!evidence.authPageHealthy || !evidence.sessionEndpointHealthy) return "FAILED";
+	if (
+		!evidence.authPageHealthy ||
+		!evidence.sessionEndpointHealthy ||
+		!evidence.clerkFapiHealthy ||
+		!evidence.clerkSignInWidgetHealthy
+	) {
+		return "FAILED";
+	}
 	if (config.requireProtectedRoute && !evidence.protectedRouteReachable) return "FAILED";
 	if (config.requireProtectedRoute && !evidence.convexAuthenticatedQueryHealthy) return "FAILED";
 	if (config.requireProtectedRoute && !evidence.signOutHealthy) return "FAILED";

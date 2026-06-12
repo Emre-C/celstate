@@ -23,6 +23,7 @@ import {
   formatAuthCanaryProbeFailure,
   isFinalGetSessionProbeOk,
 } from "../canary/auth-canary-probe.mjs";
+import { probeClerkFapiScriptFromAuthPageHtml } from "../canary/auth-canary-clerk-fapi.mjs";
 import {
   classifyAuthProbeVerdict,
   classifyCheckoutProbeVerdict,
@@ -53,6 +54,7 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 // them never makes a healthy run fail; decreasing them risks false TIMEOUTs.
 
 const PLAYWRIGHT_NAVIGATION_TIMEOUT_MS = 30_000;
+const PLAYWRIGHT_CLERK_WIDGET_TIMEOUT_MS = 25_000;
 const PLAYWRIGHT_PAY_BUTTON_TIMEOUT_MS = 15_000;
 const PLAYWRIGHT_REDIRECT_AWAY_TIMEOUT_MS = 60_000;
 
@@ -186,17 +188,12 @@ function record(
   };
 }
 
-async function probeAuthSmoke(baseUrl: string): Promise<{
-  authPageHealthy: boolean;
-  sessionEndpointHealthy: boolean;
-}> {
+async function fetchAuthPageHtml(baseUrl: string): Promise<string> {
   const normalized = baseUrl.replace(/\/$/, "");
-  const joinUrl = (p: string) => `${normalized}${p}`;
-
   const ac = new AbortController();
   const t = setTimeout(() => ac.abort(), AUTH_CANARY_PROBE_TIMEOUT_MS);
   try {
-    const authRes = await fetch(joinUrl("/auth?error=access_denied"), {
+    const authRes = await fetch(`${normalized}/auth?error=access_denied`, {
       headers: { accept: "text/html" },
       signal: ac.signal,
     });
@@ -210,14 +207,18 @@ async function probeAuthSmoke(baseUrl: string): Promise<{
     if (!html.includes('data-testid="auth-sign-in"')) {
       throw new Error("auth page sign-in marker missing");
     }
+    return html;
   } finally {
     clearTimeout(t);
   }
+}
 
+async function probeAuthSessionEndpoint(baseUrl: string): Promise<void> {
+  const normalized = baseUrl.replace(/\/$/, "");
   const sc = new AbortController();
-  const t2 = setTimeout(() => sc.abort(), AUTH_CANARY_PROBE_TIMEOUT_MS);
+  const t = setTimeout(() => sc.abort(), AUTH_CANARY_PROBE_TIMEOUT_MS);
   try {
-    const sessionRes = await fetch(joinUrl("/api/auth/session"), {
+    const sessionRes = await fetch(`${normalized}/api/auth/session`, {
       headers: { accept: "application/json" },
       signal: sc.signal,
     });
@@ -233,10 +234,67 @@ async function probeAuthSmoke(baseUrl: string): Promise<{
       throw new Error("/api/auth/session JSON missing boolean authenticated");
     }
   } finally {
-    clearTimeout(t2);
+    clearTimeout(t);
   }
+}
 
-  return { authPageHealthy: true, sessionEndpointHealthy: true };
+async function probeClerkFapiFromAuthHtml(html: string): Promise<void> {
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), AUTH_CANARY_PROBE_TIMEOUT_MS);
+  try {
+    await probeClerkFapiScriptFromAuthPageHtml(html, fetch, ac.signal);
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+async function probeClerkSignInWidget(baseUrl: string): Promise<void> {
+  const normalized = baseUrl.replace(/\/$/, "");
+  const browser = await chromium.launch({ headless: true });
+  const context = await browser.newContext();
+  const clerkConsoleErrors: string[] = [];
+  try {
+    const page = await context.newPage();
+    page.on("console", (message) => {
+      if (message.type() !== "error") {
+        return;
+      }
+      const text = message.text();
+      if (/clerk/i.test(text)) {
+        clerkConsoleErrors.push(text);
+      }
+    });
+
+    const response = await page.goto(`${normalized}/auth`, {
+      waitUntil: "domcontentloaded",
+      timeout: PLAYWRIGHT_NAVIGATION_TIMEOUT_MS,
+    });
+    if (!response?.ok()) {
+      throw new Error(`[clerk_sign_in_widget] /auth returned ${response?.status() ?? "no response"}`);
+    }
+
+    const socialButton = page
+      .locator(
+        '.cl-socialButtonsBlockButton, .cl-socialButtons button, [class*="socialButtons"] button',
+      )
+      .first();
+    await socialButton.waitFor({
+      state: "visible",
+      timeout: PLAYWRIGHT_CLERK_WIDGET_TIMEOUT_MS,
+    });
+
+    const failedToLoad = clerkConsoleErrors.some((line) =>
+      /failed_to_load_clerk_(js|ui)/i.test(line),
+    );
+    if (failedToLoad) {
+      throw new Error(
+        `[clerk_sign_in_widget] Clerk client failed to load: ${clerkConsoleErrors.join(" | ")}`,
+      );
+    }
+  } finally {
+    await context.close().catch(() => {});
+    await browser.close();
+  }
 }
 
 async function probeClerkProtectedRoute(
@@ -435,6 +493,8 @@ async function main(): Promise<void> {
   type AuthFailureStage =
     | "auth_page"
     | "get_session"
+    | "clerk_fapi"
+    | "clerk_sign_in_widget"
     | "protected_route"
     | "convex_ready"
     | "sign_out";
@@ -442,20 +502,54 @@ async function main(): Promise<void> {
   let authFailureMessage: string | null = null;
   let authPageHealthy = false;
   let sessionEndpointHealthy = false;
+  let clerkFapiHealthy = false;
+  let clerkSignInWidgetHealthy = false;
   let protectedRouteReachable = false;
   let convexAuthenticatedQueryHealthy = !requireProtected;
   let signOutHealthy = !requireProtected;
+  let authPageHtml: string | null = null;
+
   try {
-    await probeAuthSmoke(siteUrl);
+    authPageHtml = await fetchAuthPageHtml(siteUrl);
     authPageHealthy = true;
-    sessionEndpointHealthy = true;
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    authFailureStage =
-      msg.includes("/api/auth/session") || msg.includes("session JSON")
-        ? AUTH_CANARY_PROBE.GET_SESSION
-        : AUTH_CANARY_PROBE.AUTH_PAGE;
+    authFailureStage = AUTH_CANARY_PROBE.AUTH_PAGE;
     authFailureMessage = formatAuthCanaryProbeFailure(authFailureStage, e);
+  }
+
+  if (!authFailureStage && authPageHtml) {
+    try {
+      await probeClerkFapiFromAuthHtml(authPageHtml);
+      clerkFapiHealthy = true;
+    } catch (e) {
+      authFailureStage = AUTH_CANARY_PROBE.CLERK_FAPI;
+      authFailureMessage = formatAuthCanaryProbeFailure(authFailureStage, e);
+    }
+  }
+
+  if (!authFailureStage) {
+    try {
+      await probeAuthSessionEndpoint(siteUrl);
+      sessionEndpointHealthy = true;
+    } catch (e) {
+      authFailureStage = AUTH_CANARY_PROBE.GET_SESSION;
+      authFailureMessage = formatAuthCanaryProbeFailure(authFailureStage, e);
+    }
+  }
+
+  if (!authFailureStage) {
+    try {
+      await probeClerkSignInWidget(siteUrl);
+      clerkSignInWidgetHealthy = true;
+    } catch (e) {
+      const raw = e instanceof Error ? e.message : String(e);
+      const bracket = /^\[([a-z_]+)\]/u.exec(raw);
+      authFailureStage =
+        (bracket?.[1] as AuthFailureStage | undefined) ?? AUTH_CANARY_PROBE.CLERK_SIGN_IN_WIDGET;
+      authFailureMessage = raw.startsWith("[")
+        ? raw
+        : formatAuthCanaryProbeFailure(AUTH_CANARY_PROBE.CLERK_SIGN_IN_WIDGET, e);
+    }
   }
   if (!authFailureStage) {
     try {
@@ -490,6 +584,8 @@ async function main(): Promise<void> {
   const authEvidence: AuthCanaryEvidence = {
     authPageHealthy,
     sessionEndpointHealthy,
+    clerkFapiHealthy,
+    clerkSignInWidgetHealthy,
     protectedRouteReachable,
     convexAuthenticatedQueryHealthy,
     signOutHealthy,
