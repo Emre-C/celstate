@@ -1,19 +1,29 @@
 export const MCP_SERVER_CONFIG_NAME = "celstate";
 
-export function buildHostedMcpUrl(publicConvexUrl: string): string {
+export function buildPublicMcpUrl(publicSiteUrl: string): string {
   let url: URL;
   try {
-    url = new URL(publicConvexUrl);
+    url = new URL(publicSiteUrl.trim());
   } catch {
     throw new Error(
-      "Invalid PUBLIC_CONVEX_URL: set a full deployment URL (for example https://<deployment>.convex.cloud) so the hosted MCP endpoint can be derived.",
+      "Invalid PUBLIC_SITE_URL: set an origin-only URL (for example https://celstate.com) so the public MCP endpoint can be derived.",
     );
   }
-  const hostname = url.hostname.endsWith(".convex.cloud")
-    ? url.hostname.replace(/\.convex\.cloud$/, ".convex.site")
-    : url.hostname;
 
-  return `${url.protocol}//${hostname}/mcp`;
+  if (
+    (url.protocol !== "http:" && url.protocol !== "https:") ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash ||
+    (url.pathname !== "/" && url.pathname !== "")
+  ) {
+    throw new Error(
+      "Invalid PUBLIC_SITE_URL: set an origin-only URL (for example https://celstate.com) so the public MCP endpoint can be derived.",
+    );
+  }
+
+  return `${url.origin}/mcp`;
 }
 
 export function buildClaudeCodeCommand(url: string, apiKey: string): string {

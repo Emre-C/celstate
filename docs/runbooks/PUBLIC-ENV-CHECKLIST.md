@@ -6,9 +6,9 @@ SvelteKit exposes `PUBLIC_*` variables to the client. Anything imported from `$e
 
 | Variable | Role |
 |----------|------|
-| `PUBLIC_SITE_URL` | **This SvelteKit app** — canonical origin (e.g. `https://your-app.vercel.app`). Used for auth client base URL, canonical host redirects, and marketing SEO/social metadata (`rel=canonical`, `og:url`, absolute `og:image` on the landing page). |
+| `PUBLIC_SITE_URL` | **This SvelteKit app** — canonical origin (e.g. `https://your-app.vercel.app`). Used for auth client base URL, canonical host redirects, marketing SEO/social metadata (`rel=canonical`, `og:url`, absolute `og:image` on the landing page), and the public MCP endpoint shown to agent users as `${PUBLIC_SITE_URL}/mcp`. |
 | `PUBLIC_CONVEX_URL` | **Convex realtime / client API** — `https://<deployment>.convex.cloud` (or loopback when using local Convex). |
-| `PUBLIC_CONVEX_SITE_URL` | **Optional.** Only when `PUBLIC_CONVEX_URL` is loopback: set to the **same deployment’s** `https://<deployment>.convex.site` for Convex **HTTP** routes (verification, webhooks) when the browser uses local realtime. If `PUBLIC_CONVEX_URL` is already `*.convex.cloud`, omit unless you have a rare split deployment. |
+| `PUBLIC_CONVEX_SITE_URL` | **Optional.** Only when `PUBLIC_CONVEX_URL` is loopback: set to the **same deployment's** `https://<deployment>.convex.site` for Convex **HTTP** routes (verification, webhooks, MCP upstream) when the browser uses local realtime. If `PUBLIC_CONVEX_URL` is already `*.convex.cloud`, omit unless you have a rare split deployment. |
 
 Convex secrets and `SITE_URL` **inside Convex** are separate; see [CONVEX-VERCEL-ENVIRONMENTS.md](./CONVEX-VERCEL-ENVIRONMENTS.md).
 
@@ -21,6 +21,7 @@ Convex secrets and `SITE_URL` **inside Convex** are separate; see [CONVEX-VERCEL
 - Pathname must be empty or `/` (so the value denotes an origin, not a path). A trailing slash alone is fine; validation normalizes to `u.origin`.
 
 That keeps client-built absolute URLs for SEO and Open Graph consistent with the host enforced in `src/hooks.server.ts` and `src/lib/server/canonical-site.ts`.
+It also keeps API Access setup snippets on the Celstate-owned endpoint instead of exposing the Convex upstream URL.
 
 ## Rules that prevent ping-pong
 
@@ -29,6 +30,7 @@ That keeps client-built absolute URLs for SEO and Open Graph consistent with the
 3. **Local:** keep `.env` / `.env.local` aligned with the Convex deployment you run (`pnpm dev` = `convex dev` + Vite). Run `pnpm check:public-env` and `pnpm check:convex-auth` after changing URLs.
 4. **CI:** GitHub Actions sets the same variable **names** as Vercel (placeholder values) so `pnpm check:public-env` and `pnpm build` succeed without real secrets. **`PUBLIC_SITE_URL` in CI is intentionally `http://127.0.0.1:4174`** so it matches the **`vite preview`** origin used by **`pnpm test:e2e`** (`playwright.config.ts`). That way canonical redirects in `src/hooks.server.ts` do not send the test browser off localhost during the marketing landing smoke test. This is **not** your production hostname—Vercel Preview and Production still use your real canonical origin. Update `.github/workflows/ci.yml` if you add a new `PUBLIC_*` static import.
 5. **Before changing prod Convex URL:** update Vercel env **and** redeploy; update local `.env.local`; run `pnpm check:public-env`.
+6. **Before changing the production domain:** update `PUBLIC_SITE_URL`, redeploy, and verify API Access shows the new `${PUBLIC_SITE_URL}/mcp` endpoint while `POST /mcp` still reaches the intended Convex deployment.
 
 ### CLI note (non-interactive Preview)
 

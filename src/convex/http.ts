@@ -15,6 +15,13 @@ import {
   readOpsAlertRuntimeConfig,
 } from "./lib/ops.js";
 import { handleMcpRequest } from "./mcp/handler.js";
+import type { Infer } from "convex/values";
+import type {
+  domainVerdictRecordValidator,
+  verificationEvidenceValidator,
+  verificationTriggerValidator,
+} from "./lib/validation/validators.js";
+import type { gateConfigArgsValidator } from "./verification.js";
 
 const jsonResponse = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -93,19 +100,19 @@ http.route({
       return await ctx.runMutation(internal.verification.ingestVerificationRun, {
         runnerSecret: token,
         runKey: body.runKey as string,
-        trigger: body.trigger as "PRE_MERGE_CI" | "POST_DEPLOY" | "SCHEDULED",
+        trigger: body.trigger as Infer<typeof verificationTriggerValidator>,
         deploymentId: body.deploymentId as string | undefined,
         gitSha: body.gitSha as string | undefined,
         siteUrl: body.siteUrl as string | undefined,
         workflowRunId: body.workflowRunId as string | undefined,
         startedAt: body.startedAt as number,
         finishedAt: body.finishedAt as number,
-        gateConfig: body.gateConfig as never,
-        authVerdict: body.authVerdict as never,
-        generationVerdict: body.generationVerdict as never,
-        checkoutSessionVerdict: body.checkoutSessionVerdict as never,
-        liveSettlementVerdict: body.liveSettlementVerdict as never,
-        evidenceRows: (body.evidenceRows ?? []) as never[],
+        gateConfig: body.gateConfig as Infer<typeof gateConfigArgsValidator> | undefined,
+        authVerdict: body.authVerdict as Infer<typeof domainVerdictRecordValidator> | undefined,
+        generationVerdict: body.generationVerdict as Infer<typeof domainVerdictRecordValidator> | undefined,
+        checkoutSessionVerdict: body.checkoutSessionVerdict as Infer<typeof domainVerdictRecordValidator> | undefined,
+        liveSettlementVerdict: body.liveSettlementVerdict as Infer<typeof domainVerdictRecordValidator> | undefined,
+        evidenceRows: (body.evidenceRows ?? []) as Infer<typeof verificationEvidenceValidator>[],
       });
     });
   }),

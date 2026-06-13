@@ -1,0 +1,43 @@
+diff --git a/index.js b/index.js
+index d6213e554d4b33433da9b1f13e7c7ffb0b97caf9..8771821b3afa2b2b8e0e8250aa6f372979352a7a 100644
+--- a/index.js
++++ b/index.js
+@@ -707,10 +707,13 @@ function static_vercel_config(builder, config, dir) {
+ async function create_function_bundle(builder, entry, dir, config) {
+ 	fs.rmSync(dir, { force: true, recursive: true });
+ 
+-	let base = entry;
+-	while (base !== (base = path.dirname(base)));
++	const entry_abs = path.resolve(entry);
++	const cwd = process.cwd();
++	const cwd_base = `${cwd}${path.sep}`;
++	const root = path.parse(entry_abs).root;
++	const base = entry_abs.startsWith(cwd_base) ? cwd_base : root;
+ 
+-	const traced = await nodeFileTrace([entry], { base });
++	const traced = await nodeFileTrace([entry_abs], { base });
+ 
+ 	/** @type {Map<string, string[]>} */
+ 	const resolution_failures = new Map();
+@@ -770,10 +773,10 @@ async function create_function_bundle(builder, entry, dir, config) {
+ 		}
+ 	}
+ 
+-	const ancestor = base + common_parts.join(path.sep);
++	const ancestor = path.join(base, ...common_parts);
+ 
+ 	for (const file of traced.fileList) {
+-		const source = base + file;
++		const source = path.join(base, file);
+ 		const dest = path.join(dir, path.relative(ancestor, source));
+ 
+ 		const stats = fs.statSync(source);
+@@ -803,7 +806,7 @@ async function create_function_bundle(builder, entry, dir, config) {
+ 				regions: config.regions,
+ 				memory: config.memory,
+ 				maxDuration: config.maxDuration,
+-				handler: path.relative(base + ancestor, entry),
++				handler: path.relative(ancestor, entry_abs),
+ 				launcherType: 'Nodejs',
+ 				experimentalResponseStreaming: !config.isr,
+ 				framework: {

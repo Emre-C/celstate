@@ -7,14 +7,15 @@ import { ConvexHttpClient } from "convex/browser";
 import sharp from "sharp";
 import { api } from "../../src/convex/_generated/api.js";
 import type { Id } from "../../src/convex/_generated/dataModel.js";
-import { buildAnimationReferenceStillPrompt } from "../../src/convex/lib/animation/animationPrompts.js";
+import { buildAnimationReferenceStillPrompt, type AnimationUseCase } from "../../src/convex/lib/animation/animationPrompts.js";
+import type { AnimationWorkerJob } from "../../src/convex/lib/animation/animationGenerationRun.js";
 import {
   createChatSession,
   normalizeGeminiImageMimeType,
   readGeminiRuntimeConfigFromEnv,
   type GeminiImageResult,
 } from "../../src/convex/lib/gemini.js";
-import { differenceMatte, type MatteOutput } from "../../src/convex/lib/generation/matte.js";
+import { differenceMatte, type DecodedImage, type MatteOutput } from "../../src/convex/lib/generation/matte.js";
 import {
   buildBlackBgPrompt,
   buildBlackBgRetryPrompt,
@@ -35,38 +36,6 @@ const execFileAsync = promisify(execFile);
 const FPS = 24;
 const TRANSPARENT = { r: 0, g: 0, b: 0, alpha: 0 };
 
-type AnimationStatus =
-  | "intake"
-  | "queued"
-  | "generating_reference"
-  | "submitting_video"
-  | "polling_video"
-  | "reconstructing_alpha"
-  | "qa"
-  | "exporting"
-  | "complete"
-  | "failed";
-
-type AnimationUseCase =
-  | "stream_alert"
-  | "stinger_transition"
-  | "mascot_reaction"
-  | "logo_sting"
-  | "lower_third"
-  | "video_callout"
-  | "creator_overlay";
-
-interface AnimationWorkerJob {
-  _id: Id<"animationGenerations">;
-  aspectRatio: string;
-  destination: "obs" | "video_editor" | "obs_and_video_editor";
-  durationSeconds: number;
-  productionBrief?: string;
-  prompt: string;
-  status: AnimationStatus;
-  useCase: AnimationUseCase;
-}
-
 interface WorkerConfig {
   convexUrl: string;
   keepWorkdir: boolean;
@@ -74,12 +43,6 @@ interface WorkerConfig {
   pollIntervalMs: number;
   rootWorkdir?: string;
   workerSecret: string;
-}
-
-interface DecodedImage {
-  pixels: Uint8ClampedArray;
-  width: number;
-  height: number;
 }
 
 interface ReferenceResult {

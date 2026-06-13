@@ -4,28 +4,34 @@ This is product documentation for the shipped remote MCP surface. The server is 
 
 ## Overview
 
-Celstate ships a remote, Convex-hosted MCP endpoint for agentic clients such as Claude Code and Cursor.
-It lets authenticated agents generate transparent-background images, inspect progress, and check recent work on behalf of a signed-in Celstate user.
+Celstate ships a remote MCP endpoint for agentic clients such as Claude Code and Cursor.
+The public endpoint lives on the Celstate app origin:
+
+```text
+https://celstate.com/mcp
+```
+
+In non-production environments, replace `https://celstate.com` with the configured `PUBLIC_SITE_URL` origin. Convex remains the upstream implementation detail for auth, tools, and durable data.
 
 ## Architecture
 
 ```
-┌──────────────┐    Streamable HTTP    ┌──────────────────────┐    internal     ┌──────────┐
-│ MCP Client   │ ─────────────────────▶│ Convex HTTP action   │ ───────────────▶ │ Convex   │
-│ (Claude,     │    JSON-RPC 2.0       │ `/mcp` + MCP SDK     │    queries &     │ database │
-│ Cursor, etc) │◀───────────────────── │ stateless transport   │    mutations     │ storage  │
-└──────────────┘                       └──────────────────────┘                  └──────────┘
+┌──────────────┐    Streamable HTTP    ┌──────────────────────┐    proxy        ┌──────────────────────┐    internal     ┌──────────┐
+│ MCP Client   │ ─────────────────────▶│ SvelteKit app route  │ ──────────────▶│ Convex HTTP action   │ ───────────────▶ │ Convex   │
+│ (Claude,     │    JSON-RPC 2.0       │ `/mcp` on app origin │                │ `/mcp` + MCP SDK     │    queries &     │ database │
+│ Cursor, etc) │◀───────────────────── │ public endpoint      │◀────────────── │ stateless transport  │    mutations     │ storage  │
+└──────────────┘                       └──────────────────────┘                 └──────────────────────┘                  └──────────┘
 ```
 
 ### Transport
 
-**Streamable HTTP (stateless, JSON response mode)** — the canonical endpoint is the hosted Convex route at:
+**Streamable HTTP (stateless, JSON response mode)** — the canonical user-facing endpoint is the app-domain route at:
 
 ```text
-https://<deployment>.convex.site/mcp
+https://<PUBLIC_SITE_URL origin>/mcp
 ```
 
-The server stays stateless on purpose: every POST creates a fresh MCP server instance and a fresh transport so request IDs, auth context, and tool execution cannot bleed across users or clients.
+The SvelteKit route proxies to the matching Convex HTTP action derived from `PUBLIC_CONVEX_URL` / optional `PUBLIC_CONVEX_SITE_URL`. The Convex handler stays stateless on purpose: every POST creates a fresh MCP server instance and a fresh transport so request IDs, auth context, and tool execution cannot bleed across users or clients.
 
 Celstate intentionally does **not** expose standalone SSE or session termination today:
 
@@ -39,7 +45,7 @@ That shape is deliberate for AI harnesses. It matches the MCP spec's expectation
 ### Origin and auth policy
 
 - The endpoint accepts requests with **no** `Origin` header, which is the normal case for agent clients.
-- If an `Origin` header is present, Celstate accepts only the request origin itself or explicit values from `MCP_ALLOWED_ORIGINS` and rejects everything else with `403`.
+- If an `Origin` header is present, the upstream Convex handler accepts only the request origin itself or explicit values from `MCP_ALLOWED_ORIGINS` and rejects everything else with `403`.
 - Every non-OPTIONS request must include `Authorization: Bearer <celstate_api_key>`.
 
 ### Auth
@@ -109,6 +115,8 @@ The hosted Convex implementation is the only real MCP server implementation.
 Relevant files:
 
 ```text
+src/routes/mcp/+server.ts
+src/lib/server/mcp-proxy.ts
 src/convex/http.ts
 src/convex/mcp/handler.ts
 src/convex/mcp/keys.ts
@@ -129,7 +137,7 @@ packages/mcp-server/
 └── package.json
 ```
 
-Set `MCP_UPSTREAM_URL` to your hosted Celstate MCP URL before starting the proxy.
+Set `MCP_UPSTREAM_URL` to the app-domain Celstate MCP URL before starting the proxy.
 
 ## Backend Query Shape
 
@@ -148,7 +156,7 @@ The dedicated point lookup and capped list query avoid the earlier anti-pattern 
 ### Claude Code
 
 ```bash
-claude mcp add --transport http celstate https://<deployment>.convex.site/mcp \
+claude mcp add --transport http celstate https://celstate.com/mcp \
   --header "Authorization: Bearer <your_api_key>"
 ```
 
@@ -159,7 +167,7 @@ claude mcp add --transport http celstate https://<deployment>.convex.site/mcp \
   "mcpServers": {
     "celstate": {
       "type": "http",
-      "url": "https://<deployment>.convex.site/mcp",
+      "url": "https://celstate.com/mcp",
       "headers": {
         "Authorization": "Bearer <your_api_key>"
       }
@@ -170,10 +178,16 @@ claude mcp add --transport http celstate https://<deployment>.convex.site/mcp \
 
 ## Deployment
 
-The production path is the hosted Convex endpoint.
+The production path is the app-domain endpoint:
+
+```text
+https://celstate.com/mcp
+```
+
+The app route proxies to the hosted Convex endpoint internally.
 
 If you need a local hop for enterprise networking, start the optional proxy package with:
 
 ```bash
-MCP_UPSTREAM_URL=https://<deployment>.convex.site/mcp pnpm --dir packages/mcp-server dev
+MCP_UPSTREAM_URL=https://celstate.com/mcp pnpm --dir packages/mcp-server dev
 ```

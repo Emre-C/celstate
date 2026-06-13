@@ -150,7 +150,7 @@ export const upsertCanaryPrincipal = internalMutation({
   },
 });
 
-const gateConfigArgsValidator = v.object({
+export const gateConfigArgsValidator = v.object({
   requiredOnDeploy: v.array(featureDomainValidator),
   requiredOnSchedule: v.array(featureDomainValidator),
 });

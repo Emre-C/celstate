@@ -27,16 +27,3 @@
 		<path d="M16 11V16H11" stroke="currentColor" stroke-width="1.5" fill="none" />
 	</svg>
 </div>
-
-<style>
-	.checkerboard-bg {
-		background-image:
-			linear-gradient(45deg, #d6d3cb 25%, transparent 25%),
-			linear-gradient(-45deg, #d6d3cb 25%, transparent 25%),
-			linear-gradient(45deg, transparent 75%, #d6d3cb 75%),
-			linear-gradient(-45deg, transparent 75%, #d6d3cb 75%);
-		background-size: 24px 24px;
-		background-position: 0 0, 0 12px, 12px -12px, -12px 0;
-		background-color: #e8e5dd;
-	}
-</style>

@@ -1,17 +1,9 @@
 import type { Doc, Id } from "../../_generated/dataModel.js";
+import type { Infer } from "convex/values";
 import { buildAnimationProductionBrief, type AnimationBrandInputs, type AnimationDestination, type AnimationUseCase } from "./animationPrompts.js";
+import { animationGenerationStatusValidator } from "../validation/validators.js";
 
-export type AnimationGenerationStatus =
-  | "intake"
-  | "queued"
-  | "generating_reference"
-  | "submitting_video"
-  | "polling_video"
-  | "reconstructing_alpha"
-  | "qa"
-  | "exporting"
-  | "complete"
-  | "failed";
+export type AnimationGenerationStatus = Infer<typeof animationGenerationStatusValidator>;
 
 export const ACTIVE_ANIMATION_GENERATION_STATUSES = [
   "generating_reference",
@@ -30,6 +22,23 @@ export const TERMINAL_ANIMATION_GENERATION_STATUSES = [
 export type AnimationGenerationPatch = Partial<
   Omit<Doc<"animationGenerations">, "_creationTime" | "_id">
 >;
+
+export type AnimationWorkerJob = Pick<
+  Doc<"animationGenerations">,
+  | "_creationTime"
+  | "_id"
+  | "aspectRatio"
+  | "brandInputs"
+  | "destination"
+  | "durationSeconds"
+  | "productionBrief"
+  | "prompt"
+  | "status"
+  | "useCase"
+> & {
+  logoUrl: string | null;
+  uploadedReferenceUrls: string[];
+};
 
 interface CreateAnimationGenerationRunArgs {
   aspectRatio: string;

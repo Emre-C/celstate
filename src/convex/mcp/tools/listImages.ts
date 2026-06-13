@@ -56,7 +56,7 @@ export function registerListImageTools(server: McpServer, ctx: McpToolContext): 
         }
 
         const lines = generations.map(
-          (generation: Record<string, unknown>, index: number) => {
+          (generation, index) => {
             const parts = [
               `${index + 1}. [${generation.status}] "${truncateText(String(generation.prompt), 60)}"`,
               `   ID: ${generation._id}`,

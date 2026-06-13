@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+	assertBaselinePriorMatchesReport,
 	assertComparableEvalReport,
 	buildBaseline,
 	compareReportToBaseline,
+	defaultBaselinePathForPrior,
+	defaultEvalRootForPrior,
 	defaultTolerance,
+	parsePriorMode,
 	selectScenariosForCompare,
 	type BaselineFile,
 	type ScenarioAggregates,
@@ -871,6 +875,38 @@ describe("eval report compare guards", () => {
 		];
 		expect(selectScenariosForCompare(scenarios, "gt-sparks")).toHaveLength(1);
 		expect(selectScenariosForCompare(scenarios, "gt-sparks")[0]?.id).toBe("gt-sparks");
+	});
+});
+
+describe("prior modes", () => {
+	it("parsePriorMode defaults to simulated and rejects unknown modes", () => {
+		expect(parsePriorMode(undefined)).toBe("simulated");
+		expect(parsePriorMode("bria")).toBe("bria");
+		expect(parsePriorMode("dir")).toBe("dir");
+		expect(() => parsePriorMode("matanyone")).toThrow(/--prior must be one of/);
+	});
+
+	it("derives separate roots and baseline paths for real-prior runs", () => {
+		expect(defaultEvalRootForPrior("simulated", "tmp/alpha-compiler-eval")).toBe("tmp/alpha-compiler-eval");
+		expect(defaultEvalRootForPrior("bria", "tmp/alpha-compiler-eval")).toBe("tmp/alpha-compiler-eval-bria");
+		expect(defaultEvalRootForPrior("dir", "tmp/alpha-compiler-eval")).toBe("tmp/alpha-compiler-eval-dir");
+		expect(defaultBaselinePathForPrior("simulated", "baselines/synthetic-eval.json")).toBe("baselines/synthetic-eval.json");
+		expect(defaultBaselinePathForPrior("bria", "baselines/synthetic-eval.json")).toBe("baselines/synthetic-eval-bria.json");
+	});
+
+	it("rejects comparing a report against a baseline from a different prior mode", () => {
+		expect(() => assertBaselinePriorMatchesReport("bria", {})).toThrow(/prior mode "bria".*"simulated"/s);
+		expect(() => assertBaselinePriorMatchesReport("simulated", { prior: "bria" })).toThrow(/does not match/);
+		expect(() => assertBaselinePriorMatchesReport("simulated", {})).not.toThrow();
+		expect(() => assertBaselinePriorMatchesReport("bria", { prior: "bria" })).not.toThrow();
+	});
+
+	it("treats legacy baselines without a prior field as simulated", () => {
+		const aggregates = {} as ScenarioAggregates["aggregates"];
+		const baseline = buildBaseline([{ aggregates, id: "gt-sparks" }], "2026-06-12T00:00:00.000Z", {});
+		expect(baseline.prior).toBe("simulated");
+		const briaBaseline = buildBaseline([{ aggregates, id: "gt-sparks" }], "2026-06-12T00:00:00.000Z", {}, undefined, "bria");
+		expect(briaBaseline.prior).toBe("bria");
 	});
 });
 

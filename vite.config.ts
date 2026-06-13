@@ -6,7 +6,8 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
         plugins: [sentrySvelteKit({
                 org: "emre-coklar",
-                project: "celstate"
+                project: "celstate",
+                autoUploadSourceMaps: Boolean(process.env.SENTRY_AUTH_TOKEN?.trim())
         }), tailwindcss(), sveltekit()],
         server: {
                 host: '0.0.0.0',

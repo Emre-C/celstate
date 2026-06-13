@@ -34,7 +34,7 @@ import {
   validateBlackBackground,
   validateDimensionMatch,
 } from "./lib/validation/validation.js";
-import { differenceMatte, type MatteOutput } from "./lib/generation/matte.js";
+import { differenceMatte, type DecodedImage, type MatteOutput } from "./lib/generation/matte.js";
 import { optimizeForWeb } from "./lib/generation/optimize.js";
 import {
   analyzeTransparentOutput,
@@ -43,12 +43,6 @@ import {
   type TransparentQaReasonCode,
   type TransparentQaResult,
 } from "./lib/qa/transparentQa.js";
-
-interface DecodedImage {
-  pixels: Uint8ClampedArray;
-  width: number;
-  height: number;
-}
 
 export class AspectRatioMismatchError extends Error {
   constructor(message: string) {

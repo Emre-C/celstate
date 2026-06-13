@@ -92,7 +92,7 @@ const generationWithUrlsValidator = v.object({
 });
 
 async function scheduleGenerationStage(
-  ctx: { scheduler: { runAfter: (...args: any[]) => Promise<unknown> } },
+  ctx: Pick<MutationCtx, "scheduler">,
   generationId: Id<"generations">,
   stage: GenerationStage,
   delayMs = 0,
@@ -117,7 +117,7 @@ async function scheduleGenerationStage(
 }
 
 async function scheduleGenerationAlert(
-  ctx: { scheduler: { runAfter: (...args: any[]) => Promise<unknown> } },
+  ctx: Pick<MutationCtx, "scheduler">,
   args: {
     alertType: "generation_failed" | "generation_stalled";
     error?: string;

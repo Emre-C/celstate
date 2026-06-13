@@ -1,9 +1,6 @@
-import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import {
-	appendFile,
 	copyFile,
-	mkdir,
 	readdir,
 	readFile,
 	rm,
@@ -11,7 +8,6 @@ import {
 	writeFile,
 } from "node:fs/promises";
 import path from "node:path";
-import { promisify } from "node:util";
 import { GoogleGenAI, GenerateVideosOperation } from "@google/genai";
 import type { Image, Video } from "@google/genai";
 import sharp from "sharp";
@@ -41,515 +37,91 @@ import {
 	readGeminiRuntimeConfigFromEnv,
 	type GeminiImageResult,
 } from "../../src/convex/lib/gemini.js";
-
-const execFileAsync = promisify(execFile);
-
-const DEFAULT_ROOT = "tmp/transparent-animation-spike";
-const DEFAULT_CHROMA_COLOR = "#00ff00";
-const DEFAULT_CHROMA_SIMILARITY = 0.12;
-const DEFAULT_CHROMA_BLEND = 0.08;
-const DEFAULT_PROVIDER_IMAGE_MODEL = "gemini-3.1-flash-image-preview";
-const DEFAULT_PROVIDER_VIDEO_MODEL = "veo-3.1-fast-generate-preview";
-const DEFAULT_PROVIDER_ASPECT_RATIO = "16:9";
-const DEFAULT_PROVIDER_IMAGE_SIZE = "1K";
-const DEFAULT_PROVIDER_VIDEO_RESOLUTION = "720p";
-const DEFAULT_PROVIDER_DURATION_SECONDS = 8;
-const DEFAULT_PROVIDER_POLL_INTERVAL_MS = 10_000;
-const DEFAULT_PROVIDER_MAX_WAIT_MS = 30 * 60 * 1000;
-
-const STAGES = ["chroma-baseline", "matting-baseline", "celstate-alpha-v0", "celstate-alpha-v1-despill", "celstate-alpha-v2-trimap", "celstate-alpha-v3-core-fringe", "celstate-alpha-v4-prior-fusion", "celstate-alpha-v5-video-prior", "celstate-alpha-v6-projection", "celstate-alpha-v7", "video-prior"] as const;
-type Stage = typeof STAGES[number];
-
-const SOURCE_MODES = ["text-to-video", "image-to-video", "ingredients-to-video"] as const;
-type SourceMode = typeof SOURCE_MODES[number];
-
-const REFERENCE_ROLES = ["first-frame", "reference-image"] as const;
-type ReferenceRole = typeof REFERENCE_ROLES[number];
-
-const METRIC_KEYS = [
-	"alphaUsability",
-	"temporalCoherence",
-	"edgeSpillHalo",
-	"identityStability",
-	"internalMotion",
-	"secondaryMotionCoupling",
-	"promptCompliance",
-	"editorCompatibility",
-	"overallAwe",
-] as const;
-type MetricKey = typeof METRIC_KEYS[number];
-
-interface ParsedArgs {
-	readonly command: string;
-	readonly options: ReadonlyMap<string, readonly string[]>;
-	readonly positionals: readonly string[];
-}
-
-interface PromptFixture {
-	readonly chromaPrompt: string;
-	readonly expectedHardParts: string;
-	readonly id: string;
-	readonly passCriteria: string;
-	readonly prompt: string;
-	readonly source: string;
-	readonly tests: string;
-	readonly title: string;
-	readonly useCase: string;
-}
-
-interface ChromaSettings {
-	readonly blend: number;
-	readonly color: string;
-	readonly similarity: number;
-}
-
-interface GenerationMetadata {
-	readonly costUsd?: number;
-	readonly latencySeconds?: number;
-	readonly model?: string;
-	readonly provider?: string;
-	readonly seed?: string;
-	readonly settings?: Record<string, string>;
-}
-
-interface RunInput {
-	readonly chroma: ChromaSettings;
-	readonly createdAt: string;
-	readonly generation: GenerationMetadata;
-	readonly prompt: PromptFixture;
-	readonly reference?: {
-		readonly normalized: string;
-		readonly originalPath: string;
-		readonly role: ReferenceRole;
-		readonly storedOriginal: string;
-	};
-	readonly lastFrame?: {
-		readonly normalized: string;
-		readonly originalPath: string;
-		readonly storedOriginal: string;
-	};
-	readonly runId: string;
-	readonly sourceMode?: SourceMode;
-	readonly source?: {
-		readonly originalPath: string;
-		readonly storedOriginal: string;
-		readonly normalized: string;
-	};
-}
-
-interface ManualScore {
-	readonly aggregate: number;
-	readonly artifactPath?: string;
-	readonly createdAt: string;
-	readonly failures: readonly string[];
-	readonly metrics: Record<MetricKey, number>;
-	readonly notes: string;
-	readonly stage: Stage;
-}
-
-interface ScoresFile {
-	readonly runId: string;
-	readonly scores: Partial<Record<Stage, ManualScore>>;
-	readonly updatedAt: string;
-}
-
-interface CommandResult {
-	readonly logPath?: string;
-	readonly stderr: string;
-	readonly stdout: string;
-}
-
-interface RunContext {
-	readonly directory: string;
-	readonly runId: string;
-}
-
-interface RunEvent {
-	readonly data?: Record<string, unknown>;
-	readonly event: string;
-	readonly level: "error" | "info" | "warn";
-	readonly message: string;
-	readonly runId: string;
-	readonly stage?: string;
-	readonly timestamp: string;
-}
-
-interface StepState {
-	readonly commandLog?: string;
-	readonly durationMs?: number;
-	readonly endedAt?: string;
-	readonly error?: string;
-	readonly metadata?: Record<string, unknown>;
-	readonly outputs?: readonly string[];
-	readonly skippedBecauseComplete?: boolean;
-	readonly startedAt?: string;
-	readonly status: "failed" | "running" | "succeeded";
-}
-
-interface ProviderGenerationOptions {
-	readonly aspectRatio: string;
-	readonly durationSeconds: number;
-	readonly estimatedProviderCostUsd?: number;
-	readonly force: boolean;
-	readonly imageSize: string;
-	readonly maxWaitMs: number;
-	readonly pollIntervalMs: number;
-	readonly seed?: number;
-	readonly videoModel: string;
-	readonly videoResolution: string;
-}
-
-interface VideoOperationRecord {
-	readonly config: {
-		readonly aspectRatio: string;
-		readonly durationSeconds: number;
-		readonly resolution: string;
-		readonly seed?: number;
-	};
-	readonly firstFrame: string;
-	readonly lastFrame: string;
-	readonly model: string;
-	readonly operationName: string;
-	readonly promptPath: string;
-	readonly submittedAt: string;
-}
-
-interface PipelineState {
-	readonly runId: string;
-	readonly steps: Record<string, StepState>;
-	readonly updatedAt: string;
-}
-
-interface ProviderCallSummary {
-	readonly attemptId: string;
-	readonly call: string;
-	readonly durationMs?: number;
-	readonly endedAt?: string;
-	readonly error?: string;
-	readonly metadata?: Record<string, unknown>;
-	readonly model?: string;
-	readonly startedAt: string;
-	readonly status: "failed" | "running" | "succeeded";
-}
-
-function parseArgs(argv: readonly string[]): ParsedArgs {
-	const [command = "help", ...rest] = argv;
-	const options = new Map<string, string[]>();
-	const positionals: string[] = [];
-
-	for (let index = 0; index < rest.length; index += 1) {
-		const token = rest[index];
-		if (!token.startsWith("--")) {
-			positionals.push(token);
-			continue;
-		}
-
-		const withoutPrefix = token.slice(2);
-		const equalsIndex = withoutPrefix.indexOf("=");
-		if (equalsIndex >= 0) {
-			appendOption(options, withoutPrefix.slice(0, equalsIndex), withoutPrefix.slice(equalsIndex + 1));
-			continue;
-		}
-
-		const next = rest[index + 1];
-		if (next && !next.startsWith("--")) {
-			appendOption(options, withoutPrefix, next);
-			index += 1;
-			continue;
-		}
-
-		appendOption(options, withoutPrefix, "true");
-	}
-
-	return { command, options, positionals };
-}
-
-function appendOption(options: Map<string, string[]>, key: string, value: string): void {
-	const current = options.get(key) ?? [];
-	current.push(value);
-	options.set(key, current);
-}
-
-function getOption(args: ParsedArgs, key: string): string | undefined {
-	return args.options.get(key)?.[0];
-}
-
-function getOptions(args: ParsedArgs, key: string): readonly string[] {
-	return args.options.get(key) ?? [];
-}
-
-function getRequiredOption(args: ParsedArgs, key: string): string {
-	const value = getOption(args, key)?.trim();
-	if (!value) {
-		throw new Error(`Pass --${key} <value>.`);
-	}
-	return value;
-}
-
-function getNumberOption(args: ParsedArgs, key: string, fallback: number): number {
-	const value = getOption(args, key);
-	if (value === undefined) {
-		return fallback;
-	}
-	const parsed = Number(value);
-	if (!Number.isFinite(parsed)) {
-		throw new Error(`--${key} must be a finite number. Got: ${value}`);
-	}
-	return parsed;
-}
-
-function getOptionalNumberOption(args: ParsedArgs, key: string): number | undefined {
-	const value = getOption(args, key);
-	if (value === undefined) {
-		return undefined;
-	}
-	const parsed = Number(value);
-	if (!Number.isFinite(parsed)) {
-		throw new Error(`--${key} must be a finite number. Got: ${value}`);
-	}
-	return parsed;
-}
-
-function spikeRoot(args: ParsedArgs): string {
-	return path.resolve(process.cwd(), getOption(args, "root") ?? DEFAULT_ROOT);
-}
-
-function runsRoot(root: string): string {
-	return path.join(root, "runs");
-}
-
-function runDirectory(root: string, runId: string): string {
-	return path.join(runsRoot(root), runId);
-}
-
-async function ensureDirectory(directory: string): Promise<void> {
-	await mkdir(directory, { recursive: true });
-}
-
-async function readJson<T>(filePath: string): Promise<T> {
-	return JSON.parse(await readFile(filePath, "utf8")) as T;
-}
-
-async function writeJson(filePath: string, value: unknown): Promise<void> {
-	await writeFile(filePath, `${JSON.stringify(value, null, "\t")}\n`, "utf8");
-}
-
-function relativeToWorkspace(filePath: string): string {
-	return path.relative(process.cwd(), filePath).replace(/\\/g, "/");
-}
-
-function statePath(directory: string): string {
-	return path.join(directory, "pipeline-state.json");
-}
-
-function eventsPath(directory: string): string {
-	return path.join(directory, "events.ndjson");
-}
-
-function providerCallsPath(directory: string): string {
-	return path.join(directory, "provider-calls.json");
-}
-
-async function appendRunEvent(
-	context: RunContext,
-	event: Omit<RunEvent, "runId" | "timestamp">,
-): Promise<void> {
-	const line: RunEvent = {
-		...event,
-		runId: context.runId,
-		timestamp: new Date().toISOString(),
-	};
-	await appendFile(eventsPath(context.directory), `${JSON.stringify(line)}\n`, "utf8");
-}
-
-async function readPipelineState(context: RunContext): Promise<PipelineState> {
-	const filePath = statePath(context.directory);
-	if (!existsSync(filePath)) {
-		return { runId: context.runId, steps: {}, updatedAt: new Date().toISOString() };
-	}
-	return readJson<PipelineState>(filePath);
-}
-
-async function readProviderCalls(context: RunContext): Promise<ProviderCallSummary[]> {
-	const filePath = providerCallsPath(context.directory);
-	if (!existsSync(filePath)) {
-		return [];
-	}
-	return readJson<ProviderCallSummary[]>(filePath);
-}
-
-async function upsertProviderCall(context: RunContext, summary: ProviderCallSummary): Promise<void> {
-	const calls = await readProviderCalls(context);
-	const next = calls.filter((call) => call.attemptId !== summary.attemptId);
-	next.push(summary);
-	await writeJson(providerCallsPath(context.directory), next);
-}
-
-async function runProviderCall<T>(
-	context: RunContext,
-	call: string,
-	model: string,
-	metadata: Record<string, unknown>,
-	operation: () => Promise<T>,
-): Promise<T> {
-	const startedAt = new Date().toISOString();
-	const attempt: ProviderCallSummary = {
-		attemptId: `${timestampLabel()}-${slugify(call)}`,
-		call,
-		metadata,
-		model,
-		startedAt,
-		status: "running",
-	};
-	await upsertProviderCall(context, attempt);
-	await appendRunEvent(context, {
-		data: { attemptId: attempt.attemptId, call, metadata, model },
-		event: "provider_call_started",
-		level: "info",
-		message: `${call} started`,
-		stage: call,
-	});
-	try {
-		const result = await operation();
-		const endedAt = new Date().toISOString();
-		const completed: ProviderCallSummary = {
-			...attempt,
-			durationMs: Date.parse(endedAt) - Date.parse(startedAt),
-			endedAt,
-			status: "succeeded",
-		};
-		await upsertProviderCall(context, completed);
-		await appendRunEvent(context, {
-			data: { attemptId: attempt.attemptId, call, durationMs: completed.durationMs, model },
-			event: "provider_call_succeeded",
-			level: "info",
-			message: `${call} succeeded`,
-			stage: call,
-		});
-		return result;
-	} catch (error) {
-		const endedAt = new Date().toISOString();
-		const message = error instanceof Error ? error.message : String(error);
-		const failed: ProviderCallSummary = {
-			...attempt,
-			durationMs: Date.parse(endedAt) - Date.parse(startedAt),
-			endedAt,
-			error: message,
-			status: "failed",
-		};
-		await upsertProviderCall(context, failed);
-		await appendRunEvent(context, {
-			data: { attemptId: attempt.attemptId, call, durationMs: failed.durationMs, error: message, model },
-			event: "provider_call_failed",
-			level: "error",
-			message,
-			stage: call,
-		});
-		throw error;
-	}
-}
-
-async function updateStepState(context: RunContext, step: string, state: StepState): Promise<void> {
-	const current = await readPipelineState(context);
-	await writeJson(statePath(context.directory), {
-		runId: context.runId,
-		steps: {
-			...current.steps,
-			[step]: state,
-		},
-		updatedAt: new Date().toISOString(),
-	} satisfies PipelineState);
-}
-
-async function markStepStarted(context: RunContext, step: string): Promise<string> {
-	const startedAt = new Date().toISOString();
-	await updateStepState(context, step, { startedAt, status: "running" });
-	await appendRunEvent(context, {
-		event: "step_started",
-		level: "info",
-		message: `${step} started`,
-		stage: step,
-	});
-	return startedAt;
-}
-
-async function markStepSucceeded(
-	context: RunContext,
-	step: string,
-	startedAt: string,
-	options: {
-		commandLog?: string;
-		metadata?: Record<string, unknown>;
-		outputs?: readonly string[];
-		skippedBecauseComplete?: boolean;
-	} = {},
-): Promise<void> {
-	const endedAt = new Date().toISOString();
-	await updateStepState(context, step, {
-		commandLog: options.commandLog,
-		durationMs: Date.parse(endedAt) - Date.parse(startedAt),
-		endedAt,
-		metadata: options.metadata,
-		outputs: options.outputs,
-		skippedBecauseComplete: options.skippedBecauseComplete,
-		startedAt,
-		status: "succeeded",
-	});
-	await appendRunEvent(context, {
-		data: options.outputs || options.metadata ? { metadata: options.metadata, outputs: options.outputs } : undefined,
-		event: options.skippedBecauseComplete ? "step_skipped_complete" : "step_succeeded",
-		level: "info",
-		message: options.skippedBecauseComplete ? `${step} already complete` : `${step} succeeded`,
-		stage: step,
-	});
-}
-
-async function markStepFailed(
-	context: RunContext,
-	step: string,
-	startedAt: string,
-	error: unknown,
-	commandLog?: string,
-): Promise<void> {
-	const endedAt = new Date().toISOString();
-	const message = error instanceof Error ? error.message : String(error);
-	const resolvedCommandLog = commandLog ?? extractCommandLog(message);
-	await updateStepState(context, step, {
-		commandLog: resolvedCommandLog,
-		durationMs: Date.parse(endedAt) - Date.parse(startedAt),
-		endedAt,
-		error: message,
-		startedAt,
-		status: "failed",
-	});
-	await appendRunEvent(context, {
-		data: resolvedCommandLog ? { commandLog: resolvedCommandLog } : undefined,
-		event: "step_failed",
-		level: "error",
-		message,
-		stage: step,
-	});
-}
-
-function extractCommandLog(message: string): string | undefined {
-	return message.match(/command log: ([^\r\n]+)/)?.[1];
-}
-
-function timestampLabel(): string {
-	return new Date().toISOString().replace(/[:.]/g, "-");
-}
-
-function slugify(value: string): string {
-	return value
-		.trim()
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, "-")
-		.replace(/^-+|-+$/g, "") || "run";
-}
-
-function compact<T>(values: readonly (T | undefined)[]): T[] {
-	return values.filter((value): value is T => value !== undefined);
-}
+import {
+	getNumberOption,
+	getOption,
+	getOptionalNumberOption,
+	getOptions,
+	getRequiredOption,
+	parseArgs,
+} from "./transparent-animation/args.js";
+import {
+	celstateAlphaGraph,
+	celstateAlphaV1DespillGraph,
+	keyFilter,
+} from "./transparent-animation/ffmpeg-filters.js";
+import {
+	appendRunEvent,
+	command,
+	compact,
+	ensureDirectory,
+	eventsPath,
+	ffprobeJson,
+	readJson,
+	readPipelineState,
+	readProviderCalls,
+	relativeToWorkspace,
+	runCommand,
+	runDirectory,
+	runFfmpeg,
+	runProviderCall,
+	runsRoot,
+	markStepFailed,
+	markStepStarted,
+	markStepSucceeded,
+	slugify,
+	spikeRoot,
+	timestampLabel,
+	writeJson,
+} from "./transparent-animation/harness.js";
+import {
+	extractRoughAlphaFrames,
+	extractSharpChromaAlphaFrames,
+	extractSourceFrames,
+	frameRateFromProbe,
+	listFrameFiles,
+	readGrayImage,
+	readRgbImage,
+	readRgbaImage,
+	sampleFramePaths,
+	writeRgbImage,
+	writeRgbaImage,
+} from "./transparent-animation/media.js";
+import {
+	DEFAULT_CHROMA_BLEND,
+	DEFAULT_CHROMA_COLOR,
+	DEFAULT_CHROMA_SIMILARITY,
+	DEFAULT_PROVIDER_ASPECT_RATIO,
+	DEFAULT_PROVIDER_DURATION_SECONDS,
+	DEFAULT_PROVIDER_IMAGE_MODEL,
+	DEFAULT_PROVIDER_IMAGE_SIZE,
+	DEFAULT_PROVIDER_MAX_WAIT_MS,
+	DEFAULT_PROVIDER_POLL_INTERVAL_MS,
+	DEFAULT_PROVIDER_VIDEO_MODEL,
+	DEFAULT_PROVIDER_VIDEO_RESOLUTION,
+	DEFAULT_ROOT,
+	METRIC_KEYS,
+	REFERENCE_ROLES,
+	SOURCE_MODES,
+	STAGES,
+	type ChromaSettings,
+	type GenerationMetadata,
+	type ManualScore,
+	type MetricKey,
+	type ParsedArgs,
+	type PipelineState,
+	type PromptFixture,
+	type ProviderCallSummary,
+	type ProviderGenerationOptions,
+	type ReferenceRole,
+	type RunContext,
+	type RunEvent,
+	type RunInput,
+	type ScoresFile,
+	type SourceMode,
+	type Stage,
+	type VideoOperationRecord,
+} from "./transparent-animation/model.js";
 
 function chromaKeyDescription(color: string): string {
 	const normalized = normalizeHexColor(color).toUpperCase();
@@ -753,10 +325,6 @@ function withChromaPrompt(prompt: PromptFixture, keyColor: string, sourceMode: S
 	};
 }
 
-function ffmpegColor(value: string): string {
-	return `0x${normalizeHexColor(value).slice(1)}`;
-}
-
 function chromaSettings(args: ParsedArgs): ChromaSettings {
 	return {
 		blend: getNumberOption(args, "blend", DEFAULT_CHROMA_BLEND),
@@ -780,115 +348,6 @@ function parseSettings(args: ParsedArgs): Record<string, string> | undefined {
 		settings[entry.slice(0, equalsIndex)] = entry.slice(equalsIndex + 1);
 	}
 	return settings;
-}
-
-async function command(commandName: string, args: readonly string[]): Promise<CommandResult> {
-	return runCommand(commandName, args, commandName);
-}
-
-async function runCommand(
-	commandName: string,
-	args: readonly string[],
-	label: string,
-	context?: RunContext,
-): Promise<CommandResult> {
-	const startedAt = new Date().toISOString();
-	const startMs = Date.now();
-	let stdout = "";
-	let stderr = "";
-	let errorMessage: string | undefined;
-	let logPath: string | undefined;
-
-	try {
-		const result = await execFileAsync(commandName, args, {
-			encoding: "utf8",
-			maxBuffer: 1024 * 1024 * 64,
-			windowsHide: true,
-		});
-		stdout = String(result.stdout);
-		stderr = String(result.stderr);
-	} catch (error) {
-		stdout = commandOutput(error, "stdout");
-		stderr = commandOutput(error, "stderr");
-		errorMessage = commandErrorMessage(error);
-	}
-
-	if (context) {
-		logPath = await writeCommandLog(context, label, {
-			args,
-			commandName,
-			durationMs: Date.now() - startMs,
-			error: errorMessage,
-			ok: errorMessage === undefined,
-			startedAt,
-			stderr,
-			stdout,
-		});
-	}
-
-	if (errorMessage) {
-		throw new Error(`${errorMessage}${logPath ? `\ncommand log: ${logPath}` : ""}`);
-	}
-
-	return { logPath, stderr, stdout };
-}
-
-function commandErrorMessage(error: unknown): string {
-	if (error && typeof error === "object") {
-		const record = error as { message?: unknown; stderr?: unknown; stdout?: unknown };
-		const stderr = typeof record.stderr === "string" ? record.stderr.trim() : "";
-		const stdout = typeof record.stdout === "string" ? record.stdout.trim() : "";
-		const message = typeof record.message === "string" ? record.message : "command failed";
-		return [
-			message,
-			stderr && !message.includes(stderr) ? stderr : undefined,
-			stdout && !message.includes(stdout) ? stdout : undefined,
-		].filter(Boolean).join("\n");
-	}
-	return String(error);
-}
-
-function commandOutput(error: unknown, key: "stderr" | "stdout"): string {
-	if (error && typeof error === "object") {
-		const value = (error as Record<string, unknown>)[key];
-		return typeof value === "string" ? value : "";
-	}
-	return "";
-}
-
-async function writeCommandLog(
-	context: RunContext,
-	label: string,
-	log: Record<string, unknown>,
-): Promise<string> {
-	const logsDirectory = path.join(context.directory, "logs");
-	await ensureDirectory(logsDirectory);
-	const filePath = path.join(logsDirectory, `${timestampLabel()}-${slugify(label)}.json`);
-	await writeJson(filePath, log);
-	return relativeToWorkspace(filePath);
-}
-
-async function runFfmpeg(args: readonly string[], label: string, context?: RunContext): Promise<string | undefined> {
-	try {
-		const result = await runCommand("ffmpeg", ["-hide_banner", ...args], label, context);
-		return result.logPath;
-	} catch (error) {
-		const message = error instanceof Error ? error.message : String(error);
-		throw new Error(`${label} failed:\n${message}`);
-	}
-}
-
-async function ffprobeJson(filePath: string, context?: RunContext): Promise<unknown> {
-	const result = await runCommand("ffprobe", [
-		"-v",
-		"error",
-		"-print_format",
-		"json",
-		"-show_format",
-		"-show_streams",
-		filePath,
-	], `ffprobe ${path.basename(filePath)}`, context);
-	return JSON.parse(result.stdout) as unknown;
 }
 
 async function createSourcePreview(sourcePath: string, outputPath: string, context?: RunContext): Promise<void> {
@@ -1751,51 +1210,6 @@ async function runDurableStep(
 	}
 }
 
-function keyFilter(settings: ChromaSettings): string {
-	return `format=rgba,colorkey=${ffmpegColor(settings.color)}:${settings.similarity}:${settings.blend}`;
-}
-
-function celstateAlphaGraph(settings: ChromaSettings): string {
-	const keyed = keyFilter(settings);
-	return `[0:v]${keyed},split[keyed][rgb];[keyed]alphaextract,tmix=frames=3:weights='1 2 1',format=gray[alpha];[rgb][alpha]alphamerge,format=yuva444p10le[out]`;
-}
-
-function despillParams(color: string, mix: number): string {
-	const normalized = normalizeHexColor(color).toUpperCase();
-	// FFmpeg 8.x despill AVOptions: type, mix, expand, red, green, blue, brightness, alpha
-	// Defaults: type=green, mix=0.5, green=-1, red=0, blue=0
-	if (normalized === "#00FF00") {
-		return `despill=type=green:mix=${mix}`;
-	}
-	if (normalized === "#0000FF") {
-		return `despill=type=blue:blue=-1:green=0:mix=${mix}`;
-	}
-	const r = parseInt(normalized.slice(1, 3), 16);
-	const g = parseInt(normalized.slice(3, 5), 16);
-	const b = parseInt(normalized.slice(5, 7), 16);
-	const maxChannel = Math.max(r, g, b);
-	if (maxChannel === g && g > 100) {
-		return `despill=type=green:mix=${mix}`;
-	}
-	if (maxChannel === b && b > 100) {
-		return `despill=type=blue:blue=-1:green=0:mix=${mix}`;
-	}
-	if (maxChannel === r && r > 100) {
-		return `despill=type=green:red=-1:green=0:mix=${mix}`;
-	}
-	return `despill=type=green:mix=${mix}`;
-}
-
-function celstateAlphaV1DespillGraph(settings: ChromaSettings, despillMix: number): string {
-	const keyed = keyFilter(settings);
-	const despill = despillParams(settings.color, despillMix);
-	// Key first to create alpha, then despill the keyed RGB. Despill preserves
-	// alpha by default (alpha=false), so the keyed background stays transparent.
-	// Alpha is extracted from the keyed stream, temporally smoothed, then merged
-	// with the despilled RGB for the final output.
-	return `[0:v]${keyed},split[keyed][rgb];[keyed]alphaextract,tmix=frames=3:weights='1 2 1',format=gray[alpha];[rgb]${despill}[despilled];[despilled][alpha]alphamerge,format=yuva444p10le[out]`;
-}
-
 async function writeStageReport(
 	directory: string,
 	stage: Stage,
@@ -2240,149 +1654,6 @@ interface VideoPriorSettings {
 	readonly maxSize: number | undefined;
 	readonly priorModel: string;
 	readonly priorPackage: string;
-}
-
-async function readRgbImage(filePath: string): Promise<RawRgbImage> {
-	const { data, info } = await sharp(filePath)
-		.removeAlpha()
-		.raw()
-		.toBuffer({ resolveWithObject: true });
-	return {
-		data,
-		height: info.height,
-		width: info.width,
-	};
-}
-
-async function readGrayImage(filePath: string): Promise<RawGrayImage> {
-	const { data, info } = await sharp(filePath)
-		.greyscale()
-		.raw()
-		.toBuffer({ resolveWithObject: true });
-	if (info.channels !== 1) {
-		throw new Error(`Expected a single-channel grayscale image. Got ${info.channels} channels for ${filePath}.`);
-	}
-	return {
-		data,
-		height: info.height,
-		width: info.width,
-	};
-}
-
-async function readRgbaImage(filePath: string): Promise<RawRgbaImage> {
-	const { data, info } = await sharp(filePath)
-		.ensureAlpha()
-		.raw()
-		.toBuffer({ resolveWithObject: true });
-	if (info.channels !== 4) {
-		throw new Error(`Expected a four-channel RGBA image. Got ${info.channels} channels for ${filePath}.`);
-	}
-	return {
-		data,
-		height: info.height,
-		width: info.width,
-	};
-}
-
-async function writeRgbImage(image: RawRgbImage, filePath: string): Promise<void> {
-	await sharp(image.data, {
-		raw: {
-			channels: 3,
-			height: image.height,
-			width: image.width,
-		},
-	}).png().toFile(filePath);
-}
-
-async function writeRgbaImage(data: Buffer, width: number, height: number, filePath: string): Promise<void> {
-	await sharp(data, {
-		raw: {
-			channels: 4,
-			height,
-			width,
-		},
-	}).png().toFile(filePath);
-}
-
-async function listFrameFiles(directory: string): Promise<string[]> {
-	const files = await readdir(directory);
-	return files
-		.filter((file) => /^frame-\d+\.png$/u.test(file))
-		.sort()
-		.map((file) => path.join(directory, file));
-}
-
-function sampleFramePaths(frames: readonly string[], count: number): string[] {
-	if (frames.length <= count) {
-		return [...frames];
-	}
-	const selected = new Set<number>();
-	for (let index = 0; index < count; index += 1) {
-		selected.add(Math.round((index * (frames.length - 1)) / Math.max(1, count - 1)));
-	}
-	return [...selected].sort((a, b) => a - b).map((index) => frames[index]);
-}
-
-async function extractSourceFrames(source: string, framesDirectory: string, context: RunContext): Promise<string[]> {
-	await rm(framesDirectory, { force: true, recursive: true });
-	await ensureDirectory(framesDirectory);
-	await runFfmpeg(
-		["-y", "-i", source, "-vsync", "0", path.join(framesDirectory, "frame-%05d.png")],
-		"celstate alpha v2 source frame extraction",
-		context,
-	);
-	return listFrameFiles(framesDirectory);
-}
-
-async function extractSharpChromaAlphaFrames(source: string, framesDirectory: string, settings: ChromaSettings, context: RunContext): Promise<string[]> {
-	await rm(framesDirectory, { force: true, recursive: true });
-	await ensureDirectory(framesDirectory);
-	await runFfmpeg(
-		[
-			"-y",
-			"-i",
-			source,
-			"-vf",
-			`${keyFilter(settings)},alphaextract,format=gray`,
-			"-vsync",
-			"0",
-			path.join(framesDirectory, "frame-%05d.png"),
-		],
-		"celstate alpha v5 sharp chroma alpha extraction",
-		context,
-	);
-	return listFrameFiles(framesDirectory);
-}
-
-async function extractRoughAlphaFrames(source: string, framesDirectory: string, settings: ChromaSettings, context: RunContext): Promise<string[]> {
-	await rm(framesDirectory, { force: true, recursive: true });
-	await ensureDirectory(framesDirectory);
-	await runFfmpeg(
-		[
-			"-y",
-			"-i",
-			source,
-			"-vf",
-			`${keyFilter(settings)},alphaextract,tmix=frames=3:weights='1 2 1',format=gray`,
-			"-vsync",
-			"0",
-			path.join(framesDirectory, "frame-%05d.png"),
-		],
-		"celstate alpha v3 rough alpha extraction",
-		context,
-	);
-	return listFrameFiles(framesDirectory);
-}
-
-function frameRateFromProbe(probe: unknown): string {
-	if (probe && typeof probe === "object") {
-		const streams = (probe as { streams?: Array<{ r_frame_rate?: unknown }> }).streams;
-		const frameRate = streams?.[0]?.r_frame_rate;
-		if (typeof frameRate === "string" && frameRate !== "0/0") {
-			return frameRate;
-		}
-	}
-	return "24";
 }
 
 function estimatePlateColor(samples: readonly RawRgbImage[], fallback: RgbColor): RgbColor {

@@ -8,3 +8,5 @@ onlyBuiltDependencies:
   - esbuild
   - protobufjs
   - sharp
+patchedDependencies:
+  '@sveltejs/adapter-vercel@6.3.3': patches/@sveltejs__adapter-vercel@6.3.3.patch

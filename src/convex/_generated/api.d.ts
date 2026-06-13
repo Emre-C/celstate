@@ -50,7 +50,6 @@ import type * as mcp_tools_listImages from "../mcp/tools/listImages.js";
 import type * as ops from "../ops.js";
 import type * as posthog from "../posthog.js";
 import type * as qaUserReset from "../qaUserReset.js";
-import type * as stripe from "../stripe.js";
 import type * as users from "../users.js";
 import type * as verification from "../verification.js";
 import type * as verificationRuns from "../verificationRuns.js";
@@ -104,7 +103,6 @@ declare const fullApi: ApiFromModules<{
   ops: typeof ops;
   posthog: typeof posthog;
   qaUserReset: typeof qaUserReset;
-  stripe: typeof stripe;
   users: typeof users;
   verification: typeof verification;
   verificationRuns: typeof verificationRuns;

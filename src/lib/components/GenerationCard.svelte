@@ -2,6 +2,8 @@
 	import CheckerboardPreview from './CheckerboardPreview.svelte';
 	import GeneratingIndicator from './GeneratingIndicator.svelte';
 	import MonoLabel from './ui/MonoLabel.svelte';
+	import { formatTimeAgo, toDownloadFileSlug } from '../utils/format.js';
+	import { downloadUrlAsFile } from '../utils/download.js';
 
 	let {
 		prompt,
@@ -38,36 +40,13 @@
 		return `${(ms / 1000).toFixed(1)}s`;
 	}
 
-	function formatTimeAgo(timestamp: number): string {
-		const seconds = Math.floor((Date.now() - timestamp) / 1000);
-		if (seconds < 60) return 'just now';
-		if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-		if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-		return `${Math.floor(seconds / 86400)}d ago`;
-	}
-
-	const safeName = $derived(
-		prompt
-			.toLowerCase()
-			.replace(/[^a-z0-9\s]/g, '')
-			.replace(/\s+/g, '-')
-			.slice(0, 40)
-	);
+	const safeName = $derived(toDownloadFileSlug(prompt));
 
 	async function handleDownload(url: string, suffix: string) {
 		if (!url || downloading) return;
 		downloading = suffix;
 		try {
-			const response = await fetch(url);
-			const blob = await response.blob();
-			const objectUrl = URL.createObjectURL(blob);
-			const a = document.createElement('a');
-			a.href = objectUrl;
-			a.download = `celstate-${safeName}${suffix}.png`;
-			document.body.appendChild(a);
-			a.click();
-			document.body.removeChild(a);
-			URL.revokeObjectURL(objectUrl);
+			await downloadUrlAsFile(url, `celstate-${safeName}${suffix}.png`);
 		} finally {
 			downloading = false;
 		}

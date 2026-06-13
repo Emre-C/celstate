@@ -1,25 +1,26 @@
 import { describe, expect, it } from "vitest";
 import {
   buildClaudeCodeCommand,
-  buildHostedMcpUrl,
+  buildPublicMcpUrl,
   buildMcpJsonConfig,
 } from "./clientConfig.js";
 
 describe("clientConfig", () => {
-  it("converts convex cloud URLs to hosted MCP URLs", () => {
-    expect(buildHostedMcpUrl("https://vivid-fox-123.convex.cloud")).toBe(
-      "https://vivid-fox-123.convex.site/mcp",
-    );
+  it("builds the public MCP URL from the app origin", () => {
+    expect(buildPublicMcpUrl("https://celstate.com")).toBe("https://celstate.com/mcp");
   });
 
-  it("keeps non-convex-cloud hosts intact", () => {
-    expect(buildHostedMcpUrl("https://api.celstate.com")).toBe(
-      "https://api.celstate.com/mcp",
-    );
+  it("normalizes trailing slashes before appending the MCP path", () => {
+    expect(buildPublicMcpUrl("https://www.celstate.com/")).toBe("https://www.celstate.com/mcp");
   });
 
-  it("throws when the public URL cannot be parsed", () => {
-    expect(() => buildHostedMcpUrl("not-a-url")).toThrow(/Invalid PUBLIC_CONVEX_URL/);
+  it("rejects non-origin public site URLs", () => {
+    expect(() => buildPublicMcpUrl("https://celstate.com/app")).toThrow(/Invalid PUBLIC_SITE_URL/);
+    expect(() => buildPublicMcpUrl("https://celstate.com?preview=1")).toThrow(/Invalid PUBLIC_SITE_URL/);
+  });
+
+  it("throws when the public site URL cannot be parsed", () => {
+    expect(() => buildPublicMcpUrl("not-a-url")).toThrow(/Invalid PUBLIC_SITE_URL/);
   });
 
   it("builds a Claude Code command with the http transport", () => {

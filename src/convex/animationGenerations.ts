@@ -16,6 +16,7 @@ import {
   createAnimationGenerationRun,
   isTerminalAnimationGenerationStatus,
   type AnimationGenerationStatus,
+  type AnimationWorkerJob,
 } from "./lib/animation/animationGenerationRun.js";
 import {
   animationAttributionValidator,
@@ -97,23 +98,6 @@ type AnimationGenerationWithUrls = Doc<"animationGenerations"> & {
     webmUrl: string | null;
   };
   previewUrl: string | null;
-};
-
-type AnimationWorkerJob = Pick<
-  Doc<"animationGenerations">,
-  | "_creationTime"
-  | "_id"
-  | "aspectRatio"
-  | "brandInputs"
-  | "destination"
-  | "durationSeconds"
-  | "productionBrief"
-  | "prompt"
-  | "status"
-  | "useCase"
-> & {
-  logoUrl: string | null;
-  uploadedReferenceUrls: string[];
 };
 
 function assertAnimationWorkerSecret(workerSecret: string): void {

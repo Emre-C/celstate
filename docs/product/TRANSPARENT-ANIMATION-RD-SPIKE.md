@@ -76,7 +76,7 @@ Verification from the promoted review candidate:
 - `transparent-animation-prores.mov` is ProRes with alpha (`yuva444p12le`), 1280x720, 216 frames.
 - `report.json` includes residual spill, detached-color fidelity, temporal-alpha delta, and projected-coverage metrics plus `spill-heatmap.png`.
 
-**Next blocker:** real-prior eval leg (MatAnyone2/BRIA on synthetic truth) before production worker wiring; then generalization beyond the three synthetic scenarios (different key colors, soft alpha, non-mascot content).
+**Real-prior leg (2026-06-12):** the BRIA leg ran on synthetic truth (`pnpm alpha-eval run --prior bria`, section 3.15). v7 beat v6 on every target metric under the identical real prior, so the v7 mechanisms are not artifacts of the simulated prior — production-worker design for subject + detached content is unblocked. Genuine soft alpha (smoke) proved **prior-bound** with a segmentation-class prior: BRIA binarizes it and the compiler recovers only part. **Next blocker:** MatAnyone2 leg (`--prior dir`, CUDA box) to decide the soft-content stance; then generalization beyond the three synthetic scenarios (different key colors, soft alpha, non-mascot content).
 
 **Phase 1 (2026-06) shipped:** v7 core mechanisms (color-line alpha fusion, matting-equation foreground recovery, evidence-gated detached path) moved all target metrics on synthetic truth and updated the baseline. Quality is now measurable, reproducible, and regression-checkable via the synthetic ground-truth eval (`pnpm alpha-eval run` / `compare`, section 3.14) with a committed baseline and unit-tested numerical core.
 
@@ -298,7 +298,7 @@ Synthetic ffmpeg probes (`GP-01` blue screen, `GP-02` green glow) exercise key-a
 pnpm transparent-animation-spike generalization-probes --probe-duration 1
 ```
 
-Probe runs use `per-frame-prior` (BRIA via rembg) when MatAnyone2 is unavailable. The loop is idempotent: rerunning reuses existing probe runs instead of failing on the existing directory.
+Probe runs can use `per-frame-prior` (BRIA via rembg) as evaluation plumbing. This is not a production fallback path. The loop is idempotent: rerunning reuses existing probe runs instead of failing on the existing directory.
 
 **Honest limitations (2026-06 review):** these probes overclaim. GP-01 draws a hard-edged disc, not genuinely detached sparks — its `leafAddedCoverage` is 0, so the detached-element path is never exercised. GP-02 is a mostly binary circle, not genuine soft smoke. `detachedColorFidelity` measures unchanged pixels in a passthrough branch, so it is a regression tripwire, **not** independent quality evidence. Use the synthetic ground-truth eval (3.13) as the canonical generalization evidence; the probes remain only as cheap smoke tests of the full spike plumbing.
 
@@ -317,7 +317,15 @@ baselines/synthetic-eval.json   committed regression baseline
 alpha-compiler.test.ts          unit tests for all of the above
 ```
 
-Pipeline per scenario: generate RGBA truth frames → composite over a noisy chroma plate → H.264 yuv420p round trip (crf 23) → ffmpeg `colorkey` chroma alpha → simulated matting prior (truth alpha minus detached elements, gaussian-blurred) → `createV6RgbaFrame` → compare output against stored truth.
+Pipeline per scenario: generate RGBA truth frames → composite over a noisy chroma plate → H.264 yuv420p round trip (crf 23) → ffmpeg `colorkey` chroma alpha → matting prior (`--prior`, below) → compiler core (`--compiler v6|v7`) → compare output against stored truth.
+
+Prior modes (`--prior`):
+
+- `simulated` (default) — truth alpha minus detached elements, gaussian-blurred. Deterministic and model-free; the canonical CI leg gated by the committed baseline.
+- `bria` — real BRIA RMBG prior produced by `uvx rembg` over the decoded lossy frames. Real-prior evidence leg; depends on the rembg/onnxruntime toolchain, so its baseline is machine-pinned.
+- `dir` — externally produced gray alpha frames (e.g. a MatAnyone2 `pha/` tree generated on a CUDA box), passed via `--prior-alpha-dir`; per-scenario subdirectories (`<dir>/<scenario-id>/`) are resolved automatically.
+
+Real-prior runs write to their own roots (`tmp/alpha-compiler-eval-<prior>`) and baseline files (`baselines/synthetic-eval-<prior>.json`), and `compare` refuses to gate a report against a baseline produced with a different prior mode — the canonical simulated leg can never be clobbered or confused with a real-prior leg.
 
 Scenarios (640x360, 48 frames, all deterministic):
 
@@ -334,6 +342,12 @@ pnpm alpha-eval compare              # full-report gate: exit 1 on regression or
 pnpm alpha-eval compare --scenario gt-sparks   # scoped compare (required after partial run)
 pnpm alpha-eval compare --allow-unbaselined    # exploratory only — permits scenarios/metrics missing from baseline
 pnpm alpha-eval update-baseline      # rewrite the committed baseline after accepted changes
+
+# real-prior legs (write to tmp/alpha-compiler-eval-<prior>, gated by synthetic-eval-<prior>.json)
+pnpm alpha-eval run --prior bria                       # BRIA RMBG prior via uvx rembg
+pnpm alpha-eval run --prior dir --prior-alpha-dir <d>  # external prior frames (MatAnyone2 pha/)
+pnpm alpha-eval compare --prior bria
+pnpm alpha-eval update-baseline --prior bria
 ```
 
 Partial vs full reports: every `run` writes top-level `report.json` with `runScope` and `includedScenarioIds`. A partial run replaces any previous full report — `compare` without `--scenario` fails on partial reports so stale full baselines cannot be mistaken for a fresh partial loop. Full `compare` also requires all canonical scenarios (`gt-sparks`, `gt-smoke`, `gt-tassels`) in `includedScenarioIds`.
@@ -349,7 +363,8 @@ Per-frame metrics are persisted in `tmp/alpha-compiler-eval/<scenario>/frames.js
 
 Honest limitations:
 
-- The matting prior is **simulated** from truth (blurred, detached elements removed), not MatAnyone2/BRIA output. This isolates the compiler's contribution deterministically but does not measure real prior failure modes.
+- The **canonical CI leg** uses a prior simulated from truth (blurred, detached elements removed). This isolates the compiler's contribution deterministically but does not measure real prior failure modes — that is what the `--prior bria` / `--prior dir` legs are for.
+- The BRIA leg depends on rembg/onnxruntime inference, so its baseline is pinned to a machine + toolchain and is evidence, not a portable CI gate. The MatAnyone2 leg (`--prior dir`) requires inference on a CUDA box.
 - Baseline tolerances (`max(0.005, 15%)`) apply to both metric means and worst-frame values to absorb ffmpeg/x264/sharp version drift; the baseline records toolchain versions so cross-machine drift is diagnosable.
 
 v7 baseline numbers (2026-06, committed in `baselines/synthetic-eval.json`):
@@ -370,6 +385,40 @@ The v7 improvements came from:
 - **Evidence-gated detached path** — re-adds detached elements based on color evidence (not hard distance), preserving soft alpha where the prior deleted particles;
 - **Reference seed filtering** — key-free observations are only used as reference seeds when sufficiently distant from the prior core, preventing contaminated thick-structure edges from polluting the fill;
 - **Background plate erosion** — sure-background seeds are eroded near foreground evidence so faint halos cannot pollute the background plate used for matting recovery.
+
+### 3.15 Real-prior eval leg (BRIA): v7 holds on an imperfect prior
+
+Ran 2026-06-12 on this machine (macOS arm64, rembg `bria-rmbg` via `uvx`). Methodology:
+
+- `pnpm alpha-eval run --prior bria` — same three truth scenarios, prior produced by BRIA RMBG over the *decoded lossy frames* (not truth-derived);
+- v6 then ran against the **identical captured prior frames** via `--prior dir --prior-alpha-dir` (per-scenario symlink staging onto the captured `prior-alpha/` dirs), so the v7-vs-v6 comparison shares one prior bit-for-bit and also validates the external-dir ingestion path end to end;
+- baseline written to `baselines/synthetic-eval-bria.json` (machine-pinned evidence, not a portable CI gate); `compare` refuses cross-prior baselines.
+
+Results (means):
+
+| Scenario | Metric | v7 simulated | v7 BRIA | v6 same BRIA prior |
+|----------|--------|--------------|---------|--------------------|
+| `gt-sparks` | `detachedAlphaRecall` ↑ | 0.62 | 0.56 | 0.53 |
+| `gt-sparks` | `softBinarizationRate` ↓ | 0.53 | 0.69 | 0.75 |
+| `gt-smoke` | `residualSpill` ↓ | 0.021 | 0.098 | 0.124 |
+| `gt-smoke` | `softBinarizationRate` ↓ | 0.00 | 0.79 | 0.82 |
+| `gt-smoke` | `edgeRgbMae` ↓ | 0.048 | 0.137 | 0.159 |
+| `gt-tassels` | `edgeAlphaMae` ↓ | 0.115 | 0.070 | 0.079 |
+| `gt-tassels` | `residualSpill` ↓ | 0.002 | 0.006 | 0.016 |
+| `gt-tassels` | `softBinarizationRate` ↓ | 0.00 | 0.09 | 0.14 |
+
+Findings:
+
+1. **v7 > v6 on every target metric under the real prior.** The v7 mechanism gains (color-line fusion, matting-equation recovery, evidence-gated detached path) are not artifacts of the simulated prior. This was the question the leg existed to answer.
+2. **Detached recall holds** (0.56 vs 0.62 simulated; v6 ~0.53 on the same prior, ~0.38 historically).
+3. **Genuine soft alpha is prior-bound.** BRIA is a salient-object segmenter: it binarizes smoke at the prior level (`softBinarizationRate` 0.79 vs 0.00 simulated) and the compiler recovers only part of the loss. Soft smoke/glow content needs a matting-class prior — exactly what the MatAnyone2 leg decides.
+4. **Thin strands improved under the real prior** (`edgeAlphaMae` 0.070 vs 0.115): the crisp BRIA matte beats the gaussian-blurred simulated prior on fine geometry, so the simulated prior's blur was the limiter there, not the compiler.
+5. **Metrology note:** `priorAlphaMae` understates prior damage on soft content (background pixels dominate the mean) — read it together with `softBinarizationRate`.
+
+Ops notes:
+
+- A single `rembg p` over a whole frame directory **deadlocked mid-batch** on macOS (thread-pool hang; last frame written, then 90 minutes of silence). The eval CLI now runs rembg in small watchdogged batches (12 frames, 7-minute timeout, 3 attempts, stray-process cleanup) and **reuses completed cutouts on rerun** (`prior-rgba/` survives the per-scenario wipe in bria mode), so an interrupted BRIA leg resumes instead of restarting.
+- The dir-mode staging pattern for reusing captured priors: `ln -sfn <root>/<scenario>/prior-alpha tmp/<staging>/<scenario>` then `--prior dir --prior-alpha-dir tmp/<staging>`.
 
 ---
 
@@ -419,7 +468,7 @@ Treating `fgr/` as a clean foreground prior fails. MatAnyone2 outputs source-ove
 
 ### 4.10 Video-prior environment fragility
 
-`video-prior` seeds masks via `rembg bria-rmbg` reliably. MatAnyone2 via `uvx` currently fails to build on Windows (hatchling wheel collision). Use an existing `pha/` tree, Linux/CUDA, or `per-frame-prior` for probes.
+`video-prior` seeds masks via `rembg bria-rmbg` reliably for spike experiments. MatAnyone2 via `uvx` has failed to build on Windows (hatchling wheel collision), so the production-quality path should be tested directly on Windows WSL2/CUDA using the upstream MatAnyone2 install/inference flow. Do not design runtime fallback behavior around BRIA.
 
 ---
 
@@ -495,9 +544,13 @@ Benchmark native-RGBA or background-removal providers only as comparators. The q
 
 Do **not** default to new provider video for the flagship clip — v7 is promoted.
 
-**Real-prior eval leg:**
+**Real-prior eval leg:** BRIA half **done 2026-06-12** (section 3.15) — v7 held on every target metric against v6 on the identical real prior, unblocking production-worker design for subject + detached content. BRIA is evaluation evidence only, not a product dependency. Remaining half: the **MatAnyone2 leg** — generate MatAnyone2 alpha outputs for the three scenario `source.mp4` files on the target Windows WSL2/CUDA machine and ingest with:
 
-The synthetic baseline uses a simulated prior (truth alpha minus detached, blurred). Before production worker wiring, run the same three scenarios with actual MatAnyone2/BRIA prior output to confirm the compiler improvements hold when the prior is imperfect.
+```bash
+pnpm alpha-eval run --prior dir --prior-alpha-dir <matanyone-pha-root>
+```
+
+This decides the soft-content stance: segmentation-class priors binarize smoke (3.15, finding 3), so soft alpha needs MatAnyone2-quality matting to ship. If MatAnyone2 fails the bar, soft smoke/glow content is deferred; we do not silently downgrade to a weaker prior.
 
 **Generalize (canonical loop):**
 
@@ -520,7 +573,7 @@ The legacy ffmpeg probes (`generalization-probes`) remain as plumbing smoke test
 pnpm transparent-animation-spike video-prior --run-id <id>
 ```
 
-On Windows when MatAnyone2 `uvx` build fails, reuse an existing `pha/` tree or run inference on Linux/CUDA and pass `--prior-alpha-dir`.
+For the MatAnyone2 decision gate, run the upstream MatAnyone2 path on Windows WSL2/CUDA and pass its alpha output through `--prior-alpha-dir`. If setup fails, fix the setup or mark the gate blocked; do not replace it with BRIA and call it production evidence.
 
 **Spike harness default stage:**
 
@@ -533,7 +586,7 @@ Escalation rule:
 
 - Celstate owns prior-fusion, projection decontamination, color-line fusion, matting-equation recovery, QA metrics, and export hardening around video mattes.
 - If a future native-RGBA provider fully solves quality with no compiler layer, shift R&D toward benchmarking, workflow UX, and export QA.
-- Per-frame BRIA (`per-frame-prior`) remains the fallback for probes and environments without MatAnyone2.
+- No fallback ladder in production. A production worker should use the chosen prior path, prove it is reliable, and fail closed with actionable diagnostics when it cannot produce a trustworthy alpha prior.
 
 ---
 ## 7. Durable Product Thesis

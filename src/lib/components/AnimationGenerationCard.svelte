@@ -1,6 +1,8 @@
 <script lang="ts">
 	import GeneratingIndicator from './GeneratingIndicator.svelte';
 	import MonoLabel from './ui/MonoLabel.svelte';
+	import { formatTimeAgo, toDownloadFileSlug } from '../utils/format.js';
+	import { downloadUrlAsFile } from '../utils/download.js';
 
 	type AnimationStatus =
 		| 'intake'
@@ -62,13 +64,7 @@
 			{ label: 'OBS', suffix: '-obs.zip', url: exportUrls?.obsBundleUrl }
 		].filter((item) => !!item.url)
 	);
-	const safeName = $derived(
-		prompt
-			.toLowerCase()
-			.replace(/[^a-z0-9\s]/g, '')
-			.replace(/\s+/g, '-')
-			.slice(0, 40)
-	);
+	const safeName = $derived(toDownloadFileSlug(prompt));
 
 	function getStatusLabel(value: AnimationStatus): string {
 		switch (value) {
@@ -113,28 +109,11 @@
 			.join(' ');
 	}
 
-	function formatTimeAgo(timestamp: number): string {
-		const seconds = Math.floor((Date.now() - timestamp) / 1000);
-		if (seconds < 60) return 'just now';
-		if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-		if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-		return `${Math.floor(seconds / 86400)}d ago`;
-	}
-
 	async function handleDownload(url: string, suffix: string) {
 		if (!url || downloading) return;
 		downloading = suffix;
 		try {
-			const response = await fetch(url);
-			const blob = await response.blob();
-			const objectUrl = URL.createObjectURL(blob);
-			const a = document.createElement('a');
-			a.href = objectUrl;
-			a.download = `celstate-${safeName}${suffix}`;
-			document.body.appendChild(a);
-			a.click();
-			document.body.removeChild(a);
-			URL.revokeObjectURL(objectUrl);
+			await downloadUrlAsFile(url, `celstate-${safeName}${suffix}`);
 		} finally {
 			downloading = false;
 		}
@@ -142,7 +121,7 @@
 </script>
 
 <div class="min-w-0 border border-border transition-colors hover:border-accent/20">
-	<div class="animation-preview flex aspect-video items-center justify-center overflow-hidden">
+	<div class="checkerboard-bg flex aspect-video items-center justify-center overflow-hidden">
 		{#if status === 'complete' && previewUrl}
 			<video
 				src={previewUrl}
@@ -209,16 +188,3 @@
 		{/if}
 	</div>
 </div>
-
-<style>
-	.animation-preview {
-		background-image:
-			linear-gradient(45deg, #d6d3cb 25%, transparent 25%),
-			linear-gradient(-45deg, #d6d3cb 25%, transparent 25%),
-			linear-gradient(45deg, transparent 75%, #d6d3cb 75%),
-			linear-gradient(-45deg, transparent 75%, #d6d3cb 75%);
-		background-size: 24px 24px;
-		background-position: 0 0, 0 12px, 12px -12px, -12px 0;
-		background-color: #e8e5dd;
-	}
-</style>

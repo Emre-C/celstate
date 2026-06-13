@@ -1,5 +1,11 @@
 import { GENERATION_CONFIG } from "../config.js";
 
+export interface DecodedImage {
+  pixels: Uint8ClampedArray;
+  width: number;
+  height: number;
+}
+
 export interface MatteInput {
   whiteBg: Uint8ClampedArray;
   blackBg: Uint8ClampedArray;

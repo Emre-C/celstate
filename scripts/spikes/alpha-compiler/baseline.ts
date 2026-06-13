@@ -20,6 +20,8 @@ export interface BaselineMetricEntry {
 
 export interface BaselineFile {
 	readonly generatedAt: string;
+	/** Prior mode the baseline numbers were produced with. Absent means "simulated" (legacy files). */
+	readonly prior?: PriorMode;
 	readonly scenarios: Readonly<Record<string, Readonly<Record<string, BaselineMetricEntry>>>>;
 	readonly schemaVersion: 1;
 	readonly toolchain?: Readonly<Record<string, string>>;
@@ -209,6 +211,52 @@ export function compareReportToBaseline(
 
 export type EvalRunScope = "full" | "partial";
 
+export const PRIOR_MODES = ["simulated", "bria", "dir"] as const;
+
+/**
+ * Matting-prior source for an eval run.
+ * - "simulated": truth-derived prior (deterministic, model-free) — the canonical CI leg;
+ * - "bria": real BRIA RMBG prior via rembg over the decoded lossy frames;
+ * - "dir": externally produced gray alpha frames (e.g. a MatAnyone2 `pha/` tree).
+ */
+export type PriorMode = (typeof PRIOR_MODES)[number];
+
+export function parsePriorMode(raw: string | undefined): PriorMode {
+	if (raw === undefined) {
+		return "simulated";
+	}
+	if ((PRIOR_MODES as readonly string[]).includes(raw)) {
+		return raw as PriorMode;
+	}
+	throw new Error(`--prior must be one of: ${PRIOR_MODES.join(", ")}. Got: ${raw}`);
+}
+
+/**
+ * Real-prior runs write to their own roots and baseline files so they can never
+ * clobber the canonical simulated report or be gated against the wrong baseline.
+ */
+export function defaultEvalRootForPrior(prior: PriorMode, simulatedRoot: string): string {
+	return prior === "simulated" ? simulatedRoot : `${simulatedRoot}-${prior}`;
+}
+
+export function defaultBaselinePathForPrior(prior: PriorMode, simulatedBaselinePath: string): string {
+	if (prior === "simulated") {
+		return simulatedBaselinePath;
+	}
+	return simulatedBaselinePath.replace(/\.json$/u, `-${prior}.json`);
+}
+
+/** Reject comparing a report against a baseline produced with a different prior mode. */
+export function assertBaselinePriorMatchesReport(reportPrior: PriorMode, baseline: Pick<BaselineFile, "prior">): void {
+	const baselinePrior = baseline.prior ?? "simulated";
+	if (baselinePrior !== reportPrior) {
+		throw new Error(
+			`Report prior mode "${reportPrior}" does not match baseline prior mode "${baselinePrior}". `
+				+ "Pass --baseline pointing at a baseline produced with the same --prior, or rerun the eval with the matching prior.",
+		);
+	}
+}
+
 export interface EvalReportScope {
 	readonly includedScenarioIds?: readonly string[];
 	readonly runScope?: EvalRunScope;
@@ -276,6 +324,7 @@ export function buildBaseline(
 	generatedAt: string,
 	toolchain: Readonly<Record<string, string>>,
 	toleranceFor: (metric: MetricName, value: number) => number = (_, value) => defaultTolerance(value),
+	prior: PriorMode = "simulated",
 ): BaselineFile {
 	const baselineScenarios: Record<string, Record<string, BaselineMetricEntry>> = {};
 	for (const scenario of scenarios) {
@@ -297,6 +346,7 @@ export function buildBaseline(
 	}
 	return {
 		generatedAt,
+		prior,
 		scenarios: baselineScenarios,
 		schemaVersion: 1,
 		toolchain,
