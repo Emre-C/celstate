@@ -34,7 +34,7 @@ Celstate does not want to own password storage, reset flows, breach handling, or
 - `src/routes/callback/+server.ts` — Compatibility redirect to `/auth` (Clerk handles OAuth callbacks via SDK routes).
 - `src/routes/sign-out/+server.ts` — Redirects to `/` (Clerk `afterSignOutUrl` on `ClerkProvider`).
 - `src/convex/auth.config.ts` — Convex JWT provider for Clerk issuer + `applicationID: "convex"`.
-- `src/convex/users.ts` — Idempotent `users.storeUser` / `upsertCurrentUser` (**`clerkUserId` first**, then token, then normalized-email adoption).
+- `src/convex/users.ts` — Idempotent `users.storeUser` / `upsertCurrentUser`. Resolves all rows an identity matches (clerk subject, token, verified email), picks the **oldest as canonical**, and merges any duplicates into it (`mergeUserInto`) so one verified human maps to one row.
 
 ### Supporting
 
@@ -82,18 +82,33 @@ Session state is **Clerk’s HTTP-only session cookie** (typically `__session`).
 
 ## Clerk JWT template and Convex `UserIdentity`
 
-Clerk must expose a JWT template named **`convex`** (issuer domain → `CLERK_JWT_ISSUER_DOMAIN` on Convex). **Operator contract:**
+Clerk must expose a JWT template named **`convex`** (issuer domain → `CLERK_JWT_ISSUER_DOMAIN` on Convex).
 
-1. **Stable identity** — Provisioning keys off `sub` (`identity.subject`) and `users.clerkUserId` (see `users.storeUser`). Email is optional on the token and stored **lowercased** when present.
-2. **Email verification** — `users.storeUser` rejects only when Convex supplies an explicit `emailVerified === false`. Configure the Clerk JWT template so `email_verified` is emitted when the product requires it.
-3. **Provider hints** — `resolveAuthProviderFromIdentity` uses `connection_type` / email heuristics for analytics.
+> **Required claims (do not skip).** Clerk's "Connect with Convex" flow pre-maps **only** the `aud` claim. You **must** add `email` and `email_verified` yourself, or Convex's `getUserIdentity()` returns them as `undefined`. Without them, account linking and WorkOS→Clerk cutover consolidation **silently cannot run** — every sign-in resolves to a `clerkUserId`-only shell, stranding the user's real account, credits, and generations. This is not optional for Celstate. In **Clerk Dashboard → JWT Templates → `convex` → Claims**, ensure:
+>
+> ```json
+> {
+>   "aud": "convex",
+>   "email": "{{user.primary_email_address}}",
+>   "email_verified": "{{user.email_verified}}"
+> }
+> ```
+>
+> Apply this to **every** environment (dev + production instances each have their own template).
+
+**Operator contract:**
+
+1. **Stable identity** — Provisioning keys off `sub` (`identity.subject` → `users.clerkUserId`). A *verified* `email` is the link key that adopts a pre-existing account and consolidates a cutover shell; it is stored **lowercased**. See `users.upsertUserRecord` / `mergeUserInto`.
+2. **Canonical resolution** — When one identity matches multiple rows (legacy account + shell), the **oldest row wins** (it holds the established history); the write path merges the rest into it. Read (`getMe`) and write (`storeUser`) share this ordering, so the UI is correct even before the merge mutation runs.
+3. **Email verification** — `users.storeUser` rejects only when Convex supplies an explicit `emailVerified === false`. Email-based adoption is allowed when `email_verified` is `true` or absent, never when `false`. A missing `email` claim is logged as a `console.warn` in the Convex deployment (a misconfiguration signal).
+4. **Provider hints** — `resolveAuthProviderFromIdentity` uses `connection_type` / email heuristics for analytics.
 
 ## Pre-merge verification (auth boundary changes)
 
 CI exercises mocks and Vitest contracts; it does not speak to live Clerk issuers. Before merging auth-boundary changes:
 
 1. Sign in against **dev or staging** with a real Clerk user; confirm Convex queries succeed and `users.storeUser` completes.
-2. Inspect the `convex` template token claims (secure environment) and update Clerk JWT settings if the product requires `email` / `email_verified` in Convex.
+2. **Confirm the token actually carries `email` and `email_verified`.** Either decode the `convex` template token (Clerk Dashboard → JWT Templates → `convex` → *Preview*, or paste a live token into [jwt.io](https://jwt.io/)) and check the payload, or watch the Convex deployment logs for the `has no email claim` warning emitted by `upsertCurrentUser`. If the claims are missing, fix the template (see required-claims block above) before relying on account linking.
 
 ## Clerk domain and branding (production)
 

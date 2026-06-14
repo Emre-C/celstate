@@ -1,49 +1,18 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api.js";
-import type { Doc, Id } from "./_generated/dataModel.js";
+import type { Id } from "./_generated/dataModel.js";
 import { internalMutation, type MutationCtx } from "./_generated/server.js";
 import {
   assertEmailAllowlistedForQaReset,
   assertQaUserResetSecret,
 } from "./lib/qa/qaUserResetSecret.js";
 import { purgeUserPurchaseStateHelper } from "./lib/creditPackPurchase/lifecycle.js";
+import {
+  storageIdsFromAnimationGeneration,
+  storageIdsFromGeneration,
+} from "./lib/generationArtifactStorage.js";
 
 const GENERATION_BATCH = 80;
-
-function storageIdsFromGeneration(gen: Doc<"generations">): Id<"_storage">[] {
-  const ids: Id<"_storage">[] = [];
-  const push = (id: Id<"_storage"> | undefined) => {
-    if (id !== undefined) ids.push(id);
-  };
-  push(gen.resultStorageId);
-  push(gen.whiteBgStorageId);
-  push(gen.blackBgStorageId);
-  push(gen.optimizedStorageId);
-  push(gen.referenceStorageId);
-  if (gen.referenceStorageIds) {
-    for (const id of gen.referenceStorageIds) {
-      ids.push(id);
-    }
-  }
-  return ids;
-}
-
-function storageIdsFromAnimationGeneration(gen: Doc<"animationGenerations">): Id<"_storage">[] {
-  const ids: Id<"_storage">[] = [];
-  const push = (id: Id<"_storage"> | undefined) => {
-    if (id !== undefined) ids.push(id);
-  };
-
-  push(gen.canonicalFrameManifestStorageId);
-  push(gen.previewStorageId);
-  push(gen.exports?.apngStorageId);
-  push(gen.exports?.movStorageId);
-  push(gen.exports?.obsBundleStorageId);
-  push(gen.exports?.pngSequenceStorageId);
-  push(gen.exports?.webmStorageId);
-
-  return ids;
-}
 
 async function deleteGenerationsAndOpsForUser(
   ctx: MutationCtx,
@@ -66,15 +35,17 @@ async function deleteGenerationsAndOpsForUser(
         .withIndex("by_generation", (q) => q.eq("generationId", gen._id))
         .collect();
       for (const ev of events) {
-        await ctx.db.delete(ev._id);
+        await ctx.db.delete("generationOpsEvents", ev._id);
       }
-      await ctx.db.delete(gen._id);
+      await ctx.db.delete("generations", gen._id);
       removed++;
     }
 
-    const uniqueStorage = [...new Set(storageAcc)];
-    if (uniqueStorage.length > 0) {
-      await ctx.runMutation(internal.generations.deleteStorageFiles, { storageIds: uniqueStorage });
+    if (storageAcc.length > 0) {
+      await ctx.runMutation(internal.generations.deleteStorageFiles, {
+        storageIds: storageAcc,
+        reason: "qa_user_reset",
+      });
     }
   }
   return removed;
@@ -96,13 +67,15 @@ async function deleteAnimationGenerationsForUser(
     const storageAcc: Id<"_storage">[] = [];
     for (const gen of batch) {
       storageAcc.push(...storageIdsFromAnimationGeneration(gen));
-      await ctx.db.delete(gen._id);
+      await ctx.db.delete("animationGenerations", gen._id);
       removed++;
     }
 
-    const uniqueStorage = [...new Set(storageAcc)];
-    if (uniqueStorage.length > 0) {
-      await ctx.runMutation(internal.generations.deleteStorageFiles, { storageIds: uniqueStorage });
+    if (storageAcc.length > 0) {
+      await ctx.runMutation(internal.generations.deleteStorageFiles, {
+        storageIds: storageAcc,
+        reason: "qa_user_reset",
+      });
     }
   }
   return removed;
@@ -111,6 +84,8 @@ async function deleteAnimationGenerationsForUser(
 /**
  * Wipes an allowlisted email from the Celstate app database.
  * Does not delete Stripe customers or payment history in Stripe itself.
+ *
+ * Scoped to a single allowlisted QA email — never scans or wipes all users.
  *
  * Clerk sessions / refresh tokens are owned by Clerk — revoke the user
  * from the Clerk dashboard if you must invalidate remote tokens.
@@ -156,7 +131,7 @@ export const resetAllowlistedTestUser = internalMutation({
         .query("mcpApiKeys")
         .withIndex("by_user", (q) => q.eq("userId", userId))
         .collect()) {
-        await ctx.db.delete(key._id);
+        await ctx.db.delete("mcpApiKeys", key._id);
       }
 
       generationsRemoved = await deleteGenerationsAndOpsForUser(ctx, userId);
@@ -168,17 +143,17 @@ export const resetAllowlistedTestUser = internalMutation({
         .query("creditGrants")
         .withIndex("by_user", (q) => q.eq("userId", userId))
         .collect()) {
-        await ctx.db.delete(row._id);
+        await ctx.db.delete("creditGrants", row._id);
       }
 
       for (const row of await ctx.db
         .query("referenceUploadUrlIssues")
         .withIndex("by_user_createdAt", (q) => q.eq("userId", userId))
         .collect()) {
-        await ctx.db.delete(row._id);
+        await ctx.db.delete("referenceUploadUrlIssues", row._id);
       }
 
-      await ctx.db.delete(userId);
+      await ctx.db.delete("users", userId);
     }
 
     return {

@@ -10,7 +10,7 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server.js";
-import type { Id } from "./_generated/dataModel.js";
+import type { Doc, Id } from "./_generated/dataModel.js";
 import type { ResolvedAuthProvider } from "../lib/auth/providers.js";
 import { GENERATION_CONFIG } from "./lib/config.js";
 import { assertStripeEnv } from "./lib/stripeEnv.js";
@@ -54,21 +54,184 @@ const resolveAuthProviderFromIdentity = (identity: UserIdentity): ResolvedAuthPr
   return "unknown";
 };
 
-const getCurrentTokenIdentifier = async (ctx: QueryCtx | MutationCtx) => {
-  const identity = await ctx.auth.getUserIdentity();
-  return identity?.tokenIdentifier ?? null;
+type IdentityProfile = {
+  clerkUserId?: string;
+  email?: string;
+  emailVerified?: boolean | null;
+  tokenIdentifier?: string;
+};
+
+/**
+ * Finds every existing row a given identity could map to. A single Clerk sign-in
+ * can match more than one row during the WorkOS→Clerk cutover: a legacy account
+ * keyed by email/token, plus a `clerkUserId`-only shell created on first Clerk
+ * sign-in. Email matching requires a *verified* email (never `emailVerified === false`)
+ * so an unverified identity cannot take over an established account.
+ */
+const lookupUsersForIdentity = async (
+  ctx: QueryCtx | MutationCtx,
+  profile: IdentityProfile,
+): Promise<Doc<"users">[]> => {
+  const email = normalizeOptionalEmail(profile.email);
+  const emailLookupAllowed = profile.emailVerified !== false && !!email;
+  const clerkUserId = profile.clerkUserId?.trim();
+
+  const byClerk = clerkUserId
+    ? await ctx.db
+        .query("users")
+        .withIndex("by_clerk_user", (q) => q.eq("clerkUserId", clerkUserId))
+        .first()
+    : null;
+
+  const byToken = profile.tokenIdentifier
+    ? await ctx.db
+        .query("users")
+        .withIndex("by_token", (q) => q.eq("tokenIdentifier", profile.tokenIdentifier!))
+        .first()
+    : null;
+
+  const byEmail = emailLookupAllowed
+    ? await ctx.db
+        .query("users")
+        .withIndex("email", (q) => q.eq("email", email))
+        .first()
+    : null;
+
+  // De-duplicate by _id, then order oldest-first. The oldest row is canonical
+  // because it carries the established history (credits, generations, billing);
+  // a cutover shell is always newer. Read and write paths share this ordering so
+  // queries resolve to the same row the next `storeUser` will consolidate onto.
+  const seen = new Set<string>();
+  const candidates: Doc<"users">[] = [];
+  for (const row of [byClerk, byToken, byEmail]) {
+    if (row && !seen.has(row._id)) {
+      seen.add(row._id);
+      candidates.push(row);
+    }
+  }
+  candidates.sort((a, b) => a._creationTime - b._creationTime);
+  return candidates;
 };
 
 export const getCurrentAppUser = async (ctx: QueryCtx | MutationCtx) => {
-  const tokenIdentifier = await getCurrentTokenIdentifier(ctx);
-  if (!tokenIdentifier) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
     return null;
   }
 
-  return await ctx.db
-    .query("users")
-    .withIndex("by_token", (q) => q.eq("tokenIdentifier", tokenIdentifier))
-    .first();
+  const candidates = await lookupUsersForIdentity(ctx, {
+    clerkUserId: identity.subject,
+    email: identity.email,
+    emailVerified: identity.emailVerified,
+    tokenIdentifier: identity.tokenIdentifier,
+  });
+
+  return candidates[0] ?? null;
+};
+
+/**
+ * Repoints a duplicate user's owned records onto the canonical row, copies over
+ * any account state the canonical row is missing (billing, profile), and deletes
+ * the duplicate. Used to consolidate a WorkOS→Clerk cutover shell into the
+ * established account. The child-table list mirrors `qaUserReset` — every table
+ * keyed by `userId` must be repointed or the rows would be orphaned.
+ *
+ * Credits are intentionally NOT summed: the canonical (older) row keeps its own
+ * balance, and the duplicate's default sign-up grant is discarded to avoid
+ * double-granting. Purchased balance is preserved because real purchases live on
+ * the canonical account that predates any shell.
+ */
+const mergeUserInto = async (
+  ctx: MutationCtx,
+  canonical: Doc<"users">,
+  duplicate: Doc<"users">,
+) => {
+  if (canonical._id === duplicate._id) {
+    return;
+  }
+
+  const dupId = duplicate._id;
+  const canonicalId = canonical._id;
+
+  for (const key of await ctx.db
+    .query("mcpApiKeys")
+    .withIndex("by_user", (q) => q.eq("userId", dupId))
+    .collect()) {
+    await ctx.db.patch(key._id, { userId: canonicalId });
+  }
+
+  for (const gen of await ctx.db
+    .query("generations")
+    .withIndex("by_user", (q) => q.eq("userId", dupId))
+    .collect()) {
+    await ctx.db.patch(gen._id, { userId: canonicalId });
+    // generationOpsEvents has no by_user index; reach its rows via the generation
+    // they belong to and keep the denormalized userId consistent.
+    for (const ev of await ctx.db
+      .query("generationOpsEvents")
+      .withIndex("by_generation", (q) => q.eq("generationId", gen._id))
+      .collect()) {
+      await ctx.db.patch(ev._id, { userId: canonicalId });
+    }
+  }
+
+  for (const gen of await ctx.db
+    .query("animationGenerations")
+    .withIndex("by_user_created", (q) => q.eq("userId", dupId))
+    .collect()) {
+    await ctx.db.patch(gen._id, { userId: canonicalId });
+  }
+
+  for (const grant of await ctx.db
+    .query("creditGrants")
+    .withIndex("by_user", (q) => q.eq("userId", dupId))
+    .collect()) {
+    await ctx.db.patch(grant._id, { userId: canonicalId });
+  }
+
+  for (const checkout of await ctx.db
+    .query("pendingCheckouts")
+    .withIndex("by_user_status", (q) => q.eq("userId", dupId))
+    .collect()) {
+    await ctx.db.patch(checkout._id, { userId: canonicalId });
+  }
+
+  for (const settlement of await ctx.db
+    .query("purchaseSettlements")
+    .withIndex("by_user", (q) => q.eq("userId", dupId))
+    .collect()) {
+    await ctx.db.patch(settlement._id, { userId: canonicalId });
+  }
+
+  for (const issue of await ctx.db
+    .query("referenceUploadUrlIssues")
+    .withIndex("by_user_createdAt", (q) => q.eq("userId", dupId))
+    .collect()) {
+    await ctx.db.patch(issue._id, { userId: canonicalId });
+  }
+
+  // Backfill account state the canonical row lacks (never overwrite existing).
+  const backfill: Partial<Doc<"users">> = {};
+  if (!canonical.stripeCustomerId && duplicate.stripeCustomerId) {
+    backfill.stripeCustomerId = duplicate.stripeCustomerId;
+  }
+  if (!canonical.email && duplicate.email) {
+    backfill.email = duplicate.email;
+  }
+  if (!canonical.name && duplicate.name) {
+    backfill.name = duplicate.name;
+  }
+  if (!canonical.image && duplicate.image) {
+    backfill.image = duplicate.image;
+  }
+  if ((canonical.credits ?? undefined) === undefined && duplicate.credits !== undefined) {
+    backfill.credits = duplicate.credits;
+  }
+  if (Object.keys(backfill).length > 0) {
+    await ctx.db.patch(canonicalId, backfill);
+  }
+
+  await ctx.db.delete(dupId);
 };
 
 const upsertUserRecord = async (
@@ -84,52 +247,32 @@ const upsertUserRecord = async (
 ) => {
   const email = normalizeOptionalEmail(profile.email);
 
-  const patchFromExisting = async (
-    existingId: Id<"users">,
-    existing: {
-      tokenIdentifier?: string;
-      email?: string;
-      name?: string;
-      image?: string;
-    },
-  ) => {
-    await ctx.db.patch(existingId, {
+  const candidates = await lookupUsersForIdentity(ctx, {
+    clerkUserId: profile.clerkUserId,
+    email: profile.email,
+    emailVerified: true,
+    tokenIdentifier: profile.tokenIdentifier,
+  });
+
+  if (candidates.length > 0) {
+    const canonical = candidates[0]!;
+
+    // Consolidate any other rows this identity matched (cutover shells) so a
+    // verified human maps to exactly one row. Re-read canonical afterward to pick
+    // up any backfilled fields before binding the current identity onto it.
+    for (const duplicate of candidates.slice(1)) {
+      await mergeUserInto(ctx, canonical, duplicate);
+    }
+    const merged = (await ctx.db.get(canonical._id)) ?? canonical;
+
+    await ctx.db.patch(merged._id, {
       tokenIdentifier: profile.tokenIdentifier,
       clerkUserId: profile.clerkUserId,
-      email: email ?? existing.email,
-      name: profile.name ?? existing.name,
-      image: profile.image ?? existing.image,
+      email: email ?? merged.email,
+      name: profile.name ?? merged.name,
+      image: profile.image ?? merged.image,
     });
-    return (await ctx.db.get(existingId))!;
-  };
-
-  const byClerk = await ctx.db
-    .query("users")
-    .withIndex("by_clerk_user", (q) => q.eq("clerkUserId", profile.clerkUserId))
-    .first();
-
-  if (byClerk) {
-    return await patchFromExisting(byClerk._id, byClerk);
-  }
-
-  const byToken = await ctx.db
-    .query("users")
-    .withIndex("by_token", (q) => q.eq("tokenIdentifier", profile.tokenIdentifier))
-    .first();
-
-  if (byToken) {
-    return await patchFromExisting(byToken._id, byToken);
-  }
-
-  if (email) {
-    const byEmail = await ctx.db
-      .query("users")
-      .withIndex("email", (q) => q.eq("email", email))
-      .first();
-
-    if (byEmail) {
-      return await patchFromExisting(byEmail._id, byEmail);
-    }
+    return (await ctx.db.get(merged._id))!;
   }
 
   const userId = await ctx.db.insert("users", {
@@ -177,6 +320,19 @@ export const upsertCurrentUser = async (ctx: MutationCtx) => {
 
   if (identity.emailVerified === false) {
     throw new Error("Email must be verified before using Celstate.");
+  }
+
+  // The `email` claim is the only key that links a Clerk sign-in back to an
+  // established account (legacy WorkOS rows, or a cutover shell). If it is
+  // absent the Convex JWT template is missing the `email` claim — without it
+  // account adoption/merge silently cannot run and the user is stranded on a
+  // clerkUserId-only shell. Surface it loudly in Convex logs.
+  if (!normalizeOptionalEmail(identity.email ?? undefined)) {
+    console.warn(
+      `Clerk identity ${clerkUserId} has no email claim — add "email" and ` +
+        `"email_verified" to the Convex JWT template in Clerk. Account linking ` +
+        `and cutover-shell consolidation cannot run without it.`,
+    );
   }
 
   const authProvider = resolveAuthProviderFromIdentity(identity);

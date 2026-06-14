@@ -89,6 +89,100 @@ describe("Clerk provisioning — users.storeUser", () => {
     expect(doc.clerkUserId).toBe("user_sub_b");
   });
 
+  it("adopts legacy email account over a blank Clerk shell row", async () => {
+    const t = createTest();
+    const legacyId = await t.run(async (ctx) => {
+      return await ctx.db.insert("users", {
+        email: "emre@celstate.test",
+        credits: 7,
+        name: "Emre",
+        tokenIdentifier: "https://legacy.convex.site|old_session",
+      });
+    });
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("users", {
+        clerkUserId: "user_clerk_shell",
+        credits: 3,
+        tokenIdentifier: "https://clerk.test/|user_clerk_shell",
+      });
+    });
+
+    const asUser = t.withIdentity({
+      tokenIdentifier: "https://clerk.test/|user_clerk_shell",
+      subject: "user_clerk_shell",
+      email: "emre@celstate.test",
+      emailVerified: true,
+    });
+
+    const doc = await asUser.mutation(api.users.storeUser, {});
+    expect(doc._id).toEqual(legacyId);
+    expect(doc.credits).toBe(7);
+    expect(doc.clerkUserId).toBe("user_clerk_shell");
+    expect(doc.tokenIdentifier).toBe("https://clerk.test/|user_clerk_shell");
+
+    const me = await asUser.query(api.users.getMe, {});
+    expect(me?._id).toEqual(legacyId);
+    expect(me?.credits).toBe(7);
+  });
+
+  it("consolidates a cutover shell into the legacy account, repointing its records", async () => {
+    const t = createTest();
+    const { legacyId, shellId, genId, animId } = await t.run(async (ctx) => {
+      const legacyId = await ctx.db.insert("users", {
+        email: "merge@celstate.test",
+        credits: 7,
+        tokenIdentifier: "https://legacy.convex.site|old_session",
+      });
+      const shellId = await ctx.db.insert("users", {
+        clerkUserId: "user_shell_merge",
+        credits: 3,
+        tokenIdentifier: "https://clerk.test/|user_shell_merge",
+      });
+      // A record created while the user was stranded on the shell must follow
+      // them onto the canonical account.
+      const genId = await ctx.db.insert("generations", {
+        userId: shellId,
+        prompt: "stranded",
+        status: "complete",
+        creditsCost: 1,
+        aspectRatio: "1:1",
+        createdAt: 1,
+      });
+      const animId = await ctx.db.insert("animationGenerations", {
+        userId: shellId,
+        prompt: "stranded-anim",
+        useCase: "small_accent",
+        destination: "web_runtime",
+        status: "complete",
+        aspectRatio: "1:1",
+        durationSeconds: 2,
+        creditsCost: 1,
+        retryCount: 0,
+        createdAt: 1,
+      });
+      return { legacyId, shellId, genId, animId };
+    });
+
+    const asUser = t.withIdentity({
+      tokenIdentifier: "https://clerk.test/|user_shell_merge",
+      subject: "user_shell_merge",
+      email: "merge@celstate.test",
+      emailVerified: true,
+    });
+
+    const doc = await asUser.mutation(api.users.storeUser, {});
+    expect(doc._id).toEqual(legacyId);
+    expect(doc.credits).toBe(7); // shell's default grant is discarded, not summed
+    expect(doc.clerkUserId).toBe("user_shell_merge");
+
+    await t.run(async (ctx) => {
+      expect(await ctx.db.get(shellId)).toBeNull(); // shell consolidated away
+      expect((await ctx.db.get(genId))?.userId).toEqual(legacyId);
+      expect((await ctx.db.get(animId))?.userId).toEqual(legacyId);
+    });
+  });
+
   it("prefers by_clerk_user over email when both could apply", async () => {
     const t = createTest();
     const clerkRow = await t.run(async (ctx) => {
