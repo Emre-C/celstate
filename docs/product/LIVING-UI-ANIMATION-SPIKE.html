@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>Living-UI Animation Spike</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com" />
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+	<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;family=Instrument+Serif:ital@0;1&amp;display=swap" rel="stylesheet" />
+	<style>
+		:root {
+			--bg: #F5F3ED;
+			--text: #1C1917;
+			--dim: #78716C;
+			--accent: #C2410C;
+			--border: #E2DED6;
+			--surface: #FAF8F4;
+			--pass: #166534;
+			--pass-bg: #F0FDF4;
+			--warn: #92400E;
+			--warn-bg: #FFFBEB;
+			--fail: #991B1B;
+			--fail-bg: #FEF2F2;
+			--info: #1E40AF;
+			--info-bg: #EFF6FF;
+			--code-bg: #EDEAE3;
+		}
+
+		* { box-sizing: border-box; }
+		html { scroll-behavior: smooth; }
+
+		body {
+			margin: 0;
+			background: var(--bg);
+			color: var(--text);
+			font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+			font-size: 16px;
+			line-height: 1.65;
+			-webkit-font-smoothing: antialiased;
+		}
+
+		.wrap { max-width: 54rem; margin: 0 auto; padding: 3rem 1.5rem 5rem; }
+
+		header { margin-bottom: 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+
+		h1, h2, h3 {
+			color: var(--text);
+			font-family: "Instrument Serif", Georgia, serif;
+			font-weight: 400;
+			font-style: italic;
+			line-height: 1.18;
+		}
+
+		h1 { max-width: 42rem; margin: 0 0 0.65rem; font-size: 4rem; letter-spacing: 0; }
+		h2 { margin: 3rem 0 1rem; font-size: 1.8rem; }
+		h3 {
+			margin: 1.75rem 0 0.65rem;
+			font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+			font-size: 0.92rem;
+			font-style: normal;
+			font-weight: 600;
+			letter-spacing: 0.04em;
+			text-transform: uppercase;
+		}
+
+		p { margin: 0 0 1rem; }
+		a { color: var(--accent); }
+		strong { font-weight: 600; }
+		ul, ol { margin: 0 0 1rem; padding-left: 1.35rem; }
+		li { margin-bottom: 0.35rem; }
+
+		.meta { max-width: 44rem; margin: 0; color: var(--dim); font-size: 0.92rem; }
+
+		.status {
+			margin: 2rem 0 2.5rem;
+			padding: 1.35rem 1.5rem;
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-left: 4px solid var(--accent);
+		}
+		.status h2 { margin: 0 0 0.9rem; font-size: 1.45rem; }
+
+		.status-grid { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+		.status-grid li {
+			display: grid;
+			grid-template-columns: 9.5rem 1fr;
+			gap: 0.85rem;
+			margin: 0;
+			padding: 0.55rem 0;
+			border-bottom: 1px solid var(--border);
+		}
+		.status-grid li:last-child { border-bottom: none; }
+
+		.label {
+			color: var(--dim);
+			font-size: 0.78rem;
+			font-weight: 600;
+			letter-spacing: 0.05em;
+			text-transform: uppercase;
+		}
+
+		.pill {
+			display: inline-block;
+			margin-right: 0.45rem;
+			padding: 0.12rem 0.45rem;
+			border-radius: 2px;
+			font-size: 0.72rem;
+			font-weight: 600;
+			letter-spacing: 0.05em;
+			text-transform: uppercase;
+			vertical-align: 0.08rem;
+		}
+		.pill-pass { background: var(--pass-bg); color: var(--pass); }
+		.pill-warn { background: var(--warn-bg); color: var(--warn); }
+		.pill-fail { background: var(--fail-bg); color: var(--fail); }
+		.pill-info { background: var(--info-bg); color: var(--info); }
+
+		.toc { margin: 0 0 2.5rem; padding: 1.1rem 1.35rem; background: var(--surface); border: 1px solid var(--border); }
+		.toc h2 {
+			margin: 0 0 0.6rem;
+			font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+			font-size: 0.82rem;
+			font-style: normal;
+			font-weight: 600;
+			letter-spacing: 0.05em;
+			text-transform: uppercase;
+			color: var(--dim);
+		}
+		.toc ol {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+			gap: 0.2rem 1.5rem;
+			margin: 0;
+			padding-left: 1.2rem;
+		}
+		.toc a { text-decoration: none; }
+		.toc a:hover { text-decoration: underline; }
+
+		table { width: 100%; margin: 0 0 1.4rem; border-collapse: collapse; font-size: 0.92rem; }
+		th, td { padding: 0.62rem 0.75rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+		th {
+			background: var(--surface);
+			color: var(--dim);
+			font-size: 0.75rem;
+			font-weight: 600;
+			letter-spacing: 0.05em;
+			text-transform: uppercase;
+		}
+		tr:last-child td { border-bottom: none; }
+
+		.callout { margin: 1.2rem 0 1.5rem; padding: 1rem 1.15rem; background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent); }
+		.callout strong { display: block; margin-bottom: 0.35rem; }
+		.callout.info { border-left-color: var(--info); }
+
+		code, pre { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 0.87rem; }
+		code { padding: 0.1rem 0.32rem; background: var(--code-bg); border-radius: 2px; }
+		pre { margin: 0 0 1.25rem; padding: 1rem 1.1rem; overflow-x: auto; background: var(--code-bg); border: 1px solid var(--border); line-height: 1.55; }
+		pre code { padding: 0; background: transparent; }
+		pre.math { line-height: 1.7; }
+		.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+		.criteria { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 1px; margin: 1rem 0 1.5rem; background: var(--border); border: 1px solid var(--border); }
+		.criteria > div { padding: 1rem; background: var(--surface); }
+		.criteria h3 { margin-top: 0; }
+
+		footer { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border); color: var(--dim); font-size: 0.88rem; }
+
+		@media (max-width: 680px) {
+			.wrap { padding: 2rem 1rem 4rem; }
+			h1 { font-size: 2.45rem; }
+			.status-grid li { grid-template-columns: 1fr; gap: 0.15rem; }
+			table { font-size: 0.86rem; }
+			th, td { padding: 0.55rem 0.45rem; }
+		}
+	</style>
+</head>
+<body>
+	<div class="wrap">
+		<header>
+			<h1>Living-UI Animation Spike</h1>
+			<p class="meta">
+				Active R&amp;D direction for Celstate motion assets: <strong>matted motion assets from our own difference-matting image pipeline</strong> — animated as stepped sprite cells, rigged deformations, or procedurally-driven stills — consumed by a <strong>React&nbsp;Native</strong> runtime. Replaces the video-source + alpha-matting line, whose full record is archived in
+				<a href="../archive/transparent-animation/TRANSPARENT-ANIMATION-RD-SPIKE.md">TRANSPARENT-ANIMATION-RD-SPIKE.md</a>.
+				Read that archive's §0 for <em>why</em> we pivoted; this doc is <em>where we are going</em>.
+			</p>
+		</header>
+
+		<section class="status" id="state">
+			<h2>Plain Current State</h2>
+			<ul class="status-grid">
+				<li>
+					<span class="label">Phase</span>
+					<span><span class="pill pill-info">Hypothesis</span> Direction chosen and reasoned. No sprite sheet has yet been generated or measured. Nothing here is validated.</span>
+				</li>
+				<li>
+					<span class="label">Core bet</span>
+					<span>Matte <strong>one generated image</strong> with the existing white/black difference matte, then make it move — by stepping sprite cells (Path&nbsp;A), or by animating a single still in the runtime (procedural Path&nbsp;C / rigged Path&nbsp;B, §6). Alpha, cost, and cross-platform consumption collapse to solved or near-solved; the open work is coherence and the runtime.</span>
+				</li>
+				<li>
+					<span class="label">Platform</span>
+					<span>React Native (iOS + Android). Chosen because RN has <strong>no robust transparent-video primitive</strong>, which makes a PNG/WebP sprite sheet the natural — not the compromise — choice.</span>
+				</li>
+				<li>
+					<span class="label">Key unknown</span>
+					<span><strong>Temporal coherence</strong> of generated frames (per-cell "boil"). The resolution ceiling is now <em>bounded</em> — both candidate models render a native 4K square (§3.8) — so the live unknown is coherence plus the <strong>crisp-cell floor</strong>: how much per-cell detail survives once N frames share the canvas. Both are cheap to test against the pipeline today.</span>
+				</li>
+				<li>
+					<span class="label">Next decision</span>
+					<span>Run the two-phase spike (§7): can we <em>generate</em> usable sheets (G-gate), and can RN <em>consume</em> them at density and right-size them (C-gate)?</span>
+				</li>
+			</ul>
+		</section>
+
+		<nav class="toc">
+			<h2>Contents</h2>
+			<ol>
+				<li><a href="#vision">1. Vision</a></li>
+				<li><a href="#thesis">2. Strategic Thesis</a></li>
+				<li><a href="#method">3. The Method, Formally</a></li>
+				<li><a href="#why-rn">4. Why React Native</a></li>
+				<li><a href="#rn-arch">5. React Native Architecture</a></li>
+				<li><a href="#variants">6. Three Paths</a></li>
+				<li><a href="#spike">7. The Spike Plan</a></li>
+				<li><a href="#gates">8. Decision Gates</a></li>
+				<li><a href="#mvp">9. MVP Definition &amp; Measures</a></li>
+				<li><a href="#scope">10. Out of Scope</a></li>
+				<li><a href="#open">11. Open Questions</a></li>
+			</ol>
+		</nav>
+
+		<section id="vision">
+			<h2>1. Vision</h2>
+			<p>
+				Every app looks alike now: sterile, flat, modern, dead. Celstate makes apps feel <strong>alive</strong>. Not "another pretty image" — <strong>motion assets that inhabit the interface</strong> and are dropped straight into a running app.
+			</p>
+			<ul>
+				<li>A button whose <strong>overgrown bushes sway</strong> in the wind.</li>
+				<li>A <strong>slider that rides railroad tracks</strong> as you drag it.</li>
+				<li>A <strong>background that teems with life</strong> — drifting fireflies, swaying grass, falling leaves — instead of a static gradient.</li>
+			</ul>
+			<p>
+				The asset class we serve, stated precisely, is <code>A* = { stylized, mostly-opaque objects in motion, with bounded soft edges }</code>. Soft volumetrics (smoke, glow, mist, fine hair) are <strong>corner cases, explicitly out of MVP scope</strong> — see <a href="../archive/transparent-animation/TRANSPARENT-ANIMATION-RD-SPIKE.md">archive §0.1</a>. This narrowing is not a retreat; it is the unlock. It removes the only regime where alpha recovery is genuinely hard.
+			</p>
+		</section>
+
+		<section id="thesis">
+			<h2>2. Strategic Thesis</h2>
+			<p>Three pillars, each chosen to fix a specific failure of the archived video path.</p>
+			<table>
+				<thead>
+					<tr><th>Pillar</th><th>Claim</th><th>Fixes</th></tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td><strong>Motion = sprite sheets</strong></td>
+						<td>An animation is an <code>R×C</code> grid of frames in one image; play by stepping cells. Optionally an <em>animated</em> WebP/APNG for the no-interaction case.</td>
+						<td>Cross-platform consumption, looping, interactivity, density.</td>
+					</tr>
+					<tr>
+						<td><strong>Alpha = our difference matte</strong></td>
+						<td>Generate the sheet once on white and once on black; recover exact alpha with the pipeline we already ship. No chroma key, no MatAnyone2, no spill repair, no watermark.</td>
+						<td>The entire alpha-recovery problem and the watermark blocker.</td>
+					</tr>
+					<tr>
+						<td><strong>Moat = the runtime</strong></td>
+						<td>Generation is a commodity input. Defensibility lives in the consumption layer: a drop-in RN component library + atlas runtime that right-sizes, performs at density, loops, and themes.</td>
+						<td>The "no moat in owning a generator" problem.</td>
+					</tr>
+				</tbody>
+			</table>
+			<pre class="math"><code>M ≠ f(generator)            # the model that draws the frames is not the product
+M  = f(runtime, curation)   # the thing that makes a generated asset trivially usable, is</code></pre>
+			<p><strong>What "commodity" does and doesn't mean.</strong> The base model is a commodity — we don't build it and we swap it freely. The <em>craft</em> of getting coherent, registration-clean, loop-clean frames out of it (reference-image anchoring, prompt structure, loop authoring) is <strong>not</strong> commodity; it is one of the two hard problems — the other being the runtime — and a sanctioned workstream. "No moat in the generator" means we don't <em>depend on owning</em> the model, not that generation is easy.</p>
+			<p>Likewise the runtime is <strong>open design space</strong>. The component names in §5 (<code>&lt;LivingButton&gt;</code>, …) are illustrative, not a spec. How the library is factored, what its API is, and where it draws the seam between asset and motion are the decisions where the product is won — deliberately left to whoever builds it.</p>
+		</section>
+
+		<section id="method">
+			<h2>3. The Method, Formally</h2>
+			<p>English is lossy here; the symbols are the contract.</p>
+
+			<h3>3.1 Difference matting on a single sheet</h3>
+			<p>Generate the same content on white (<code>B=255</code>) and black (<code>B=0</code>). Per the live pipeline, alpha is exact:</p>
+			<pre class="math"><code>C_w = F·α + 255·(1−α)
+C_b = F·α
+  ⇒  α = 1 − (C_w − C_b)/255      (per channel; α = max over channels)
+  ⇒  F = C_b / α                  (α > 0)</code></pre>
+			<p>Applied to <strong>one sheet image</strong>, this yields clean alpha for <em>every</em> frame at once — <em>provided the white and black passes register sub-pixel</em>. That registration is neither free nor automatic. Because the Gemini&nbsp;3.x image family is autoregressive and exposes <strong>no seed</strong> (§3.8), the pipeline gets it the only way available: the <strong>black pass is generated img2img, conditioned on the white pass as a reference image</strong> (live code: <code>blackSession.sendMessageWithImages(buildBlackBgPrompt(), [whiteImage])</code>). For a single subject this holds well. For an <code>R×C</code> sheet it is the central unproven step — every one of the <code>N</code> cells must reproduce pixel-aligned on black, and a few px of drift in any one cell turns that cell's matte into edge fringe. <strong>Per-cell white↔black registration is therefore a first-class G-gate measurement</strong> (§7), distinct from temporal coherence (§3.6).</p>
+
+			<h3>3.2 Sheet geometry</h3>
+			<pre class="math"><code>Sheet S: canvas W×H, grid R rows × C cols, N = R·C frames
+cell size        (w, h) = (⌊W/C⌋, ⌊H/R⌋)
+frame f → grid   (row, col) = (⌊f/C⌋, f mod C),   f ∈ {0 … N−1}
+frame f → pixel  (x, y) = (col·w, row·h)</code></pre>
+
+			<h3>3.3 The fidelity × frame-count ceiling (the central constraint)</h3>
+			<p>For a fixed canvas, frames and per-frame resolution trade off directly:</p>
+			<pre class="math"><code>per-frame area  a(N) = w·h = (W·H) / N        # double the frames ⇒ half the cell
+crisp cell needs (w ≥ w_min, h ≥ h_min):
+  N_max = ⌊W / w_min⌋ · ⌊H / h_min⌋</code></pre>
+			<p>Couple this with right-sizing (§3.6): <code>w_min = d_max · ρ_max</code>, where <code>d_max</code> is the largest on-screen size in dp and <code>ρ_max ≈ 3</code> is the max device pixel ratio. So the model's max output resolution and the asset's display size <em>jointly</em> cap the frame count:</p>
+			<pre class="math"><code>N_max ≈ (W_model · H_model) / (d_max · ρ_max)²      [square cells]</code></pre>
+			<p><strong>Pixel ceiling (June 2026):</strong> both candidate models — <strong>Gemini 3.1 Flash Image</strong> and <strong>Gemini 3.0 Pro Image</strong> — can render a <strong>native 4K square (4096×4096 = 16.78&nbsp;MP)</strong>, not an upscale, so the <em>pixels</em> for the 4K column below exist. One caveat to verify first: <code>gemini-3.1-flash-image-preview</code> has a reported bug where it ignores <code>imageConfig.imageSize</code> and returns ~1K regardless — so guaranteed 2K/4K output may require <strong>3.0 Pro Image</strong> until confirmed fixed (§3.8). Model and canvas-shape rationale: §3.8.</p>
+			<table>
+				<thead><tr><th>Asset</th><th>Display</th><th>Cell @ ρ=3</th><th>N_max @ 2K (2048²)</th><th>N_max @ 4K (4096²)</th></tr></thead>
+				<tbody>
+					<tr><td>Small accent (icon)</td><td>48 dp</td><td class="num">144 px</td><td class="num">≈ 202</td><td class="num">≈ 784</td></tr>
+					<tr><td>Button overlay</td><td>120 dp</td><td class="num">360 px</td><td class="num">≈ 32</td><td class="num">≈ 121</td></tr>
+					<tr><td>Hero / background</td><td>256 dp</td><td class="num">768 px</td><td class="num">≈ 7</td><td class="num">≈ 25</td></tr>
+				</tbody>
+			</table>
+			<p><strong>Design rule that falls out of the math:</strong> small accents get many frames per sheet (smooth); large hero/background assets get few frames per sheet → <strong>tile across multiple sheets, lower the frame rate, or move to a non-sheet path</strong> (§6). The table above is the <em>pixel</em> ceiling — necessary, not sufficient.</p>
+			<div class="callout">
+				<strong>The binding ceiling is coherence, not pixels.</strong>
+				Practitioner reports on this exact model family converge on a hard limit well below the pixel budget: keep a sheet to roughly <strong>one subject, 3–6 cells per row, 2–3 rows — order <code>N ≈ 6–18</code> coherent cells</strong> before identity drifts. So although 4K supplies the pixels for ~784 small-accent cells, the model holds only ~12 before boil and per-cell drift dominate. <strong><code>N</code> is coherence-bound — roughly an order of magnitude under the pixel ceiling.</strong> This is the single most important number to measure first, and it is what routes anything needing many frames to Paths&nbsp;B/C (§6) rather than to bigger sheets.
+			</div>
+
+			<h3>3.4 Cost model (why "per-frame" is no longer cost-prohibitive)</h3>
+			<pre class="math"><code>C_per_frame    = 2N model passes     # generate each frame independently
+C_single_sheet = 2  model passes     # one sheet, matted once
+speedup = C_per_frame / C_single_sheet = N</code></pre>
+			<p>The old objection ("a transparent still per frame is cost-prohibitive") assumed <code>2N</code>. Single-sheet generation makes cost <code>O(1)</code> in frame count.</p>
+
+			<h3>3.5 Playback &amp; looping</h3>
+			<pre class="math"><code>frame(t) = ⌊t · fps⌋ mod N
+loop period  T = N / fps
+seamless loop ⇔ d(S_{N−1}, S_0) ≤ ε_loop     # perceptual continuity at the seam</code></pre>
+
+			<h3>3.6 Coherence ("boil") — the key empirical risk</h3>
+			<p>Independent frames jitter. Even within one sheet, cells can drift. Define the residual not explained by the intended motion field <code>Φ_f</code>:</p>
+			<pre class="math"><code>B = (1/|interior|) · Σ_x ‖ S_{f+1}(x) − warp(S_f ; Φ_f)(x) ‖
+accept ⇔ B ≤ B_max</code></pre>
+			<p>Ambient motion (sway, pulse, drift) is the <em>most forgiving</em> coherence case — and it is exactly our vision. A swaying bush tolerates small <code>B</code>; a character performing a complex action would not. We are lucky here, but <code>B</code> must be measured, not assumed.</p>
+
+			<h3>3.7 Right-sizing</h3>
+			<pre class="math"><code>display size d (dp), device pixel ratio ρ = PixelRatio.get()   # 2 or 3 on phones
+required native px  p ≥ d · ρ
+render scale        s = (d · ρ) / p
+crisp ⇔ s ≤ 1        (s > 1 ⇒ upscale blur)</code></pre>
+			<p>Raster, so not vector-perfect at arbitrary upscale — but far better than video: author the cell at <code>d_max · ρ_max</code> and it scales <em>down</em> cleanly everywhere. Ship <code>@2x</code>/<code>@3x</code> where the size range is wide.</p>
+
+			<h3>3.8 Model &amp; canvas-shape decision</h3>
+			<p>Two questions were open when this doc opened: <em>which</em> image model, and <em>what</em> sheet aspect ratio. Both now have answers grounded in the June 2026 specs of the two models we use.</p>
+			<table>
+				<thead><tr><th></th><th>Gemini 3.1 Flash Image <span class="pill pill-pass">in pipeline</span></th><th>Gemini 3.0 Pro Image</th></tr></thead>
+				<tbody>
+					<tr><td><strong>Native max</strong></td><td class="num">4096² — 16.78 MP</td><td class="num">4096² — 16.78 MP</td></tr>
+					<tr><td><strong>Size tiers</strong></td><td>512p / 1K / 2K / 4K — but preview <strong>reportedly ignores <code>imageSize</code></strong>, returning ~1K ⚠</td><td>1K / 2K / 4K — honoured</td></tr>
+					<tr><td><strong>Aspect ratios</strong></td><td>1:1 … 21:9 <strong>plus 4:1 &amp; 8:1</strong> (and 1:4, 1:8 @ 512p)</td><td>1:1 … 21:9 only — <strong>no ultra-wide strip</strong></td></tr>
+					<tr><td><strong>Seed / reproducibility</strong></td><td>None — autoregressive; anchor via reference image</td><td>None — autoregressive; anchor via reference image</td></tr>
+					<tr><td><strong>≈ cost / image</strong></td><td class="num">~$0.05 std → ~$0.15 @ 4K</td><td class="num">~$0.13 (1K/2K) → ~$0.24 (4K)</td></tr>
+					<tr><td><strong>Edge it buys</strong></td><td>Speed, cost, free <code>(R,C)</code> sweeps; wide strips</td><td>Reliable hi-res + strongest cross-cell identity (the <em>boil</em> lever, §3.6)</td></tr>
+				</tbody>
+			</table>
+			<p><strong>Seal on the seed question.</strong> Neither model exposes a seed — the whole Gemini&nbsp;3.x image family is autoregressive (LLM-style), not diffusion, so there is no noise vector to pin. Cross-cell and white↔black consistency therefore come <em>only</em> from <strong>reference-image anchoring (img2img)</strong>, which the pipeline already uses (§3.1). Practical consequence: identity is a prompt/conditioning problem, not a seed-control one, and "60–95% consistent" is the realistic band to design around — not bit-exact reproduction.</p>
+			<p><strong>Model decision — probe on Flash, escalate to 3.0 Pro for resolution and identity.</strong> Sweep <code>(R,C)</code> on <strong>Flash 3.1</strong> first: it is already the pipeline's model (<code>GENERATION_CONFIG.model</code>), cheap (~$0.10–$0.30 per two-pass sheet), and fast enough to iterate freely. But <strong>verify it actually emits the requested size</strong> — if the <code>imageSize</code> bug is live, Flash caps at ~1K and the 4K column is unreachable on it. Move an asset to <strong>3.0 Pro Image</strong> when it needs guaranteed 2K/4K <em>or</em> when cross-cell identity is marginal (boil near <code>B_max</code>) — which, given the ~6–18-cell coherence ceiling (§3.3), is most hero/large assets. The split maps onto the pivot tree (§6, §8): Flash is the cheap probe; 3.0 Pro is the upgrade you try <em>before</em> abandoning Path&nbsp;A. Pro's missing 8:1 costs nothing — we want square sheets regardless (below).</p>
+			<p><strong>Aspect-ratio decision — keep the sheet square, not wide.</strong> The instinct toward an 8:1 canvas is the wrong lever for a <em>grid</em>. At a fixed 4K tier the pixel budget is maximised at 1:1 (4096² = 16.78&nbsp;MP) and collapses as the canvas stretches (8:1 = 4096×512 = 2.1&nbsp;MP — one-eighth the pixels to subdivide). The sheet's only job is to hold the most pixels; the <em>cell's</em> aspect — which should match the asset — is set by choosing <code>R</code> and <code>C</code>, not by the sheet outline.</p>
+			<pre class="math"><code>sheet aspect      ≈ 1:1             # maximise total pixels to subdivide
+cell aspect       = asset aspect    # achieved via R, C — not the sheet outline
+choose R, C   s.t. ⌊W/C⌋ : ⌊H/R⌋ ≈ asset aspect,   R·C ≥ N_min(asset)</code></pre>
+			<p>The ultra-wide ratios (4:1, 8:1 — a Flash-only capability) earn their place only for a literal single-row film strip (a <code>1×N</code> small accent) or a natively wide single asset (a banner), never for a 2-D grid: at the <em>same</em> cell size — i.e. the same per-frame crispness — a square 4K sheet holds ≈&nbsp;8× the frames of an 8:1 strip, exactly the 16.78&nbsp;MP ÷ 2.1&nbsp;MP pixel-budget ratio.</p>
+			<div class="callout info">
+				<strong>Spec provenance — verified 2026-06-13; both models are preview</strong>
+				Native 4K (4096²) and the Flash-only 4:1/8:1 ratios: Gemini 3.1 Flash Image model card + Vertex AI model doc. Gemini 3.0 Pro Image 1K/2K/4K tiers and 21:9 ceiling: Vertex AI listings. No-seed (autoregressive) and the Flash <code>imageSize</code>-ignored bug: Google parameter docs + <code>googleapis/js-genai</code> #1461 — the latter is filed against <code>@google/genai</code>, our exact client, so it is the first thing to retest. Re-confirm ceilings, ratios, and the bug before any production cutover.
+			</div>
+		</section>
+
+		<section id="why-rn">
+			<h2>4. Why React Native Makes This the Obvious Primitive</h2>
+			<p>Choosing RN as the focus is not incidental — it strengthens the thesis.</p>
+			<ul>
+				<li><strong>RN has no robust transparent-video primitive.</strong> <code>react-native-video</code> can play HEVC-alpha on iOS but Android transparent-video support is poor and inconsistent. The cross-platform codec pain that plagues web video (<a href="../archive/transparent-animation/TRANSPARENT-ANIMATION-RD-SPIKE.md">archive §0.5</a>) is <em>worse</em> on RN. So video is not even a real option here.</li>
+				<li><strong>Alpha images are first-class.</strong> PNG and WebP with alpha render natively in <code>&lt;Image&gt;</code> on both platforms. A sprite sheet is just an image. No codec matrix, no fallbacks, no iOS multi-<code>&lt;video&gt;</code> crashes.</li>
+				<li><strong>The runtime is the moat, and RN gives us the surface for it.</strong> A small set of components (<code>&lt;LivingButton&gt;</code>, <code>&lt;LivingBackground&gt;</code>, <code>&lt;LivingSlider&gt;</code>) backed by an atlas runtime is exactly the defensible consumption layer §2 calls for.</li>
+			</ul>
+		</section>
+
+		<section id="rn-arch">
+			<h2>5. React Native Architecture</h2>
+			<p>Three rendering tiers, ranked by where each wins. All consume the same matted sheet.</p>
+			<table>
+				<thead><tr><th>Tier</th><th>Tech</th><th>Best for</th><th>Why</th></tr></thead>
+				<tbody>
+					<tr>
+						<td>0 — Simplest</td>
+						<td><code>expo-image</code> plays an <strong>animated WebP / APNG</strong></td>
+						<td>Set-and-forget loops, low instance counts</td>
+						<td>Zero stepping logic; the runtime decodes the loop. Trade-off: no per-frame interactivity/state control.</td>
+					</tr>
+					<tr>
+						<td>1 — Interactive</td>
+						<td><code>&lt;Image&gt;</code> + clipping <code>View</code> + <code>react-native-reanimated</code></td>
+						<td>Buttons, sliders, state-driven motion</td>
+						<td>Frame index driven on the UI thread (60fps, off JS). Hover/press can change speed, direction, or which frame-range plays.</td>
+					</tr>
+					<tr>
+						<td>2 — Density</td>
+						<td><code>@shopify/react-native-skia</code> <code>Atlas</code> / <code>drawAtlas</code></td>
+						<td>"Teeming" backgrounds: tens–hundreds of instances</td>
+						<td>One GPU texture, batched per-sprite transforms (RSXform). The right primitive for many simultaneous elements without N draws.</td>
+					</tr>
+				</tbody>
+			</table>
+
+			<h3>5.1 Tier 1 — interactive frame-stepper (sketch)</h3>
+			<pre><code>// SpriteSheet.tsx — step one cell of an R×C atlas, UI-thread driven.
+import { Image } from 'expo-image';
+import Animated, {
+  useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing,
+} from 'react-native-reanimated';
+
+function SpriteSheet({ source, W, H, rows, cols, fps, cell }) {
+  const N = rows * cols;
+  const f = useSharedValue(0);                       // frame index (UI thread)
+  useEffect(() => {
+    f.value = withRepeat(
+      withTiming(N, { duration: (N / fps) * 1000, easing: Easing.steps(N, true) }),
+      -1, false);                                    // loop forever
+  }, [N, fps]);
+  const style = useAnimatedStyle(() => {
+    'worklet';
+    const i = Math.floor(f.value) % N;
+    const col = i % cols, row = Math.floor(i / cols);
+    return { transform: [{ translateX: -col * cell.w }, { translateY: -row * cell.h }] };
+  });
+  return (
+    &lt;View style={{ width: cell.w, height: cell.h, overflow: 'hidden' }}&gt;
+      &lt;Animated.View style={style}&gt;
+        &lt;Image source={source} style={{ width: W, height: H }} contentFit="cover" /&gt;
+      &lt;/Animated.View&gt;
+    &lt;/View&gt;
+  );
+}</code></pre>
+
+			<h3>5.2 Tier 2 — density via Skia atlas (sketch, illustrative API)</h3>
+			<pre><code>// Teeming.tsx — K instances from ONE texture, GPU-batched.
+import { Canvas, Atlas, useImage, rect, useRSXformBuffer } from '@shopify/react-native-skia';
+
+function Teeming({ sheetUri, cell, cols, rows, count, frame, X, Y }) {
+  const tex = useImage(sheetUri);
+  const sprites = useMemo(() =&gt; Array.from({ length: count }, () =&gt; {
+    const i = frame.value % (cols * rows);
+    return rect((i % cols) * cell.w, Math.floor(i / cols) * cell.h, cell.w, cell.h);
+  }), [count, frame]);
+  const transforms = useRSXformBuffer(count, (xf, i) =&gt; {
+    'worklet'; xf.set(/*scale*/ 1, /*radians*/ 0, /*tx*/ X[i], /*ty*/ Y[i]);
+  });
+  if (!tex) return null;
+  return &lt;Canvas style={{ flex: 1 }}&gt;&lt;Atlas image={tex} sprites={sprites} transforms={transforms} /&gt;&lt;/Canvas&gt;;
+}</code></pre>
+
+			<h3>5.3 Format &amp; performance budget</h3>
+			<ul>
+				<li><strong>Format:</strong> WebP-alpha for sheets (smaller than PNG, alpha-correct on both platforms); PNG for tiny hero accents; AVIF to evaluate. Animated WebP / APNG for Tier 0.</li>
+				<li><strong>Never drive frames with <code>setInterval</code></strong> — JS-thread timers jank under load. Use Reanimated (UI thread) or Skia (GPU).</li>
+				<li><strong>GPU memory ≈ W·H·4 bytes per decoded sheet</strong> (uncompressed in texture memory, regardless of file size). Budget it; pack/atlas; downscale-on-load to the largest size actually shown.</li>
+				<li><strong>Right-sizing:</strong> author at <code>d_max · ρ_max</code>; let RN scale down. Use <code>PixelRatio.get()</code> to pick a variant.</li>
+			</ul>
+		</section>
+
+		<section id="variants">
+			<h2>6. Three Paths to Living Motion</h2>
+			<p>One instinct — a matted asset that moves — has three realisations. They are complementary, not competing, and they split the asset range cleanly. Crucially, <strong>A is not the default with B/C as fallbacks</strong>: because <code>N</code> is coherence-bound to ~6–18 cells (§3.3), the many-frame regime belongs to C and the large-asset regime to B <em>from the start</em>.</p>
+			<div class="criteria">
+				<div>
+					<h3>A. Generated Sprite Sheet</h3>
+					<p>The model draws all <code>N</code> cells; we matte once and step them. <strong>Fastest to prove.</strong> Risk: coherence <code>B</code>, per-cell registration (§3.1), and the ~6–18-cell ceiling. Best for <strong>short ambient loops on small/medium assets</strong> that fit inside the coherent-cell budget.</p>
+				</div>
+				<div>
+					<h3>C. Generate-One + Procedural Motion</h3>
+					<p>Model draws <strong>one</strong> matted still; a GPU shader animates it — displacement / flow / noise fields (Skia, Reanimated, or a fragment shader). <strong>Zero boil, unlimited frames, sub-100&nbsp;KB, runtime-themeable.</strong> For the actual vision — sway, drift, shimmer, fireflies — this is often the <em>primary</em> technique, not a fallback: ambient motion is a continuous field, and a generated sprite grid is only a lossy sampling of it.</p>
+				</div>
+				<div>
+					<h3>B. Generate-One + Rigged Deformation</h3>
+					<p>Model draws <strong>one</strong> gorgeous asset; a runtime mesh/skeleton animates it — Rive / Lottie / Skia mesh, Spine/Live2D-style. <strong>Zero boil, vector-like right-sizing, tiny files.</strong> Best for <strong>hero/background and large assets</strong>, and for structured motion (a slider riding rails) where a deformation field beats sampled pixels.</p>
+				</div>
+			</div>
+			<p>
+				A is the cheap empirical probe and the only path that needs many <em>coherent generated</em> frames. C and B move the motion out of generated pixels and into the runtime — exactly where §2 says the value lives. All three reuse the difference-matting pipeline on a single sheet or still; none touches a commodity video model. The decision tree (§8) routes each asset to the cheapest path that clears its quality bar.
+			</p>
+		</section>
+
+		<section id="spike">
+			<h2>7. The Spike Plan</h2>
+			<p>
+				Cheap, two-phase, runnable against the <strong>live pipeline today</strong>. Three target assets exercise the real range: <strong>(1)</strong> swaying-bush button overlay, <strong>(2)</strong> slider-on-rails, <strong>(3)</strong> teeming-background element (drifting fireflies / swaying grass).
+			</p>
+
+			<h3>Phase G — Generation (does our pipeline produce usable sheets?)</h3>
+			<ul>
+				<li>Prompt the model for an <code>R×C</code> sprite sheet of each asset; sweep <code>(R,C)</code> from inside the coherent-cell budget (~6–18) outward to find where it breaks. <strong>First verify the requested size is honoured</strong> — Flash 3.1 may silently return ~1K (§3.8); fall back to 3.0 Pro Image if so.</li>
+				<li>Run the existing white/black pipeline: white pass, then black as img2img anchored on white (§3.1).</li>
+				<li>Measure per-cell white↔black <strong>registration</strong>, per-frame fidelity, coherence <code>B</code> (§3.6), loop seam <code>ε_loop</code>, and file size.</li>
+			</ul>
+			<pre class="math"><code>G-gate (pass requires all):
+  per-frame fidelity      ≥ 4/5   founder review, on ≥ 2 of 3 assets
+  per-cell registration   white↔black ≤ 1 px drift on every cell   (§3.1 — else matte fringes)
+  coherence               B ≤ B_max        (ambient motion reads as coherent, no boil)
+  loop seam               d(S_{N−1}, S_0) ≤ ε_loop
+  usable frames at size   N ≥ N_min(asset),  N within the coherent-cell budget (§3.3)
+  reachable resolution    requested imageSize honoured; crisp-cell px recorded (§3.8)</code></pre>
+
+			<h3>Phase C — Consumption (can RN use them at density &amp; right-size them?)</h3>
+			<ul>
+				<li>Expo harness rendering each asset via Tier 1 (Image+Reanimated) and Tier 2 (Skia atlas).</li>
+				<li>Measure on real iOS + Android devices.</li>
+			</ul>
+			<pre class="math"><code>C-gate (pass requires all):
+  framerate    fps ≥ 58  at K instances, K ∈ {1, 10, 50}, both platforms
+  memory       within device budget at K = 50
+  right-size   crisp (s ≤ 1) at ρ ∈ {1, 2, 3}
+  loop         seamless; no visible seam or hitch
+  interactivity state change (press → speed/range) lands within 1 frame</code></pre>
+
+			<h3>Phase R — Rigged sibling (optional, run if G-gate is marginal on large assets)</h3>
+			<p>Take one generated asset; rig it (Rive/Lottie/Skia mesh); compare coherence, right-sizing, and file size against the sheet for the hero/background case.</p>
+		</section>
+
+		<section id="gates">
+			<h2>8. Decision Gates &amp; Pivot Tree</h2>
+			<div class="criteria">
+				<div>
+					<h3>Go</h3>
+					<p>G-gate <strong>and</strong> C-gate pass for ≥ 2 of 3 assets. Build the runtime component library; that is the product.</p>
+				</div>
+				<div>
+					<h3>Coherence fails (B too high)</h3>
+					<p>Sprite generation boils or cells drift. <strong>Route to Path C (procedural) for ambient motion and Path B (rigged) for hero/structured motion:</strong> generate one matted still, animate it in the runtime. Sheets retained only for the small/ambient cases that passed.</p>
+				</div>
+				<div>
+					<h3>Both fail</h3>
+					<p>Generation can't yet make coherent living assets at fidelity. Park the motion bet; the transparent-<em>still</em> product still stands. Re-probe when the image model improves. A respectable outcome, not a failure.</p>
+				</div>
+			</div>
+			<p>
+				Note the asymmetry with the archived path: here a failure has <strong>cheap, already-specified fallbacks</strong> (Paths B and C) that still reuse our IP. We are not betting the company on a single unproven mechanism.
+			</p>
+		</section>
+
+		<section id="mvp">
+			<h2>9. MVP — Definition &amp; Objective Measures</h2>
+			<p>The gates in §7–8 prove the <em>mechanism</em>. This section defines the <em>product</em>: when have we built an MVP of "apps feel alive," covering the element/background range minus the soft-volumetric corner case? Three things must be measurable — coverage, aliveness, and the gate constants the spike otherwise leaves as bare symbols.</p>
+
+			<h3>9.1 Coverage — the tickable definition of "everything except corner cases"</h3>
+			<p>MVP = the runtime + a starter asset set that clears the per-class bar on the elements below. Soft volumetrics (smoke, glow, mist, fine hair) are explicitly excluded (§10).</p>
+			<table>
+				<thead><tr><th>Element class</th><th>Example</th><th>Likely path (§6)</th><th>In MVP?</th></tr></thead>
+				<tbody>
+					<tr><td>Small accent / icon</td><td>swaying leaf, pulsing dot</td><td>A or C</td><td><span class="pill pill-pass">Yes</span></td></tr>
+					<tr><td>Interactive control</td><td>slider-on-rails, toggle</td><td>B (rigged)</td><td><span class="pill pill-pass">Yes</span></td></tr>
+					<tr><td>Button overlay</td><td>swaying-bush button</td><td>A or C</td><td><span class="pill pill-pass">Yes</span></td></tr>
+					<tr><td>Background / ambient field</td><td>fireflies, grass, leaves</td><td>C (procedural)</td><td><span class="pill pill-pass">Yes</span></td></tr>
+					<tr><td>Loader / state feedback</td><td>living spinner, success bloom</td><td>A or C</td><td><span class="pill pill-pass">Yes</span></td></tr>
+					<tr><td>Soft volumetric</td><td>smoke, glow, mist, hair</td><td>—</td><td><span class="pill pill-warn">Corner case</span></td></tr>
+				</tbody>
+			</table>
+			<p><strong>Coverage bar:</strong> MVP ships when <strong>≥ 4 of the 5 in-scope classes</strong> have at least one asset that passes both gates <em>and</em> renders through a runtime component, on both platforms. That is the falsifiable line for "covers the range minus corner cases."</p>
+
+			<h3>9.2 Aliveness — the one outcome metric that isn't taste</h3>
+			<p>The vision is a perception claim ("alive, not dead"), so its top-line metric must be a perception test, not founder review. Forced-choice, blind:</p>
+			<pre class="math"><code>2AFC: N ≥ 30 viewers, each shown the living vs static build of the same screen
+aliveness ⇔ living preferred as "more alive / more premium" at p < 0.05
+            (binomial vs 50%; target effect ≥ 70/30)
+guardrail  ⇔ no rise in self-reported distraction / discomfort vs static</code></pre>
+			<p>Founder review (≥ 4/5) stays as the fast inner-loop filter; the 2AFC is the gate that says the motion <em>earns its place</em> rather than merely renders.</p>
+
+			<h3>9.3 Calibrating the gate constants (objective in substance, not just form)</h3>
+			<p><code>B_max</code>, <code>ε_loop</code>, and <code>N_min</code> are symbols until pinned. Each earns a number by calibration against human judgement, not by guess:</p>
+			<table>
+				<thead><tr><th>Constant</th><th>Meaning</th><th>How it gets a number</th></tr></thead>
+				<tbody>
+					<tr><td><code>B_max</code></td><td>max residual before "boil" is visible (§3.6)</td><td><code>B</code> of the worst asset a blind panel still rates "no visible boil" vs a clean reference</td></tr>
+					<tr><td><code>ε_loop</code></td><td>max seam discontinuity for a seamless loop (§3.5)</td><td>seam <code>d(S_{N−1},S_0)</code> at which &lt; 1 in 10 viewers can locate the loop point</td></tr>
+					<tr><td><code>N_min</code></td><td>min frames for motion to read as smooth, per asset</td><td>lowest <code>N</code> at fixed fps where the panel stops reporting "steppy"; expect ~8–12 for ambient</td></tr>
+				</tbody>
+			</table>
+			<p>Calibrating these on the three spike assets converts every G-gate row from "objective in form" to "objective in substance," and they then hold for every asset after. Note the numbers interlock: <code>N_min</code> (≈ 8–12) sits just under the coherence ceiling (~6–18, §3.3) — confirmation that Path A's usable window is real but narrow, and that anything above it belongs to Paths B/C.</p>
+		</section>
+
+		<section id="scope">
+			<h2>10. Out of Scope (Explicit)</h2>
+			<ul>
+				<li><strong>Soft volumetrics</strong> — smoke, glow, mist, fine hair. The corner case (<a href="../archive/transparent-animation/TRANSPARENT-ANIMATION-RD-SPIKE.md">archive §0.1</a>); not an MVP requirement.</li>
+				<li><strong>Transparent video</strong> as a delivery format — cross-platform-hostile, and worse on RN than web.</li>
+				<li><strong>Owning / depending on a commodity generator</strong> (Wan-Alpha, Veo, Runway, …) as the source of defensibility. Use whatever is cheapest to make frames; the moat is the runtime.</li>
+				<li><strong>The Alpha Compiler as a primary alpha source.</strong> Kept only as an optional raster edge-refinement pass if ever needed (archive §0.7).</li>
+				<li><strong>Web-first.</strong> We have chosen RN as the focus. Web is a later port, not the proving ground.</li>
+			</ul>
+		</section>
+
+		<section id="open">
+			<h2>11. Open Questions</h2>
+			<ul>
+				<li><strong>Reproducibility / seed — resolved.</strong> Neither model exposes a seed; the Gemini 3.x image family is autoregressive, not diffusion. Consistency comes only from <strong>reference-image anchoring</strong>, which the pipeline already does (white → black img2img, §3.1). Implication: cross-cell identity is a prompt/conditioning problem, not a seed-pinning one; design for the 60–95% band, not bit-exactness.</li>
+				<li><strong>Model resolution ceiling — bounded, with a caveat (§3.8).</strong> Both <strong>Gemini 3.1 Flash Image</strong> and <strong>Gemini 3.0 Pro Image</strong> can render a native 4K square (4096² = 16.78&nbsp;MP) on Vertex. Caveat to confirm first: <code>gemini-3.1-flash-image-preview</code> reportedly ignores <code>imageConfig.imageSize</code> and returns ~1K — so reaching 2K/4K may require 3.0 Pro Image until fixed. The live question is no longer the ceiling but how many of those pixels survive as <em>coherent</em> cells (§3.3) — order ~12, not ~784.</li>
+				<li><strong>Coherence on ambient motion.</strong> Does single-sheet generation hold identity across cells well enough that <code>B ≤ B_max</code> without per-frame conditioning? If not, does img2img/reference conditioning between cells fix it, or do we move to Paths B/C?</li>
+				<li><strong>Loop authoring.</strong> Can we reliably prompt cyclic motion so <code>S_{N−1} → S_0</code> is seamless, or do we need a synthesis step (ping-pong, cross-fade, learned loop)?</li>
+				<li><strong>Theming.</strong> Re-generate per palette, or tint at runtime? Living UI implies assets that match the host app's theme.</li>
+				<li><strong>File-size budget.</strong> A hi-fidelity multi-frame WebP sheet vs the &lt;200 KB mobile guideline — where does each asset class land?</li>
+				<li><strong>Density ceiling.</strong> How many Skia-atlas instances before the C-gate framerate breaks on a mid-tier Android device?</li>
+			</ul>
+			<div class="callout info">
+				<strong>One-line summary for future-us</strong>
+				The hard, valuable problem is no longer "make alpha from video." It is "generate coherent, right-sizeable living assets and make them trivially consumable in a React Native app." Alpha is solved by our existing difference matte on a single sheet; the bet is coherence + the runtime.
+			</div>
+		</section>
+
+		<footer>
+			<p>
+				Opened 2026-06-13 as the active successor to the video-matting line. Full prior history and the pivot reasoning: <a href="../archive/transparent-animation/TRANSPARENT-ANIMATION-RD-SPIKE.md">archive record §0</a>. Keep this file decision-shaped; move raw run notes to a chronological appendix as the spike produces evidence.
+			</p>
+		</footer>
+	</div>
+</body>
+</html>

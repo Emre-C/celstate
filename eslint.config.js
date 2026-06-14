@@ -10,12 +10,15 @@ export default tseslint.config(
 			'**/node_modules/**',
 			'src/convex/_generated/**',
 			'.svelte-kit/**',
+			'**/.svelte-kit/**',
 			'build/**',
-			'dist/**'
+			'dist/**',
+			'**/dist/**',
+			'archive/**'
 		]
 	},
 	{
-		files: ['src/**/*.{ts,tsx}', 'scripts/**/*.{ts,tsx}', 'e2e/**/*.ts', 'playwright.config.ts'],
+		files: ['src/**/*.{ts,tsx}', 'scripts/**/*.{ts,tsx}', 'packages/**/*.{ts,tsx}', 'e2e/**/*.ts', 'playwright.config.ts'],
 		languageOptions: {
 			parser: tseslint.parser,
 			parserOptions: {

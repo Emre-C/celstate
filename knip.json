@@ -12,7 +12,14 @@
 		},
 		"packages/mcp-server": {
 			"project": ["src/**/*.ts"]
+		},
+		"packages/living-ui-runtime": {
+			"project": ["src/**/*.{ts,tsx}"],
+			"ignoreDependencies": ["react-native", "react-native-reanimated"]
 		}
+	},
+	"ignoreIssues": {
+		"packages/living-ui-runtime/src/react-native.tsx": ["duplicates"]
 	},
 	"ignoreExportsUsedInFile": true,
 	"ignoreDependencies": ["tailwindcss", "vercel"],

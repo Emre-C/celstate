@@ -7,6 +7,7 @@
 	"scripts": {
 		"dev": "concurrently \"vite dev\" \"pnpm exec convex dev\"",
 		"build": "vite build",
+		"build:living-ui-runtime": "pnpm --filter @celstate/living-ui-runtime build",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
@@ -28,8 +29,7 @@
 		"animation-worker": "tsx scripts/workers/animation-worker.ts",
 		"animation-worker:once": "tsx scripts/workers/animation-worker.ts --once",
 		"animation-worker:report": "tsx scripts/workers/animation-worker-report.ts",
-		"transparent-animation-spike": "tsx scripts/spikes/transparent-animation-spike.ts",
-		"alpha-eval": "tsx scripts/spikes/alpha-compiler/eval-cli.ts",
+		"living-ui:evaluate-mvp": "tsx scripts/living-ui/evaluate-mvp-evidence.ts",
 		"reset-qa": "tsx scripts/ops/reset-qa.ts",
 		"growth:list": "tsx scripts/ops/growth-ops.ts list",
 		"growth:scaffold": "tsx scripts/ops/growth-ops.ts scaffold",
@@ -47,12 +47,12 @@
 		"knip": "knip",
 		"knip:fix": "knip --fix",
 		"dupcheck": "jscpd src/",
-		"lint:ts": "eslint \"src/**/*.ts\" \"scripts/**/*.ts\" \"scripts/**/*.mjs\" \"e2e/**/*.ts\" \"playwright.config.ts\"",
+		"lint:ts": "eslint \"src/**/*.ts\" \"scripts/**/*.ts\" \"scripts/**/*.mjs\" \"packages/**/*.ts\" \"packages/**/*.tsx\" \"e2e/**/*.ts\" \"playwright.config.ts\"",
 		"typecheck:tsc": "tsc --noEmit",
 		"test:e2e": "playwright test",
 		"test:e2e:build": "cross-env PUBLIC_SITE_URL=http://127.0.0.1:4174 vite build",
 		"verify": "cross-env PUBLIC_SITE_URL=http://127.0.0.1:4174 pnpm run verify:inner",
-		"verify:inner": "pnpm check:public-env && pnpm check:ui-contracts && pnpm check && pnpm typecheck:tsc && pnpm knip && pnpm dupcheck && pnpm lint:ts && pnpm test && pnpm build && pnpm test:e2e"
+		"verify:inner": "pnpm check:public-env && pnpm check:ui-contracts && pnpm check && pnpm typecheck:tsc && pnpm knip && pnpm dupcheck && pnpm lint:ts && pnpm test && pnpm build:living-ui-runtime && pnpm build && pnpm test:e2e"
 	},
 	"devDependencies": {
 		"@playwright/test": "^1.59.1",
