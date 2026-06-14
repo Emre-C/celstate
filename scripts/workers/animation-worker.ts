@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -7,7 +7,11 @@ import { ConvexHttpClient } from "convex/browser";
 import sharp from "sharp";
 import { api } from "../../src/convex/_generated/api.js";
 import type { Id } from "../../src/convex/_generated/dataModel.js";
-import { buildAnimationReferenceStillPrompt, type AnimationUseCase } from "../../src/convex/lib/animation/animationPrompts.js";
+import {
+  ANIMATION_USE_CASES,
+  buildAnimationReferenceStillPrompt,
+  type AnimationUseCase,
+} from "../../src/convex/lib/animation/animationPrompts.js";
 import type { AnimationWorkerJob } from "../../src/convex/lib/animation/animationGenerationRun.js";
 import {
   createChatSession,
@@ -34,7 +38,40 @@ import {
 
 const execFileAsync = promisify(execFile);
 const FPS = 24;
+const RUNTIME_DENSITY_MAX = 3;
+const SPRITE_SHEET_COLUMNS = 4;
+const SPRITE_SHEET_FRAME_COUNT = 12;
+const SPRITE_SHEET_FPS = 12;
 const TRANSPARENT = { r: 0, g: 0, b: 0, alpha: 0 };
+
+type LivingMotionPath =
+  | "generated_sprite_sheet"
+  | "procedural_still"
+  | "rigged_deformation";
+
+const DISPLAY_DP_MAX_BY_USE_CASE: Record<AnimationUseCase, number> = {
+  small_accent: 48,
+  interactive_control: 160,
+  button_overlay: 120,
+  ambient_background: 256,
+  loader_feedback: 72,
+};
+
+const MOTION_PATH_BY_USE_CASE: Record<AnimationUseCase, LivingMotionPath> = {
+  small_accent: "procedural_still",
+  interactive_control: "rigged_deformation",
+  button_overlay: "procedural_still",
+  ambient_background: "procedural_still",
+  loader_feedback: "generated_sprite_sheet",
+};
+
+const RUNTIME_COMPONENT_BY_USE_CASE: Record<AnimationUseCase, string> = {
+  small_accent: "LivingAccent",
+  interactive_control: "LivingControl",
+  button_overlay: "LivingButtonOverlay",
+  ambient_background: "LivingField",
+  loader_feedback: "LivingFeedback",
+};
 
 interface WorkerConfig {
   convexUrl: string;
@@ -77,11 +114,22 @@ interface RenderedAnimation {
   width: number;
 }
 
+interface SpriteSheetExport {
+  cols: number;
+  frameCount: number;
+  height: number;
+  path: string;
+  pngBytes: number;
+  rows: number;
+  webpBytes: number;
+  webpPath: string;
+  width: number;
+}
+
 interface ExportedAnimation {
   apngPath: string;
   frameZipPath: string;
   manifestPath: string;
-  movPath: string;
   qa: {
     decision: "pass";
     metrics: {
@@ -94,11 +142,18 @@ interface ExportedAnimation {
       edgeSpill: number;
       frameCount: number;
       loopSeamScore: number;
+      rightSizeMaxScale: number;
+      runtimeDensityMax: number;
+      runtimeDisplayDpMax: number;
+      spriteCellCount: number;
+      spriteCellHeight: number;
+      spriteCellWidth: number;
     };
     reasonCodes: [];
     version: "animation_alpha_worker_v1";
   };
-  webmPath: string;
+  spriteSheetPath: string;
+  webpSpriteSheetPath: string;
 }
 
 function parseArgs(argv: string[]): WorkerConfig {
@@ -150,6 +205,51 @@ function parseArgs(argv: string[]): WorkerConfig {
 function stringFlag(flags: Map<string, string | true>, key: string): string | undefined {
   const value = flags.get(key);
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function isTransientAnimationWorkerError(message: string): boolean {
+  if (/RESOURCE_EXHAUSTED|"code"\s*:\s*429|\b429\b/.test(message)) {
+    return true;
+  }
+  if (/UND_ERR_CONNECT_TIMEOUT|ETIMEDOUT|ECONNRESET|fetch failed|Connect Timeout/i.test(message)) {
+    return true;
+  }
+  return false;
+}
+
+async function handleAnimationWorkerJobFailure(
+  client: ConvexHttpClient,
+  config: WorkerConfig,
+  job: AnimationWorkerJob,
+  workdir: string,
+  message: string,
+): Promise<void> {
+  console.error(`[animation-worker] failed ${job._id}: ${message}`);
+  await writeJson(path.join(workdir, "failure.json"), { message });
+  await appendFlightEvent(workdir, {
+    jobId: job._id,
+    message,
+    stage: "job",
+    status: "failed",
+  });
+
+  if (isTransientAnimationWorkerError(message)) {
+    const outcome = await client.mutation(api.animationGenerations.requeueAnimationGenerationForWorker, {
+      animationGenerationId: job._id,
+      workerError: message,
+      workerSecret: config.workerSecret,
+    });
+    if (outcome === "requeued") {
+      console.warn(`[animation-worker] requeued ${job._id} after transient error`);
+      return;
+    }
+  }
+
+  await client.mutation(api.animationGenerations.failAnimationGenerationForWorker, {
+    animationGenerationId: job._id,
+    error: "We couldn't generate a production-ready transparent animation. Your request has been closed and any charged credits were refunded.",
+    workerSecret: config.workerSecret,
+  });
 }
 
 async function decodeImage(image: GeminiImageResult): Promise<DecodedImage> {
@@ -523,20 +623,16 @@ function motionOffset(
   const secondary = Math.sin(t * Math.PI * 4);
 
   switch (useCase) {
-    case "stream_alert":
-      return { x: Math.round(wave * base * 0.4), y: Math.round(-Math.abs(wave) * base) };
-    case "stinger_transition":
-      return { x: Math.round(wave * base * 1.8), y: Math.round(secondary * base * 0.25) };
-    case "mascot_reaction":
-      return { x: Math.round(secondary * base * 0.35), y: Math.round(wave * base * 0.9) };
-    case "logo_sting":
-      return { x: 0, y: Math.round(wave * base * 0.45) };
-    case "lower_third":
-      return { x: Math.round(wave * base * 0.8), y: 0 };
-    case "video_callout":
-      return { x: Math.round(wave * base * 0.9), y: Math.round(secondary * base * 0.35) };
-    case "creator_overlay":
-      return { x: Math.round(wave * base * 0.6), y: Math.round(secondary * base * 0.4) };
+    case "small_accent":
+      return { x: Math.round(wave * base * 0.25), y: Math.round(secondary * base * 0.2) };
+    case "interactive_control":
+      return { x: Math.round(wave * base * 1.4), y: Math.round(secondary * base * 0.15) };
+    case "button_overlay":
+      return { x: Math.round(wave * base * 0.45), y: Math.round(secondary * base * 0.25) };
+    case "ambient_background":
+      return { x: Math.round(wave * base * 0.8), y: Math.round(secondary * base * 0.55) };
+    case "loader_feedback":
+      return { x: Math.round(Math.cos(t * Math.PI * 2) * base * 0.5), y: Math.round(wave * base * 0.5) };
   }
 }
 
@@ -580,6 +676,64 @@ async function renderTransparentFrames(
   return { frameCount, framesDir, height, width };
 }
 
+function selectSpriteFrameIndexes(frameCount: number): number[] {
+  const count = Math.min(SPRITE_SHEET_FRAME_COUNT, frameCount);
+  return Array.from({ length: count }, (_, index) =>
+    Math.min(frameCount - 1, Math.floor((index * frameCount) / count))
+  );
+}
+
+async function buildSpriteSheet(
+  rendered: RenderedAnimation,
+  workdir: string,
+): Promise<SpriteSheetExport> {
+  const frameIndexes = selectSpriteFrameIndexes(rendered.frameCount);
+  const cols = Math.min(SPRITE_SHEET_COLUMNS, frameIndexes.length);
+  const rows = Math.ceil(frameIndexes.length / cols);
+  const sheetPath = path.join(workdir, "celstate-living-ui-sprite-sheet.png");
+  const webpPath = path.join(workdir, "celstate-living-ui-sprite-sheet.webp");
+
+  const overlays = frameIndexes.map((frameIndex, sheetIndex) => {
+    const col = sheetIndex % cols;
+    const row = Math.floor(sheetIndex / cols);
+    return {
+      input: path.join(rendered.framesDir, `frame-${String(frameIndex + 1).padStart(4, "0")}.png`),
+      left: col * rendered.width,
+      top: row * rendered.height,
+    };
+  });
+
+  await sharp({
+    create: {
+      background: TRANSPARENT,
+      channels: 4,
+      height: rendered.height * rows,
+      width: rendered.width * cols,
+    },
+  })
+    .composite(overlays)
+    .png()
+    .toFile(sheetPath);
+
+  await sharp(sheetPath)
+    .webp({ effort: 5, lossless: true, quality: 90 })
+    .toFile(webpPath);
+
+  const [pngStat, webpStat] = await Promise.all([stat(sheetPath), stat(webpPath)]);
+
+  return {
+    cols,
+    frameCount: frameIndexes.length,
+    height: rendered.height * rows,
+    path: sheetPath,
+    pngBytes: pngStat.size,
+    rows,
+    webpBytes: webpStat.size,
+    webpPath,
+    width: rendered.width * cols,
+  };
+}
+
 async function runFfmpeg(args: string[]): Promise<void> {
   try {
     await execFileAsync("ffmpeg", ["-hide_banner", ...args], {
@@ -599,49 +753,9 @@ async function exportAnimation(
   workdir: string,
 ): Promise<ExportedAnimation> {
   const framePattern = path.join(rendered.framesDir, "frame-%04d.png");
-  const webmPath = path.join(workdir, "celstate-animation-obs.webm");
-  const movPath = path.join(workdir, "celstate-animation-editor.mov");
   const apngPath = path.join(workdir, "celstate-animation.apng");
   const frameZipPath = path.join(workdir, "celstate-animation-frames.zip");
   const manifestPath = path.join(workdir, "manifest.json");
-
-  await runFfmpeg([
-    "-y",
-    "-framerate",
-    String(FPS),
-    "-i",
-    framePattern,
-    "-c:v",
-    "libvpx-vp9",
-    "-pix_fmt",
-    "yuva420p",
-    "-b:v",
-    "0",
-    "-crf",
-    "30",
-    "-an",
-    "-metadata:s:v:0",
-    "alpha_mode=1",
-    webmPath,
-  ]);
-
-  await runFfmpeg([
-    "-y",
-    "-framerate",
-    String(FPS),
-    "-i",
-    framePattern,
-    "-c:v",
-    "prores_ks",
-    "-profile:v",
-    "4",
-    "-pix_fmt",
-    "yuva444p10le",
-    "-vendor",
-    "apl0",
-    "-an",
-    movPath,
-  ]);
 
   await runFfmpeg([
     "-y",
@@ -657,17 +771,12 @@ async function exportAnimation(
   ]);
 
   await writeStoredZip(frameZipPath, rendered.framesDir);
+  const spriteSheet = await buildSpriteSheet(rendered, workdir);
 
   const canonicalStats = await analyzeFrameDirectory(rendered.framesDir);
   const decodedRoot = path.join(workdir, "decoded");
-  const webmStats = await decodeAndAnalyzeExport(webmPath, path.join(decodedRoot, "webm"), "webm");
-  const movStats = await decodeAndAnalyzeExport(movPath, path.join(decodedRoot, "mov"), "mov");
   const apngStats = await decodeAndAnalyzeExport(apngPath, path.join(decodedRoot, "apng"), "apng");
-  const decodedExportAlphaCoverage = Math.min(
-    webmStats.alphaFrameCoverage,
-    movStats.alphaFrameCoverage,
-    apngStats.alphaFrameCoverage,
-  );
+  const decodedExportAlphaCoverage = apngStats.alphaFrameCoverage;
 
   const pass =
     canonicalStats.alphaFrameCoverage === 1
@@ -680,23 +789,54 @@ async function exportAnimation(
     );
   }
 
+  const displayDpMax = DISPLAY_DP_MAX_BY_USE_CASE[job.useCase];
+  const rightSizeMaxScale =
+    (displayDpMax * RUNTIME_DENSITY_MAX) / Math.max(1, Math.min(rendered.width, rendered.height));
+  const runtimeComponent = RUNTIME_COMPONENT_BY_USE_CASE[job.useCase];
+  const motionPath = MOTION_PATH_BY_USE_CASE[job.useCase];
+
   const manifest = {
+    assetClass: job.useCase,
+    assetLabel: ANIMATION_USE_CASES[job.useCase].label,
     aspectRatio: job.aspectRatio,
     destination: job.destination,
     durationSeconds: job.durationSeconds,
     exports: {
       apng: path.basename(apngPath),
       frames: path.basename(frameZipPath),
-      mov: path.basename(movPath),
-      webm: path.basename(webmPath),
+      spriteSheetPng: path.basename(spriteSheet.path),
+      spriteSheetWebp: path.basename(spriteSheet.webpPath),
     },
     fps: FPS,
     frameCount: rendered.frameCount,
     generatedAt: new Date().toISOString(),
     height: rendered.height,
-    pipeline: "celstate_animation_alpha_worker_v1",
+    motionPath,
+    pipeline: "celstate_living_ui_runtime_v1",
     prompt: job.prompt,
     referenceTransparentQa: referenceQa,
+    runtime: {
+      component: runtimeComponent,
+      densityMax: RUNTIME_DENSITY_MAX,
+      displayDpMax,
+      interaction: job.useCase === "interactive_control" ? "press-or-drag-state" : "loop",
+      rightSizeMaxScale,
+      rightSizePass: rightSizeMaxScale <= 1,
+      targets: ["react-native", "web-preview"],
+    },
+    schemaVersion: 1,
+    spriteSheet: {
+      cellHeight: rendered.height,
+      cellWidth: rendered.width,
+      cols: spriteSheet.cols,
+      fps: SPRITE_SHEET_FPS,
+      frameCount: spriteSheet.frameCount,
+      height: spriteSheet.height,
+      pngBytes: spriteSheet.pngBytes,
+      rows: spriteSheet.rows,
+      webpBytes: spriteSheet.webpBytes,
+      width: spriteSheet.width,
+    },
     useCase: job.useCase,
     width: rendered.width,
   };
@@ -706,7 +846,6 @@ async function exportAnimation(
     apngPath,
     frameZipPath,
     manifestPath,
-    movPath,
     qa: {
       decision: "pass",
       metrics: {
@@ -719,11 +858,18 @@ async function exportAnimation(
         edgeSpill: 0,
         frameCount: rendered.frameCount,
         loopSeamScore: canonicalStats.boundaryFlicker,
+        rightSizeMaxScale,
+        runtimeDensityMax: RUNTIME_DENSITY_MAX,
+        runtimeDisplayDpMax: displayDpMax,
+        spriteCellCount: spriteSheet.frameCount,
+        spriteCellHeight: rendered.height,
+        spriteCellWidth: rendered.width,
       },
       reasonCodes: [],
       version: "animation_alpha_worker_v1",
     },
-    webmPath,
+    spriteSheetPath: spriteSheet.path,
+    webpSpriteSheetPath: spriteSheet.webpPath,
   };
 }
 
@@ -1004,13 +1150,19 @@ async function processJob(
       workerSecret: config.workerSecret,
     });
 
-    const [manifestStorageId, webmStorageId, movStorageId, pngSequenceStorageId, apngStorageId] =
+    const [
+      manifestStorageId,
+      pngSequenceStorageId,
+      apngStorageId,
+      spriteSheetStorageId,
+      webpSpriteSheetStorageId,
+    ] =
       await Promise.all([
         uploadArtifact(client, config.workerSecret, exported.manifestPath, "application/json"),
-        uploadArtifact(client, config.workerSecret, exported.webmPath, "video/webm"),
-        uploadArtifact(client, config.workerSecret, exported.movPath, "video/quicktime"),
         uploadArtifact(client, config.workerSecret, exported.frameZipPath, "application/zip"),
         uploadArtifact(client, config.workerSecret, exported.apngPath, "image/apng"),
+        uploadArtifact(client, config.workerSecret, exported.spriteSheetPath, "image/png"),
+        uploadArtifact(client, config.workerSecret, exported.webpSpriteSheetPath, "image/webp"),
       ]);
 
     await client.mutation(api.animationGenerations.completeAnimationGenerationForWorker, {
@@ -1020,11 +1172,12 @@ async function processJob(
       expectedStatus: "qa",
       exports: {
         apngStorageId,
-        movStorageId,
         pngSequenceStorageId,
-        webmStorageId,
+        runtimeManifestStorageId: manifestStorageId,
+        spriteSheetStorageId,
+        webpSpriteSheetStorageId,
       },
-      previewStorageId: webmStorageId,
+      previewStorageId: apngStorageId,
       workerSecret: config.workerSecret,
     });
     console.log(`[animation-worker] completed ${job._id}`);
@@ -1035,19 +1188,7 @@ async function processJob(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`[animation-worker] failed ${job._id}: ${message}`);
-    await writeJson(path.join(workdir, "failure.json"), { message });
-    await appendFlightEvent(workdir, {
-      jobId: job._id,
-      message,
-      stage: "job",
-      status: "failed",
-    });
-    await client.mutation(api.animationGenerations.failAnimationGenerationForWorker, {
-      animationGenerationId: job._id,
-      error: "We couldn't generate a production-ready transparent animation. Your request has been closed and any charged credits were refunded.",
-      workerSecret: config.workerSecret,
-    });
+    await handleAnimationWorkerJobFailure(client, config, job, workdir, message);
   } finally {
     if (!config.keepWorkdir && !config.rootWorkdir) {
       await rm(workdir, { force: true, recursive: true });

@@ -11,6 +11,7 @@ import {
   ACTIVE_ANIMATION_GENERATION_STATUSES,
   buildAnimationGenerationCompletionPatch,
   buildAnimationGenerationFailurePatch,
+  buildAnimationGenerationRequeuePatch,
   buildAnimationGenerationStagePatch,
   getAnimationGenerationStatusMessage,
   createAnimationGenerationRun,
@@ -33,10 +34,10 @@ import { validateReferenceImageMetadata } from "./lib/validation/validation.js";
 
 const animationExportUrlsValidator = v.object({
   apngUrl: v.union(v.string(), v.null()),
-  movUrl: v.union(v.string(), v.null()),
-  obsBundleUrl: v.union(v.string(), v.null()),
   pngSequenceUrl: v.union(v.string(), v.null()),
-  webmUrl: v.union(v.string(), v.null()),
+  runtimeManifestUrl: v.union(v.string(), v.null()),
+  spriteSheetUrl: v.union(v.string(), v.null()),
+  webpSpriteSheetUrl: v.union(v.string(), v.null()),
 });
 
 const animationGenerationWithUrlsValidator = v.object({
@@ -70,8 +71,6 @@ const animationGenerationWithUrlsValidator = v.object({
   uploadedReferenceStorageIds: v.optional(v.array(v.id("_storage"))),
   useCase: animationUseCaseValidator,
   userId: v.id("users"),
-  veoOperationName: v.optional(v.string()),
-  veoOutputGcsUri: v.optional(v.string()),
 });
 
 const animationWorkerJobValidator = v.object({
@@ -92,10 +91,10 @@ const animationWorkerJobValidator = v.object({
 type AnimationGenerationWithUrls = Doc<"animationGenerations"> & {
   exportUrls: {
     apngUrl: string | null;
-    movUrl: string | null;
-    obsBundleUrl: string | null;
     pngSequenceUrl: string | null;
-    webmUrl: string | null;
+    runtimeManifestUrl: string | null;
+    spriteSheetUrl: string | null;
+    webpSpriteSheetUrl: string | null;
   };
   previewUrl: string | null;
 };
@@ -291,28 +290,28 @@ async function resolveAnimationGenerationWithUrls(
   const exports = generation.exports;
   const [
     previewUrl,
-    webmUrl,
-    movUrl,
     pngSequenceUrl,
     apngUrl,
-    obsBundleUrl,
+    runtimeManifestUrl,
+    spriteSheetUrl,
+    webpSpriteSheetUrl,
   ] = await Promise.all([
     resolveStorageUrl(ctx, generation.previewStorageId),
-    resolveStorageUrl(ctx, exports?.webmStorageId),
-    resolveStorageUrl(ctx, exports?.movStorageId),
     resolveStorageUrl(ctx, exports?.pngSequenceStorageId),
     resolveStorageUrl(ctx, exports?.apngStorageId),
-    resolveStorageUrl(ctx, exports?.obsBundleStorageId),
+    resolveStorageUrl(ctx, exports?.runtimeManifestStorageId),
+    resolveStorageUrl(ctx, exports?.spriteSheetStorageId),
+    resolveStorageUrl(ctx, exports?.webpSpriteSheetStorageId),
   ]);
 
   return {
     ...generation,
     exportUrls: {
       apngUrl,
-      movUrl,
-      obsBundleUrl,
       pngSequenceUrl,
-      webmUrl,
+      runtimeManifestUrl,
+      spriteSheetUrl,
+      webpSpriteSheetUrl,
     },
     previewUrl,
   };
@@ -568,8 +567,6 @@ export const markStage = internalMutation({
     expectedStatus: animationGenerationStatusValidator,
     status: animationGenerationStatusValidator,
     statusMessage: v.optional(v.string()),
-    veoOperationName: v.optional(v.string()),
-    veoOutputGcsUri: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -589,11 +586,7 @@ export const markStage = internalMutation({
       return null;
     }
 
-    await ctx.db.patch(args.animationGenerationId, {
-      ...patch,
-      veoOperationName: args.veoOperationName ?? generation?.veoOperationName,
-      veoOutputGcsUri: args.veoOutputGcsUri ?? generation?.veoOutputGcsUri,
-    });
+    await ctx.db.patch(args.animationGenerationId, patch);
     return null;
   },
 });
@@ -629,11 +622,11 @@ export const completeAnimationGeneration = internalMutation({
     if (
       !args.exports
       || !(
-        args.exports.webmStorageId
-        || args.exports.movStorageId
-        || args.exports.pngSequenceStorageId
+        args.exports.pngSequenceStorageId
         || args.exports.apngStorageId
-        || args.exports.obsBundleStorageId
+        || args.exports.runtimeManifestStorageId
+        || args.exports.spriteSheetStorageId
+        || args.exports.webpSpriteSheetStorageId
       )
     ) {
       throw new ConvexError("Completion requires at least one transparent export");
@@ -737,8 +730,6 @@ export const markAnimationGenerationStageForWorker = mutation({
     expectedStatus: animationGenerationStatusValidator,
     status: animationGenerationStatusValidator,
     statusMessage: v.optional(v.string()),
-    veoOperationName: v.optional(v.string()),
-    veoOutputGcsUri: v.optional(v.string()),
     workerSecret: v.string(),
   },
   returns: v.null(),
@@ -760,11 +751,7 @@ export const markAnimationGenerationStageForWorker = mutation({
       return null;
     }
 
-    await ctx.db.patch(args.animationGenerationId, {
-      ...patch,
-      veoOperationName: args.veoOperationName ?? generation?.veoOperationName,
-      veoOutputGcsUri: args.veoOutputGcsUri ?? generation?.veoOutputGcsUri,
-    });
+    await ctx.db.patch(args.animationGenerationId, patch);
     return null;
   },
 });
@@ -807,11 +794,11 @@ export const completeAnimationGenerationForWorker = mutation({
     }
     if (
       !(
-        args.exports.webmStorageId
-        || args.exports.movStorageId
-        || args.exports.pngSequenceStorageId
+        args.exports.pngSequenceStorageId
         || args.exports.apngStorageId
-        || args.exports.obsBundleStorageId
+        || args.exports.runtimeManifestStorageId
+        || args.exports.spriteSheetStorageId
+        || args.exports.webpSpriteSheetStorageId
       )
     ) {
       throw new ConvexError("Completion requires at least one transparent export");
@@ -825,6 +812,48 @@ export const completeAnimationGenerationForWorker = mutation({
       previewStorageId: args.previewStorageId,
     }));
     return null;
+  },
+});
+
+export const requeueAnimationGenerationForWorker = mutation({
+  args: {
+    animationGenerationId: v.id("animationGenerations"),
+    workerError: v.string(),
+    workerSecret: v.string(),
+  },
+  returns: v.union(v.literal("requeued"), v.literal("failed"), v.null()),
+  handler: async (ctx, args) => {
+    assertAnimationWorkerSecret(args.workerSecret);
+
+    const generation = await ctx.db.get(args.animationGenerationId);
+    if (!generation || isTerminalAnimationGenerationStatus(generation.status)) {
+      return null;
+    }
+
+    const now = Date.now();
+    if (generation.retryCount >= ANIMATION_GENERATION_CONFIG.maxWorkerRetries) {
+      await ctx.db.patch(args.animationGenerationId, buildAnimationGenerationFailurePatch({
+        error: "We couldn't generate a production-ready transparent animation. Your request has been closed and any charged credits were refunded.",
+        failedAt: now,
+      }));
+
+      if (
+        generation.creditsCost > 0
+        && !generation.creditRefundedAt
+        && await applyCreditsToUser(ctx, generation.userId, generation.creditsCost)
+      ) {
+        await ctx.db.patch(args.animationGenerationId, {
+          creditRefundedAt: now,
+        });
+      }
+      return "failed";
+    }
+
+    await ctx.db.patch(
+      args.animationGenerationId,
+      buildAnimationGenerationRequeuePatch(generation, now),
+    );
+    return "requeued";
   },
 });
 

@@ -13,6 +13,7 @@ import type * as creditPackPurchase from "../creditPackPurchase.js";
 import type * as creditPackPurchaseActions from "../creditPackPurchaseActions.js";
 import type * as crons from "../crons.js";
 import type * as generation from "../generation.js";
+import type * as generationArtifactRetention from "../generationArtifactRetention.js";
 import type * as generationReports from "../generationReports.js";
 import type * as generations from "../generations.js";
 import type * as http from "../http.js";
@@ -25,6 +26,7 @@ import type * as lib_creditPackPurchase_lifecycle from "../lib/creditPackPurchas
 import type * as lib_creditPackPurchase_productionStripeAdapter from "../lib/creditPackPurchase/productionStripeAdapter.js";
 import type * as lib_creditPackPurchase_stripePort from "../lib/creditPackPurchase/stripePort.js";
 import type * as lib_gemini from "../lib/gemini.js";
+import type * as lib_generationArtifactStorage from "../lib/generationArtifactStorage.js";
 import type * as lib_generation_generationOpsEvents from "../lib/generation/generationOpsEvents.js";
 import type * as lib_generation_generationRun from "../lib/generation/generationRun.js";
 import type * as lib_generation_matte from "../lib/generation/matte.js";
@@ -66,6 +68,7 @@ declare const fullApi: ApiFromModules<{
   creditPackPurchaseActions: typeof creditPackPurchaseActions;
   crons: typeof crons;
   generation: typeof generation;
+  generationArtifactRetention: typeof generationArtifactRetention;
   generationReports: typeof generationReports;
   generations: typeof generations;
   http: typeof http;
@@ -78,6 +81,7 @@ declare const fullApi: ApiFromModules<{
   "lib/creditPackPurchase/productionStripeAdapter": typeof lib_creditPackPurchase_productionStripeAdapter;
   "lib/creditPackPurchase/stripePort": typeof lib_creditPackPurchase_stripePort;
   "lib/gemini": typeof lib_gemini;
+  "lib/generationArtifactStorage": typeof lib_generationArtifactStorage;
   "lib/generation/generationOpsEvents": typeof lib_generation_generationOpsEvents;
   "lib/generation/generationRun": typeof lib_generation_generationRun;
   "lib/generation/matte": typeof lib_generation_matte;

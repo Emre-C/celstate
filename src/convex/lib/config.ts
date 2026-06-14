@@ -102,6 +102,11 @@ export const GENERATION_CONFIG = {
   orphanedUploadMaxAgeMs: 60 * 60 * 1000, // 1 hour
   orphanedUploadCleanupBatchSize: 100,
 
+  /** Product retention: delete terminal generation artifacts after this age. */
+  generationArtifactRetentionMs: 30 * 24 * 60 * 60 * 1000,
+  /** Max rows per cron tick — prevents large single-transaction deletes. */
+  expiredGenerationArtifactCleanupBatchSize: 20,
+
   // Image optimization (Normal Resolution variant)
   optimizedMaxDimension: 1024,
   optimizedPngQuality: 80,
@@ -111,6 +116,8 @@ export const GENERATION_CONFIG = {
 } as const;
 
 export const ANIMATION_ASPECT_RATIOS = {
+  "1:1": { label: "Square" },
+  "4:3": { label: "Control" },
   "16:9": { label: "Widescreen" },
   "9:16": { label: "Vertical" },
 } as const;
@@ -127,7 +134,7 @@ export function isValidAnimationAspectRatio(
   return VALID_ANIMATION_ASPECT_RATIOS.has(value);
 }
 
-export const ANIMATION_DURATIONS_SECONDS = [4, 6, 8] as const;
+export const ANIMATION_DURATIONS_SECONDS = [2, 4, 6, 8] as const;
 
 export type AnimationDurationSeconds = (typeof ANIMATION_DURATIONS_SECONDS)[number];
 
@@ -154,6 +161,9 @@ export const ANIMATION_GENERATION_CONFIG = {
   requestWindowMs: 24 * 60 * 60 * 1000,
 
   // Phase -1 concierge validation records requests without charging credits.
-  // The automated pipeline can raise this when Veo + alpha reconstruction are live.
+  // The automated pipeline can raise this once sprite generation + runtime export are live.
   creditsPerAnimationRequest: 0,
+
+  /** Worker requeues to intake on transient provider/network errors before failing. */
+  maxWorkerRetries: 3,
 } as const;

@@ -112,8 +112,6 @@ export default defineSchema({
     uploadedReferenceStorageIds: v.optional(v.array(v.id("_storage"))),
     brandInputs: v.optional(animationBrandInputsValidator),
     attribution: v.optional(animationAttributionValidator),
-    veoOperationName: v.optional(v.string()),
-    veoOutputGcsUri: v.optional(v.string()),
     canonicalFrameManifestStorageId: v.optional(v.id("_storage")),
     previewStorageId: v.optional(v.id("_storage")),
     exports: v.optional(animationExportsValidator),
@@ -125,8 +123,8 @@ export default defineSchema({
   })
     .index("by_user_created", ["userId", "createdAt"])
     .index("by_user_status_created", ["userId", "status", "createdAt"])
+    .index("by_createdAt", ["createdAt"])
     .index("by_status_last_progress", ["status", "lastProgressAt"])
-    .index("by_veo_operation", ["veoOperationName"])
     .index("by_attribution_campaign_created", ["attribution.campaignId", "createdAt"])
     .index("by_attribution_creator_code_created", ["attribution.creatorCode", "createdAt"]),
 

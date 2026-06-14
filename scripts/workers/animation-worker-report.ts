@@ -80,7 +80,7 @@ async function listArtifacts(workdir: string): Promise<void> {
   for (const entry of entries.sort()) {
     const filePath = path.join(workdir, entry);
     const fileStat = await stat(filePath);
-    if (fileStat.isFile() && /\.(apng|json|mov|ndjson|png|webm|zip)$/i.test(entry)) {
+    if (fileStat.isFile() && /\.(apng|json|mov|ndjson|png|webm|webp|zip)$/i.test(entry)) {
       artifacts.push(`${entry} (${Math.round(fileStat.size / 1024)} KB)`);
     }
   }

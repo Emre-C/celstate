@@ -1,81 +1,65 @@
 import type { Id } from "../../_generated/dataModel.js";
 
 export const ANIMATION_USE_CASES = {
-  stream_alert: {
-    label: "Stream alert",
-    briefLabel: "OBS-ready transparent stream alert",
+  small_accent: {
+    label: "Small accent / icon",
+    briefLabel: "transparent living small-accent asset",
     motion:
-      "short celebratory entrance, readable at webcam-overlay scale, then a clean hold",
+      "subtle ambient motion that remains crisp at 48 dp, such as a swaying leaf, pulsing dot, or breathing icon",
     avoid:
-      "scene backgrounds, tiny confetti noise, unreadable text, cropped subject, camera cuts",
+      "soft volumetrics, tiny unreadable detail, full-scene backgrounds, extra subjects, cropped edges",
   },
-  stinger_transition: {
-    label: "Stinger transition",
-    briefLabel: "OBS-ready transparent stinger transition element",
+  interactive_control: {
+    label: "Interactive control",
+    briefLabel: "transparent living interactive-control asset",
     motion:
-      "decisive sweep or emblem motion that can sit over a scene change without becoming a full scene",
+      "structured motion that can respond to press or drag state, such as a slider riding rails or a tactile toggle",
     avoid:
-      "full-screen environments, hard scene cuts, text baked into the generated subject, edge-cropped motion",
+      "baked-in app chrome, generated labels, complex physics, scene cuts, full-screen UI mockups",
   },
-  mascot_reaction: {
-    label: "Mascot reaction",
-    briefLabel: "transparent creator mascot reaction",
+  button_overlay: {
+    label: "Button overlay",
+    briefLabel: "transparent living button-overlay asset",
     motion:
-      "expressive character reaction with a stable silhouette and no identity drift",
+      "short ambient loop that can sit over a button without stealing attention, such as overgrown bushes swaying",
     avoid:
-      "extra characters, complex dialogue acting, lip sync, fast spins, self-occlusion",
+      "hard shadows, text, heavy particles, soft volumetric haze, edge-cropped branches",
   },
-  logo_sting: {
-    label: "Logo sting",
-    briefLabel: "transparent logo sting",
+  ambient_background: {
+    label: "Background / ambient field",
+    briefLabel: "transparent living ambient-background element",
     motion:
-      "premium emblem reveal with a short settle, keeping logo geometry recognizable",
+      "procedural ambient drift or sway suitable for many runtime instances, such as fireflies, grass, or falling leaves",
     avoid:
-      "brand mimicry, illegible lettering, reflections on a floor, background plates",
+      "one giant illustrated background plate, fog, glow clouds, dense noise, camera motion",
   },
-  lower_third: {
-    label: "Lower third",
-    briefLabel: "editor-ready transparent lower-third motion accent",
+  loader_feedback: {
+    label: "Loader / state feedback",
+    briefLabel: "transparent living loader or state-feedback asset",
     motion:
-      "clean editorial reveal with deterministic text reserved for Celstate layout, not model-rendered text",
+      "compact looping feedback with a readable state change, such as a living spinner or success bloom",
     avoid:
-      "baked-in paragraphs, noisy templates, heavy shadows, full-frame panels",
-  },
-  video_callout: {
-    label: "Video callout",
-    briefLabel: "editor-ready transparent video callout",
-    motion:
-      "attention-directing motion that reads clearly over footage without obscuring the subject",
-    avoid:
-      "stock-template clutter, glowing arrows, full backgrounds, illegible labels",
-  },
-  creator_overlay: {
-    label: "Creator overlay",
-    briefLabel: "transparent creator/editor overlay asset",
-    motion:
-      "compact branded flourish with a stable central subject and generous transparent padding",
-    avoid:
-      "generic full-scene animation, platform UI mimicry, clutter, cropped edges",
+      "generic spinner templates, neon glow, text, confetti clutter, soft smoke bursts",
   },
 } as const;
 
 export type AnimationUseCase = keyof typeof ANIMATION_USE_CASES;
 
 export const ANIMATION_DESTINATIONS = {
-  obs: {
-    label: "OBS / streaming",
-    briefPrefix: "OBS-ready",
-    exportTarget: "transparent WebM with alpha and stream-overlay-safe framing",
+  react_native_runtime: {
+    label: "React Native runtime",
+    briefPrefix: "React-Native-ready",
+    exportTarget: "a transparent runtime bundle with sprite sheet, procedural manifest, APNG preview, and frame sequence",
   },
-  video_editor: {
-    label: "Video editor",
-    briefPrefix: "editor-ready",
-    exportTarget: "transparent editor assets, including ProRes-style MOV when available",
+  web_runtime: {
+    label: "Web runtime",
+    briefPrefix: "web-runtime-ready",
+    exportTarget: "a transparent runtime bundle with sprite sheet, procedural manifest, APNG preview, and frame sequence",
   },
-  obs_and_video_editor: {
-    label: "Both",
-    briefPrefix: "OBS-ready and editor-ready",
-    exportTarget: "transparent WebM plus editor-ready transparent video exports",
+  runtime_bundle: {
+    label: "Runtime bundle",
+    briefPrefix: "runtime-ready",
+    exportTarget: "transparent sprite sheet, runtime manifest, still reference, and preview exports",
   },
 } as const;
 
@@ -159,14 +143,6 @@ export function buildAnimationProductionBrief(
     "Transparency plan: isolate the subject for alpha reconstruction, preserve soft edges and motion blur, and avoid canvas-edge contact.",
     `Avoid: ${useCase.avoid}; no floor plane, no shadows baked into a background, no extra subjects, no camera cuts, no generated text unless it is explicitly a deterministic layout element.`,
   ].filter((line): line is string => line !== null).join("\n");
-}
-
-export function buildVeoMotionPrompt(productionBrief: string): string {
-  return [
-    productionBrief,
-    "Generate an opaque source video suitable for Celstate temporal alpha reconstruction.",
-    "Keep the background visually simple and separable from the foreground. Keep subject scale and identity stable across the full clip.",
-  ].join("\n");
 }
 
 export function buildAnimationReferenceStillPrompt(productionBrief: string): string {

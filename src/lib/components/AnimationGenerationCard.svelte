@@ -8,8 +8,6 @@
 		| 'intake'
 		| 'queued'
 		| 'generating_reference'
-		| 'submitting_video'
-		| 'polling_video'
 		| 'reconstructing_alpha'
 		| 'qa'
 		| 'exporting'
@@ -18,10 +16,10 @@
 
 	type ExportUrls = {
 		apngUrl?: string | null;
-		movUrl?: string | null;
-		obsBundleUrl?: string | null;
 		pngSequenceUrl?: string | null;
-		webmUrl?: string | null;
+		runtimeManifestUrl?: string | null;
+		spriteSheetUrl?: string | null;
+		webpSpriteSheetUrl?: string | null;
 	};
 
 	let {
@@ -57,11 +55,11 @@
 	const useCaseLabel = $derived(getUseCaseLabel(useCase));
 	const availableExports = $derived(
 		[
-			{ label: 'WebM', suffix: '-obs.webm', url: exportUrls?.webmUrl },
-			{ label: 'MOV', suffix: '-editor.mov', url: exportUrls?.movUrl },
-			{ label: 'Frames', suffix: '-frames.zip', url: exportUrls?.pngSequenceUrl },
+			{ label: 'Runtime', suffix: '-runtime.json', url: exportUrls?.runtimeManifestUrl },
+			{ label: 'WebP sheet', suffix: '-sheet.webp', url: exportUrls?.webpSpriteSheetUrl },
+			{ label: 'PNG sheet', suffix: '-sheet.png', url: exportUrls?.spriteSheetUrl },
 			{ label: 'APNG', suffix: '.apng', url: exportUrls?.apngUrl },
-			{ label: 'OBS', suffix: '-obs.zip', url: exportUrls?.obsBundleUrl }
+			{ label: 'Frames', suffix: '-frames.zip', url: exportUrls?.pngSequenceUrl }
 		].filter((item) => !!item.url)
 	);
 	const safeName = $derived(toDownloadFileSlug(prompt));
@@ -73,9 +71,6 @@
 			case 'queued':
 			case 'generating_reference':
 				return 'Designing';
-			case 'submitting_video':
-			case 'polling_video':
-				return 'Animating';
 			case 'reconstructing_alpha':
 				return 'Refining transparency';
 			case 'qa':
@@ -91,18 +86,30 @@
 
 	function getDestinationLabel(value: string): string {
 		switch (value) {
-			case 'obs':
-				return 'OBS';
-			case 'video_editor':
-				return 'Editor';
-			case 'obs_and_video_editor':
-				return 'OBS + editor';
+			case 'react_native_runtime':
+				return 'React Native';
+			case 'web_runtime':
+				return 'Web runtime';
+			case 'runtime_bundle':
+				return 'Runtime bundle';
 			default:
 				return value;
 		}
 	}
 
 	function getUseCaseLabel(value: string): string {
+		switch (value) {
+			case 'small_accent':
+				return 'Small accent';
+			case 'interactive_control':
+				return 'Interactive control';
+			case 'button_overlay':
+				return 'Button overlay';
+			case 'ambient_background':
+				return 'Ambient field';
+			case 'loader_feedback':
+				return 'State feedback';
+		}
 		return value
 			.split('_')
 			.map((part) => part.charAt(0).toUpperCase() + part.slice(1))
@@ -123,16 +130,7 @@
 <div class="min-w-0 border border-border transition-colors hover:border-accent/20">
 	<div class="checkerboard-bg flex aspect-video items-center justify-center overflow-hidden">
 		{#if status === 'complete' && previewUrl}
-			<video
-				src={previewUrl}
-				muted
-				loop
-				autoplay
-				playsinline
-				controls
-				class="h-full w-full object-contain"
-				aria-label={prompt}
-			></video>
+			<img src={previewUrl} alt={prompt} class="h-full w-full object-contain" />
 		{:else if status === 'failed'}
 			<div class="flex flex-col items-center gap-3 px-4 text-center">
 				<svg class="h-6 w-6 text-red-500/70" viewBox="0 0 24 24" fill="none">
@@ -170,7 +168,7 @@
 		</div>
 
 		{#if status === 'complete' && availableExports.length > 0}
-			<div class="grid border-t border-border" style="grid-template-columns: repeat({availableExports.length}, minmax(0, 1fr));">
+			<div class="grid border-t border-border [grid-template-columns:repeat(auto-fit,minmax(5.25rem,1fr))]">
 				{#each availableExports as item, index}
 					<button
 						type="button"

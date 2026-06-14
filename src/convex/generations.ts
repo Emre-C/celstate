@@ -1006,17 +1006,51 @@ export const backfillReferenceStorageId = internalAction({
   },
 });
 
+const storageDeleteReasonValidator = v.union(
+  v.literal("expired_retention"),
+  v.literal("orphan_cleanup"),
+  v.literal("qa_user_reset"),
+);
+
+const STORAGE_DELETE_CHUNK_SIZE = 100;
+
 /**
  * Deletes a batch of storage files; separated from the action so it runs
  * inside a mutation where ctx.storage.delete is available.
+ *
+ * Callers must pass an explicit `reason`. There is intentionally no
+ * "delete all" code path — bulk deletes are limited to retention cron,
+ * orphan cleanup, and single-user QA reset.
  */
 export const deleteStorageFiles = internalMutation({
-  args: { storageIds: v.array(v.id("_storage")) },
+  args: {
+    storageIds: v.array(v.id("_storage")),
+    reason: storageDeleteReasonValidator,
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
-    for (const storageId of args.storageIds) {
-      await ctx.storage.delete(storageId);
+    const uniqueStorageIds = [...new Set(args.storageIds.map((id) => String(id)))];
+    if (uniqueStorageIds.length === 0) {
+      return null;
     }
+
+    for (let offset = 0; offset < uniqueStorageIds.length; offset += STORAGE_DELETE_CHUNK_SIZE) {
+      const chunk = uniqueStorageIds.slice(offset, offset + STORAGE_DELETE_CHUNK_SIZE);
+      for (const storageId of chunk) {
+        const existing = await ctx.db.system.get("_storage", storageId as Id<"_storage">);
+        if (!existing) {
+          continue;
+        }
+        await ctx.storage.delete(storageId as Id<"_storage">);
+      }
+    }
+
+    console.log("deleteStorageFiles", {
+      reason: args.reason,
+      requested: args.storageIds.length,
+      unique: uniqueStorageIds.length,
+    });
+
     return null;
   },
 });
@@ -1070,6 +1104,7 @@ export const cleanupOrphanedReferenceUploads = internalAction({
     if (orphanedIds.length > 0) {
       await ctx.runMutation(internal.generations.deleteStorageFiles, {
         storageIds: orphanedIds,
+        reason: "orphan_cleanup",
       });
     }
 

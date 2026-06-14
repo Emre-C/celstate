@@ -22,6 +22,13 @@ crons.interval(
 );
 
 crons.cron(
+  "purge expired generation artifacts",
+  "0 6 * * *", // Daily at 06:00 UTC
+  internal.generationArtifactRetention.purgeExpiredGenerationArtifacts,
+  {},
+);
+
+crons.cron(
   "weekly free credit",
   "0 14 * * 1", // Mondays at 14:00 UTC
   internal.users.grantWeeklyCredit,

@@ -10,27 +10,23 @@ export const generationStageValidator = v.union(
 );
 
 export const animationUseCaseValidator = v.union(
-  v.literal("stream_alert"),
-  v.literal("stinger_transition"),
-  v.literal("mascot_reaction"),
-  v.literal("logo_sting"),
-  v.literal("lower_third"),
-  v.literal("video_callout"),
-  v.literal("creator_overlay"),
+  v.literal("small_accent"),
+  v.literal("interactive_control"),
+  v.literal("button_overlay"),
+  v.literal("ambient_background"),
+  v.literal("loader_feedback"),
 );
 
 export const animationDestinationValidator = v.union(
-  v.literal("obs"),
-  v.literal("video_editor"),
-  v.literal("obs_and_video_editor"),
+  v.literal("react_native_runtime"),
+  v.literal("web_runtime"),
+  v.literal("runtime_bundle"),
 );
 
 export const animationGenerationStatusValidator = v.union(
   v.literal("intake"),
   v.literal("queued"),
   v.literal("generating_reference"),
-  v.literal("submitting_video"),
-  v.literal("polling_video"),
   v.literal("reconstructing_alpha"),
   v.literal("qa"),
   v.literal("exporting"),
@@ -68,15 +64,14 @@ export const animationAttributionValidator = v.object({
 
 export const animationExportsValidator = v.object({
   apngStorageId: v.optional(v.id("_storage")),
-  movStorageId: v.optional(v.id("_storage")),
-  obsBundleStorageId: v.optional(v.id("_storage")),
   pngSequenceStorageId: v.optional(v.id("_storage")),
-  webmStorageId: v.optional(v.id("_storage")),
+  runtimeManifestStorageId: v.optional(v.id("_storage")),
+  spriteSheetStorageId: v.optional(v.id("_storage")),
+  webpSpriteSheetStorageId: v.optional(v.id("_storage")),
 });
 
 export const animationQaDecisionValidator = v.union(
   v.literal("pass"),
-  v.literal("rerun_veo"),
   v.literal("rerun_reference"),
   v.literal("repair_alpha"),
   v.literal("fail_refund"),
@@ -106,6 +101,12 @@ export const animationQaMetricsValidator = v.object({
   edgeSpill: v.number(),
   frameCount: v.number(),
   loopSeamScore: v.number(),
+  rightSizeMaxScale: v.optional(v.number()),
+  runtimeDensityMax: v.optional(v.number()),
+  runtimeDisplayDpMax: v.optional(v.number()),
+  spriteCellCount: v.optional(v.number()),
+  spriteCellHeight: v.optional(v.number()),
+  spriteCellWidth: v.optional(v.number()),
 });
 
 export const animationQaValidator = v.object({

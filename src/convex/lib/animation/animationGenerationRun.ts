@@ -7,8 +7,6 @@ export type AnimationGenerationStatus = Infer<typeof animationGenerationStatusVa
 
 export const ACTIVE_ANIMATION_GENERATION_STATUSES = [
   "generating_reference",
-  "submitting_video",
-  "polling_video",
   "reconstructing_alpha",
   "qa",
   "exporting",
@@ -80,16 +78,12 @@ export function getAnimationGenerationStatusMessage(
       return "Queued for the animation pilot.";
     case "generating_reference":
       return "Designing the motion asset.";
-    case "submitting_video":
-      return "Starting animation.";
-    case "polling_video":
-      return "Animating.";
     case "reconstructing_alpha":
-      return "Refining transparency.";
+      return "Preparing transparent runtime frames.";
     case "qa":
       return "Checking export quality.";
     case "exporting":
-      return "Packaging for OBS and editors.";
+      return "Packaging runtime assets.";
   }
 }
 
@@ -182,5 +176,18 @@ export function buildAnimationGenerationFailurePatch(args: {
     stageStartedAt: undefined,
     status: "failed",
     statusMessage: undefined,
+  };
+}
+
+export function buildAnimationGenerationRequeuePatch(
+  generation: Pick<Doc<"animationGenerations">, "retryCount">,
+  now: number,
+): AnimationGenerationPatch {
+  return {
+    lastProgressAt: now,
+    retryCount: generation.retryCount + 1,
+    stageStartedAt: now,
+    status: "intake",
+    statusMessage: getAnimationGenerationStatusMessage("intake"),
   };
 }

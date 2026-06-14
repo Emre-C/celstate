@@ -29,7 +29,7 @@ async function seedUser(t: ReturnType<typeof createTest>, credits = 0) {
 }
 
 describe("animation generation requests", () => {
-  it("creates a validation-phase animation request without charging image credits", async () => {
+  it("creates a living UI runtime request without charging image credits", async () => {
     const t = createTest();
     const userId = await seedUser(t, 0);
 
@@ -37,12 +37,14 @@ describe("animation generation requests", () => {
       internal.animationGenerations.requestAnimationGenerationForUser,
       {
         brandInputs: {
-          channelName: "Celstate Live",
+          channelName: "Celstate",
           colors: ["#C2410C", "warm cream"],
         },
-        destination: "obs",
-        prompt: "cozy forest-spirit raid alert",
-        useCase: "stream_alert",
+        aspectRatio: "1:1",
+        destination: "react_native_runtime",
+        durationSeconds: 2,
+        prompt: "swaying leaf icon",
+        useCase: "small_accent",
         userId,
       },
     );
@@ -52,18 +54,19 @@ describe("animation generation requests", () => {
 
     expect(user?.credits).toBe(0);
     expect(row).toMatchObject({
-      aspectRatio: ANIMATION_GENERATION_CONFIG.defaultAspectRatio,
+      aspectRatio: "1:1",
       creditsCost: 0,
-      destination: "obs",
-      durationSeconds: ANIMATION_GENERATION_CONFIG.defaultDurationSeconds,
-      prompt: "cozy forest-spirit raid alert",
+      destination: "react_native_runtime",
+      durationSeconds: 2,
+      prompt: "swaying leaf icon",
       retryCount: 0,
       status: "intake",
-      useCase: "stream_alert",
+      useCase: "small_accent",
       userId,
     });
-    expect(row?.productionBrief).toContain("OBS-ready");
-    expect(row?.productionBrief).toContain("transparent stream alert");
+    expect(row?.aspectRatio).toBe("1:1");
+    expect(row?.productionBrief).toContain("React-Native-ready");
+    expect(row?.productionBrief).toContain("transparent living small-accent asset");
   });
 
   it("does not let manual intake requests exhaust active pipeline slots", async () => {
@@ -72,9 +75,9 @@ describe("animation generation requests", () => {
 
     for (let i = 0; i < ANIMATION_GENERATION_CONFIG.maxActiveAnimationGenerations + 1; i++) {
       await t.mutation(internal.animationGenerations.requestAnimationGenerationForUser, {
-        destination: "obs",
+        destination: "react_native_runtime",
         prompt: `stream alert ${i}`,
-        useCase: "stream_alert",
+        useCase: "small_accent",
         userId,
       });
     }
@@ -95,34 +98,34 @@ describe("animation generation requests", () => {
 
     for (let i = 0; i < ANIMATION_GENERATION_CONFIG.maxRequestsPerWindow; i++) {
       await t.mutation(internal.animationGenerations.requestAnimationGenerationForUser, {
-        destination: "obs",
+        destination: "react_native_runtime",
         prompt: `validation request ${i}`,
-        useCase: "stream_alert",
+        useCase: "small_accent",
         userId,
       });
     }
 
     await expect(
       t.mutation(internal.animationGenerations.requestAnimationGenerationForUser, {
-        destination: "obs",
+        destination: "react_native_runtime",
         prompt: "one request too many",
-        useCase: "stream_alert",
+        useCase: "small_accent",
         userId,
       }),
     ).rejects.toThrow(/Too many animation requests/);
   });
 
-  it("rejects unsupported Veo-facing output controls", async () => {
+  it("rejects unsupported aspect ratio or duration", async () => {
     const t = createTest();
     const userId = await seedUser(t, 3);
 
     await expect(
       t.mutation(internal.animationGenerations.requestAnimationGenerationForUser, {
         aspectRatio: "1:1",
-        destination: "video_editor",
+        destination: "runtime_bundle",
         durationSeconds: 5,
         prompt: "logo sting",
-        useCase: "logo_sting",
+        useCase: "button_overlay",
         userId,
       }),
     ).rejects.toThrow(/Unsupported animation aspect ratio|Unsupported animation duration/);
@@ -135,9 +138,9 @@ describe("animation generation requests", () => {
     const animationGenerationId = await t.mutation(
       internal.animationGenerations.requestAnimationGenerationForUser,
       {
-        destination: "video_editor",
+        destination: "runtime_bundle",
         prompt: "podcast lower third",
-        useCase: "lower_third",
+        useCase: "interactive_control",
         userId,
       },
     );
@@ -166,9 +169,9 @@ describe("animation generation requests", () => {
     const animationGenerationId = await t.mutation(
       internal.animationGenerations.requestAnimationGenerationForUser,
       {
-        destination: "obs",
+        destination: "react_native_runtime",
         prompt: "logo sting",
-        useCase: "logo_sting",
+        useCase: "button_overlay",
         userId,
       },
     );
@@ -190,9 +193,9 @@ describe("animation generation requests", () => {
     const animationGenerationId = await t.mutation(
       internal.animationGenerations.requestAnimationGenerationForUser,
       {
-        destination: "video_editor",
+        destination: "runtime_bundle",
         prompt: "podcast lower third",
-        useCase: "lower_third",
+        useCase: "interactive_control",
         userId,
       },
     );
@@ -212,18 +215,18 @@ describe("animation generation requests", () => {
     const firstId = await t.mutation(
       internal.animationGenerations.requestAnimationGenerationForUser,
       {
-        destination: "obs",
+        destination: "react_native_runtime",
         prompt: "first stream alert",
-        useCase: "stream_alert",
+        useCase: "small_accent",
         userId,
       },
     );
     const secondId = await t.mutation(
       internal.animationGenerations.requestAnimationGenerationForUser,
       {
-        destination: "obs",
+        destination: "react_native_runtime",
         prompt: "second stream alert",
-        useCase: "stream_alert",
+        useCase: "small_accent",
         userId,
       },
     );
@@ -241,13 +244,42 @@ describe("animation generation requests", () => {
     expect(second?.status).toBe("intake");
   });
 
+  it("requeues transient worker failures back to intake until maxWorkerRetries", async () => {
+    const t = createTest();
+    const userId = await seedUser(t, 0);
+    const animationGenerationId = await t.mutation(
+      internal.animationGenerations.requestAnimationGenerationForUser,
+      {
+        destination: "react_native_runtime",
+        prompt: "swaying leaf icon",
+        useCase: "small_accent",
+        userId,
+      },
+    );
+
+    await t.mutation(api.animationGenerations.claimAnimationGenerationForWorker, {
+      workerSecret: "test-animation-worker-secret",
+    });
+
+    const requeued = await t.mutation(api.animationGenerations.requeueAnimationGenerationForWorker, {
+      animationGenerationId,
+      workerError: '{"error":{"code":429,"status":"RESOURCE_EXHAUSTED"}}',
+      workerSecret: "test-animation-worker-secret",
+    });
+    expect(requeued).toBe("requeued");
+
+    const row = await t.run((ctx) => ctx.db.get(animationGenerationId));
+    expect(row?.status).toBe("intake");
+    expect(row?.retryCount).toBe(1);
+  });
+
   it("rejects media worker claims without the configured secret", async () => {
     const t = createTest();
     const userId = await seedUser(t, 3);
     await t.mutation(internal.animationGenerations.requestAnimationGenerationForUser, {
-      destination: "obs",
+      destination: "react_native_runtime",
       prompt: "stream alert",
-      useCase: "stream_alert",
+      useCase: "small_accent",
       userId,
     });
 

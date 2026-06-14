@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   buildAnimationProductionBrief,
-  buildVeoMotionPrompt,
   normalizeAnimationPromptForBrief,
 } from "./animationPrompts.js";
 
@@ -30,26 +29,35 @@ describe("animation prompt helpers", () => {
         colors: ["#C2410C", "warm cream"],
         creatorHandle: "@celstate",
       },
-      destination: "obs_and_video_editor",
+      destination: "runtime_bundle",
       durationSeconds: 4,
-      prompt: "cozy forest-spirit raid alert",
-      useCase: "stream_alert",
+      prompt: "tactile slider riding brass rails",
+      useCase: "interactive_control",
     });
 
-    expect(brief).toContain("OBS-ready and editor-ready");
-    expect(brief).toContain("transparent stream alert");
-    expect(brief).toContain("cozy forest-spirit raid alert");
+    expect(brief).toContain("runtime-ready");
+    expect(brief).toContain("transparent living interactive-control asset");
+    expect(brief).toContain("tactile slider riding brass rails");
     expect(brief).toContain("channel name: Celstate Live");
     expect(brief).toContain("Duration target: 4 seconds");
     expect(brief).toContain("generous transparent padding");
   });
 
-  it("adds source-video constraints to the Veo prompt without exposing model controls", () => {
-    const prompt = buildVeoMotionPrompt("Production brief");
+  it("builds a living UI runtime production brief", () => {
+    const brief = buildAnimationProductionBrief({
+      brandInputs: {
+        colors: ["#F5F3ED", "#C2410C"],
+      },
+      destination: "react_native_runtime",
+      durationSeconds: 2,
+      prompt: "swaying leaf icon",
+      useCase: "small_accent",
+    });
 
-    expect(prompt).toContain("Production brief");
-    expect(prompt).toContain("alpha reconstruction");
-    expect(prompt).not.toContain("model ID");
-    expect(prompt).not.toContain("GCS");
+    expect(brief).toContain("React-Native-ready");
+    expect(brief).toContain("transparent living small-accent asset");
+    expect(brief).toContain("sprite sheet");
+    expect(brief).toContain("runtime bundle");
+    expect(brief).toContain("soft volumetrics");
   });
 });
