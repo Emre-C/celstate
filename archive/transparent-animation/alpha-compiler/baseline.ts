@@ -40,6 +40,21 @@ export type ComparisonStatus =
 	| "unbaselined"
 	| "unbaselined-metric";
 
+export type EvalGateMode = "mvp" | "strict";
+export type ComparisonGate = "benchmark" | "blocking";
+
+export const MVP_LAUNCH_SCENARIO_IDS = ["gt-sparks", "gt-tassels"] as const;
+export const MVP_BENCHMARK_SCENARIO_IDS = ["gt-smoke"] as const;
+export const MVP_BLOCKING_METRICS = [
+	"detachedAlphaRecall",
+	"edgeAlphaMae",
+	"residualSpill",
+	"softBinarizationRate",
+] as const satisfies readonly MetricName[];
+
+const MVP_LAUNCH_SCENARIOS = new Set<string>(MVP_LAUNCH_SCENARIO_IDS);
+const MVP_BLOCKING_METRIC_SET = new Set<string>(MVP_BLOCKING_METRICS);
+
 export interface ComparisonRow {
 	readonly baselineMean: number | null;
 	readonly baselineWorstValue: number | null;
@@ -47,6 +62,7 @@ export interface ComparisonRow {
 	readonly currentWorstFrame: number | null;
 	readonly currentWorstValue: number | null;
 	readonly direction: MetricDirection | null;
+	readonly gate: ComparisonGate;
 	readonly meanDelta: number | null;
 	readonly meanTolerance: number | null;
 	readonly metric: string;
@@ -57,6 +73,7 @@ export interface ComparisonRow {
 }
 
 export interface ComparisonResult {
+	readonly benchmarkFailures: number;
 	readonly failures: number;
 	readonly rows: readonly ComparisonRow[];
 	readonly unbaselinedWarnings: number;
@@ -65,6 +82,8 @@ export interface ComparisonResult {
 export interface CompareReportOptions {
 	/** When true, unbaselined scenarios/metrics log as pass with a warning count instead of failing. */
 	readonly allowUnbaselined?: boolean;
+	/** "mvp" blocks only subject/detached launch metrics; "strict" blocks every baseline regression. */
+	readonly gate?: EvalGateMode;
 }
 
 function compareValue(direction: MetricDirection, baseline: number, current: number, tolerance: number): ComparisonStatus {
@@ -106,15 +125,33 @@ function unbaselinedStatus(allowUnbaselined: boolean, raw: "unbaselined" | "unba
 	return allowUnbaselined ? "pass" : raw;
 }
 
+function comparisonGate(mode: EvalGateMode, scenarioId: string, metricName: string): ComparisonGate {
+	if (mode === "strict") {
+		return "blocking";
+	}
+	if (metricName === "(scenario)") {
+		return MVP_LAUNCH_SCENARIOS.has(scenarioId) ? "blocking" : "benchmark";
+	}
+	return MVP_LAUNCH_SCENARIOS.has(scenarioId) && MVP_BLOCKING_METRIC_SET.has(metricName)
+		? "blocking"
+		: "benchmark";
+}
+
+function statusCountsAsFailure(status: ComparisonStatus): boolean {
+	return status === "fail" || status === "missing" || status === "unbaselined" || status === "unbaselined-metric";
+}
+
 export function compareReportToBaseline(
 	scenarios: readonly ScenarioAggregates[],
 	baseline: BaselineFile,
 	options: CompareReportOptions = {},
 ): ComparisonResult {
 	const allowUnbaselined = options.allowUnbaselined === true;
+	const gateMode = options.gate ?? "strict";
 	const byId = new Map(scenarios.map((scenario) => [scenario.id, scenario]));
 	const rows: ComparisonRow[] = [];
 	let failures = 0;
+	let benchmarkFailures = 0;
 	let unbaselinedWarnings = 0;
 
 	for (const [scenarioId, metrics] of Object.entries(baseline.scenarios)) {
@@ -127,8 +164,13 @@ export function compareReportToBaseline(
 			const currentWorstValue = applies ? aggregate.worstValue : null;
 			const currentWorstFrame = applies ? aggregate.worstFrame : null;
 			const status: ComparisonStatus = currentMean === null || currentWorstValue === null ? "missing" : rowStatus(entry, currentMean, currentWorstValue);
-			if (status === "fail" || status === "missing") {
-				failures += 1;
+			const gate = comparisonGate(gateMode, scenarioId, metricName);
+			if (statusCountsAsFailure(status)) {
+				if (gate === "blocking") {
+					failures += 1;
+				} else {
+					benchmarkFailures += 1;
+				}
 			}
 			rows.push({
 				baselineMean: entry.mean,
@@ -137,6 +179,7 @@ export function compareReportToBaseline(
 				currentWorstFrame,
 				currentWorstValue,
 				direction: entry.direction,
+				gate,
 				meanDelta: currentMean === null ? null : currentMean - entry.mean,
 				meanTolerance: entry.meanTolerance,
 				metric: metricName,
@@ -152,8 +195,13 @@ export function compareReportToBaseline(
 		const baselineMetrics = baseline.scenarios[scenario.id];
 		if (baselineMetrics === undefined) {
 			const status = unbaselinedStatus(allowUnbaselined, "unbaselined");
-			if (status === "unbaselined") {
-				failures += 1;
+			const gate = comparisonGate(gateMode, scenario.id, "(scenario)");
+			if (statusCountsAsFailure(status)) {
+				if (gate === "blocking") {
+					failures += 1;
+				} else {
+					benchmarkFailures += 1;
+				}
 			} else {
 				unbaselinedWarnings += 1;
 			}
@@ -164,6 +212,7 @@ export function compareReportToBaseline(
 				currentWorstFrame: null,
 				currentWorstValue: null,
 				direction: null,
+				gate,
 				meanDelta: null,
 				meanTolerance: null,
 				metric: "(scenario)",
@@ -183,8 +232,13 @@ export function compareReportToBaseline(
 				continue;
 			}
 			const status = unbaselinedStatus(allowUnbaselined, "unbaselined-metric");
-			if (status === "unbaselined-metric") {
-				failures += 1;
+			const gate = comparisonGate(gateMode, scenario.id, metricName);
+			if (statusCountsAsFailure(status)) {
+				if (gate === "blocking") {
+					failures += 1;
+				} else {
+					benchmarkFailures += 1;
+				}
 			} else {
 				unbaselinedWarnings += 1;
 			}
@@ -195,6 +249,7 @@ export function compareReportToBaseline(
 				currentWorstFrame: aggregate.worstFrame,
 				currentWorstValue: aggregate.worstValue,
 				direction: aggregate.direction,
+				gate,
 				meanDelta: null,
 				meanTolerance: null,
 				metric: metricName,
@@ -206,7 +261,7 @@ export function compareReportToBaseline(
 		}
 	}
 
-	return { failures, rows, unbaselinedWarnings };
+	return { benchmarkFailures, failures, rows, unbaselinedWarnings };
 }
 
 export type EvalRunScope = "full" | "partial";
@@ -355,7 +410,7 @@ export function buildBaseline(
 
 export function formatComparisonTable(result: ComparisonResult): string {
 	const lines: string[] = [];
-	const header = `${"scenario".padEnd(12)} ${"metric".padEnd(26)} ${"mean base".padStart(10)} ${"mean curr".padStart(10)} ${"mean Δ".padStart(10)} ${"mean tol".padStart(8)} ${"worst base".padStart(10)} ${"worst curr".padStart(10)} ${"worst Δ".padStart(10)} ${"worst @".padStart(7)} ${"worst tol".padStart(9)}  status`;
+	const header = `${"scenario".padEnd(12)} ${"metric".padEnd(26)} ${"mean base".padStart(10)} ${"mean curr".padStart(10)} ${"mean Δ".padStart(10)} ${"mean tol".padStart(8)} ${"worst base".padStart(10)} ${"worst curr".padStart(10)} ${"worst Δ".padStart(10)} ${"worst @".padStart(7)} ${"worst tol".padStart(9)} ${"gate".padEnd(9)}  status`;
 	lines.push(header);
 	lines.push("-".repeat(header.length));
 	for (const row of result.rows) {
@@ -369,7 +424,7 @@ export function formatComparisonTable(result: ComparisonResult): string {
 		const worstFrame = row.currentWorstFrame === null ? "n/a" : String(row.currentWorstFrame);
 		const worstTolerance = row.worstTolerance === null ? "n/a" : row.worstTolerance.toFixed(4);
 		lines.push(
-			`${row.scenario.padEnd(12)} ${row.metric.padEnd(26)} ${baselineMean.padStart(10)} ${currentMean.padStart(10)} ${meanDelta.padStart(10)} ${meanTolerance.padStart(8)} ${baselineWorst.padStart(10)} ${currentWorstValue.padStart(10)} ${worstDelta.padStart(10)} ${worstFrame.padStart(7)} ${worstTolerance.padStart(9)}  ${row.status.toUpperCase()}`,
+			`${row.scenario.padEnd(12)} ${row.metric.padEnd(26)} ${baselineMean.padStart(10)} ${currentMean.padStart(10)} ${meanDelta.padStart(10)} ${meanTolerance.padStart(8)} ${baselineWorst.padStart(10)} ${currentWorstValue.padStart(10)} ${worstDelta.padStart(10)} ${worstFrame.padStart(7)} ${worstTolerance.padStart(9)} ${row.gate.padEnd(9)}  ${row.status.toUpperCase()}`,
 		);
 	}
 	return lines.join("\n");

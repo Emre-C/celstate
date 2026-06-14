@@ -835,6 +835,69 @@ describe("baseline comparison", () => {
 		expect(result.unbaselinedWarnings).toBe(1);
 		expect(result.rows.find((entry) => entry.scenario === "gt-new")?.status).toBe("pass");
 	});
+
+	it("treats smoke regressions as benchmark-only under the MVP gate", () => {
+		const smokeBaseline: BaselineFile = {
+			generatedAt: "2026-06-13T00:00:00.000Z",
+			scenarios: {
+				"gt-smoke": {
+					residualSpill: { direction: "lower-is-better", mean: 0.02, meanTolerance: 0.005, worstTolerance: 0.005, worstValue: 0.03 },
+				},
+			},
+			schemaVersion: 1,
+		};
+		const smoke = scenarioWith(0.05, 0.4, undefined, undefined, "gt-smoke", {
+			residualSpill: aggregate(0.08, "lower-is-better"),
+		});
+		const result = compareReportToBaseline([smoke], smokeBaseline, { allowUnbaselined: true, gate: "mvp" });
+		const row = result.rows.find((entry) => entry.scenario === "gt-smoke" && entry.metric === "residualSpill");
+		expect(row?.status).toBe("fail");
+		expect(row?.gate).toBe("benchmark");
+		expect(result.failures).toBe(0);
+		expect(result.benchmarkFailures).toBe(1);
+	});
+
+	it("blocks launch-scope target metric regressions under the MVP gate", () => {
+		const launchBaseline: BaselineFile = {
+			generatedAt: "2026-06-13T00:00:00.000Z",
+			scenarios: {
+				"gt-sparks": {
+					edgeAlphaMae: { direction: "lower-is-better", mean: 0.1, meanTolerance: 0.01, worstTolerance: 0.01, worstValue: 0.11 },
+				},
+			},
+			schemaVersion: 1,
+		};
+		const sparks = scenarioWith(0.05, 0.4, undefined, undefined, "gt-sparks", {
+			edgeAlphaMae: aggregate(0.13, "lower-is-better"),
+		});
+		const result = compareReportToBaseline([sparks], launchBaseline, { allowUnbaselined: true, gate: "mvp" });
+		const row = result.rows.find((entry) => entry.scenario === "gt-sparks" && entry.metric === "edgeAlphaMae");
+		expect(row?.status).toBe("fail");
+		expect(row?.gate).toBe("blocking");
+		expect(result.failures).toBe(1);
+		expect(result.benchmarkFailures).toBe(0);
+	});
+
+	it("keeps non-target launch metrics visible but non-blocking under the MVP gate", () => {
+		const launchBaseline: BaselineFile = {
+			generatedAt: "2026-06-13T00:00:00.000Z",
+			scenarios: {
+				"gt-sparks": {
+					edgeRgbMae: { direction: "lower-is-better", mean: 0.04, meanTolerance: 0.005, worstTolerance: 0.005, worstValue: 0.05 },
+				},
+			},
+			schemaVersion: 1,
+		};
+		const sparks = scenarioWith(0.05, 0.4, undefined, undefined, "gt-sparks", {
+			edgeRgbMae: aggregate(0.09, "lower-is-better"),
+		});
+		const result = compareReportToBaseline([sparks], launchBaseline, { allowUnbaselined: true, gate: "mvp" });
+		const row = result.rows.find((entry) => entry.scenario === "gt-sparks" && entry.metric === "edgeRgbMae");
+		expect(row?.status).toBe("fail");
+		expect(row?.gate).toBe("benchmark");
+		expect(result.failures).toBe(0);
+		expect(result.benchmarkFailures).toBe(1);
+	});
 });
 
 describe("eval report compare guards", () => {

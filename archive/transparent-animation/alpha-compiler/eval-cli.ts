@@ -62,9 +62,13 @@ import {
 	defaultBaselinePathForPrior,
 	defaultEvalRootForPrior,
 	formatComparisonTable,
+	MVP_BENCHMARK_SCENARIO_IDS,
+	MVP_BLOCKING_METRICS,
+	MVP_LAUNCH_SCENARIO_IDS,
 	parsePriorMode,
 	selectScenariosForCompare,
 	type BaselineFile,
+	type EvalGateMode,
 	type EvalRunScope,
 	type PriorMode,
 	type ScenarioAggregates,
@@ -135,6 +139,14 @@ function numberOption(args: EvalArgs, key: string, fallback: number): number {
 		throw new Error(`--${key} must be a number. Got: ${raw}`);
 	}
 	return parsed;
+}
+
+function gateModeOption(args: EvalArgs): EvalGateMode {
+	const raw = args.options.get("gate") ?? "mvp";
+	if (raw === "mvp" || raw === "strict") {
+		return raw;
+	}
+	throw new Error(`--gate must be mvp or strict. Got: ${raw}`);
 }
 
 async function runFfmpeg(ffmpegArgs: readonly string[]): Promise<void> {
@@ -751,6 +763,7 @@ async function commandCompare(args: EvalArgs): Promise<void> {
 	const root = args.options.get("root") ?? defaultEvalRootForPrior(priorOption ?? "simulated", DEFAULT_EVAL_ROOT);
 	const scenarioFilter = args.options.get("scenario");
 	const allowUnbaselined = args.options.has("allow-unbaselined");
+	const gate = gateModeOption(args);
 	const report = await readEvalReport(root);
 	const reportPrior: PriorMode = report.prior ?? "simulated";
 	if (priorOption !== undefined && priorOption !== reportPrior) {
@@ -777,11 +790,20 @@ async function commandCompare(args: EvalArgs): Promise<void> {
 			Object.entries(baseline.scenarios).filter(([scenarioId]) => comparedScenarioIds.has(scenarioId)),
 		),
 	};
-	const result = compareReportToBaseline(scenarios, scopedBaseline, { allowUnbaselined });
+	const result = compareReportToBaseline(scenarios, scopedBaseline, { allowUnbaselined, gate });
 	console.log(formatComparisonTable(result));
 	const improved = result.rows.filter((row) => row.status === "improved").length;
-	const passes = result.rows.length - result.failures - improved;
-	console.log(`\n${result.rows.length} checks: ${passes} pass, ${improved} improved, ${result.failures} fail`);
+	const passes = result.rows.filter((row) => row.status === "pass").length;
+	console.log(
+		`\n${result.rows.length} checks: ${passes} pass, ${improved} improved, `
+			+ `${result.failures} blocking fail, ${result.benchmarkFailures} benchmark fail`,
+	);
+	if (gate === "mvp") {
+		console.log(
+			`MVP gate: ${MVP_LAUNCH_SCENARIO_IDS.join(", ")} block on ${MVP_BLOCKING_METRICS.join(", ")}; `
+				+ `${MVP_BENCHMARK_SCENARIO_IDS.join(", ")} is benchmark-only.`,
+		);
+	}
 	if (result.unbaselinedWarnings > 0) {
 		console.warn(`${result.unbaselinedWarnings} unbaselined row(s) allowed via --allow-unbaselined (not suitable for CI).`);
 	}
@@ -789,6 +811,9 @@ async function commandCompare(args: EvalArgs): Promise<void> {
 		console.error("BASELINE COMPARISON FAILED. If the regression is intentional, rerun `pnpm alpha-eval update-baseline` and commit the new baseline with justification.");
 		process.exitCode = 1;
 		return;
+	}
+	if (result.benchmarkFailures > 0) {
+		console.warn("Benchmark-only regressions detected. They are recorded for R&D follow-up but do not block the MVP subject/detached scope.");
 	}
 	if (improved > 0) {
 		console.log("Improvements beyond tolerance detected. Consider `pnpm alpha-eval update-baseline` to lock them in.");
@@ -818,7 +843,8 @@ function printHelp(): void {
 		"Commands:",
 		"  run              [--root tmp/alpha-compiler-eval] [--scenario gt-sparks|gt-smoke|gt-tassels] [--frames 48] [--width 640] [--height 360] [--crf 23] [--compiler v6|v7]",
 		"                   [--prior simulated|bria|dir] [--prior-alpha-dir <dir>] [--prior-model bria-rmbg] [--prior-package 'rembg[cpu,cli]']",
-		"  compare          [--root tmp/alpha-compiler-eval] [--scenario gt-sparks|gt-smoke|gt-tassels] [--allow-unbaselined] [--baseline ...] [--prior ...]",
+		"  compare          [--root tmp/alpha-compiler-eval] [--scenario gt-sparks|gt-smoke|gt-tassels] [--gate mvp|strict] [--allow-unbaselined] [--baseline ...] [--prior ...]",
+		"                   Default --gate mvp blocks only subject/detached launch metrics; gt-smoke is benchmark-only. Use --gate strict for every baseline row.",
 		"                   Partial reports require --scenario. Full reports must include all canonical scenarios.",
 		"  update-baseline  [--root tmp/alpha-compiler-eval] [--baseline ...] [--prior ...]",
 		"",

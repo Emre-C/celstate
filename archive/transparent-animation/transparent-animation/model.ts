@@ -42,13 +42,17 @@ export interface ParsedArgs {
 export interface PromptFixture {
 	readonly chromaPrompt: string;
 	readonly expectedHardParts: string;
+	readonly firstFrameAction?: string;
+	readonly foregroundElements?: string;
 	readonly id: string;
+	readonly lastFrameAction?: string;
 	readonly passCriteria: string;
 	readonly prompt: string;
 	readonly source: string;
 	readonly tests: string;
 	readonly title: string;
 	readonly useCase: string;
+	readonly videoAction?: string;
 }
 
 export interface ChromaSettings {

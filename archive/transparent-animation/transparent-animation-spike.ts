@@ -8,8 +8,8 @@ import {
 	writeFile,
 } from "node:fs/promises";
 import path from "node:path";
-import { GoogleGenAI, GenerateVideosOperation } from "@google/genai";
-import type { Image, Video } from "@google/genai";
+import { GoogleGenAI, GenerateVideosOperation, Type } from "@google/genai";
+import type { Image, Part, Schema, Video } from "@google/genai";
 import sharp from "sharp";
 import {
 	chamferDistanceToMask,
@@ -141,8 +141,9 @@ function chromaAdaptPrompt(prompt: string, keyColor = DEFAULT_CHROMA_COLOR): str
 	const color = chromaKeyDescription(keyColor);
 	return [
 		prompt,
-		`Background: every pixel not occupied by the mascot or foreground leaves must be a perfectly flat, evenly lit ${color} color field.`,
-		`Color exclusion rule: ${color} is reserved only for the background. Do not use this color on the mascot, costume, fur, eyes, edges, motion blur, leaves, particles, glow, smoke, reflections, shadows, or any foreground detail.`,
+		SAFE_ACTION_REGION_TEXT,
+		`Background: every pixel not occupied by the foreground asset or detached foreground details must be a perfectly flat, evenly lit ${color} color field.`,
+		`Color exclusion rule: ${color} is reserved only for the background. Do not use this color on the foreground asset, materials, edges, motion blur, detached details, reflections, shadows, or any foreground detail.`,
 		"No text, no logo, no border, no background texture, no floor, no contact shadow, no gradient, no vignette, no camera shake.",
 	].join(" ");
 }
@@ -153,8 +154,9 @@ function imageAnchoredChromaPrompt(prompt: string, keyColor = DEFAULT_CHROMA_COL
 		"Use the provided still image as the exact first-frame composition and scene contract.",
 		prompt,
 		`Preserve the still image's ${color} background as a perfectly flat, evenly lit color field for the full clip.`,
-		"Animate only the mascot and foreground leaves/particles; keep the background as a static color plate with no floor, horizon, contact shadow, studio lighting, gradient, vignette, reflections, text, logo, border, or camera movement.",
-		`Color exclusion rule: ${color} is reserved only for the background. Do not use this color on the mascot, costume, fur, eyes, edges, motion blur, leaves, particles, glow, smoke, reflections, shadows, or any foreground detail.`,
+		SAFE_ACTION_REGION_TEXT,
+		"Animate only the foreground asset and its detached foreground details; keep the background as a static color plate with no floor, horizon, contact shadow, studio lighting, gradient, vignette, reflections, text, logo, border, or camera movement.",
+		`Color exclusion rule: ${color} is reserved only for the background. Do not use this color on the foreground asset, materials, edges, motion blur, detached details, reflections, shadows, or any foreground detail.`,
 	].join(" ");
 }
 
@@ -163,6 +165,30 @@ function promptForSourceMode(prompt: string, keyColor: string, sourceMode: Sourc
 		return imageAnchoredChromaPrompt(prompt, keyColor);
 	}
 	return chromaAdaptPrompt(prompt, keyColor);
+}
+
+const RESERVED_RIGHT_FRAME_RATIO = 0.2;
+const RESERVED_BOTTOM_FRAME_RATIO = 0.2;
+const SAFE_ACTION_REGION_TEXT =
+	"Composition safety contract: all foreground pixels that should survive alpha extraction must stay entirely inside the safe action region: the leftmost 80% of the canvas and the topmost 80% of the canvas. The rightmost 20% and bottommost 20% are reserved for provider watermark cleanup and must remain background-only key color for the entire clip.";
+
+function foregroundElements(input: RunInput): string {
+	return input.prompt.foregroundElements ?? input.prompt.expectedHardParts;
+}
+
+function firstFrameAction(input: RunInput): string {
+	return input.prompt.firstFrameAction
+		?? "The foreground subject begins fully inside the safe action region with a readable silhouette and generous key-color padding around every edge.";
+}
+
+function lastFrameAction(input: RunInput, options: ProviderGenerationOptions): string {
+	return input.prompt.lastFrameAction
+		?? `After ${options.durationSeconds} seconds, the same foreground subject has completed a clear motion beat while staying fully inside the safe action region.`;
+}
+
+function videoAction(input: RunInput): string {
+	return input.prompt.videoAction
+		?? "Animate only the foreground subject and its detached foreground details. Keep the motion authored and coherent, with independent secondary motion rather than rigid sticker translation.";
 }
 
 function blueScreenProbePrompt(): PromptFixture {
@@ -174,7 +200,7 @@ function blueScreenProbePrompt(): PromptFixture {
 		id: "GP-01",
 		passCriteria: "Compiler removes blue spill without crushing terracotta/amber foreground.",
 		prompt,
-		source: "docs/product/TRANSPARENT-ANIMATION-RD-SPIKE.md",
+		source: "docs/archive/transparent-animation/TRANSPARENT-ANIMATION-RD-SPIKE.md",
 		tests: "key-agnostic spill repair, detached element color fidelity",
 		title: "Blue-screen logo with amber sparks",
 		useCase: "generalization_probe",
@@ -190,7 +216,7 @@ function glowProbePrompt(): PromptFixture {
 		id: "GP-02",
 		passCriteria: "Soft alpha fringe stays stable without cyan ghosts or core color loss.",
 		prompt,
-		source: "docs/product/TRANSPARENT-ANIMATION-RD-SPIKE.md",
+		source: "docs/archive/transparent-animation/TRANSPARENT-ANIMATION-RD-SPIKE.md",
 		tests: "soft alpha fringe, projection decontamination on glow edges",
 		title: "Green-screen glow orb with smoke wisps",
 		useCase: "generalization_probe",
@@ -199,25 +225,114 @@ function glowProbePrompt(): PromptFixture {
 
 function flagshipPrompt(): PromptFixture {
 	const prompt =
-		"Wide horizontal shot. A warm editorial humanoid fox mascot crosses the canvas from left to right, pauses near the right third, turns back toward the viewer with a confident playful expression, then gestures as wind-blown terracotta leaves swirl coherently around the body and trail behind. The mascot's hair tufts, jacket hem, tail fur, and leaves all move with the same wind direction but independent secondary motion. Premium studio mascot animation style with clean silhouettes and restrained charm.";
+		"Wide horizontal shot. A warm editorial humanoid fox mascot crosses the safe action region from the left edge toward center-left, pauses before the reserved right-side watermark zone, turns back toward the viewer with a confident playful expression, then gestures as wind-blown terracotta leaves swirl coherently around the body and trail behind. The mascot's hair tufts, jacket hem, tail fur, and leaves all move with the same wind direction but independent secondary motion. Premium studio mascot animation style with clean silhouettes and restrained charm.";
 
 	return {
 		chromaPrompt: chromaAdaptPrompt(prompt),
 		expectedHardParts:
 			"Identity stability during traversal and turn-back, connected wind direction, independent hair/cloth/tail/leaves motion, no rigid sticker translation.",
+		firstFrameAction:
+			"The mascot enters from the left third, mid-step toward center-left, with leaves just beginning to lift. Keep the entire body, tail, and leaves inside the safe action region.",
+		foregroundElements: "the fox mascot, hair tufts, jacket hem, tail fur, and detached terracotta leaves/particles",
 		id: "MS-01",
+		lastFrameAction:
+			"The mascot pauses near center-left, turns back toward the viewer, and gestures while the leaf trail stays behind the body inside the safe action region.",
 		passCriteria:
 			"Mascot crosses the canvas, turns back with readable personality, and leaves/particles move coherently with the character and wind.",
 		prompt,
-		source: "docs/product/TRANSPARENT-ANIMATION-RD-SPIKE.md",
+		source: "docs/archive/transparent-animation/TRANSPARENT-ANIMATION-RD-SPIKE.md",
 		tests: "alpha usability, temporal stability, identity, internal motion, secondary-motion coupling, overall awe",
 		title: "Flagship mascot traversal with coherent leaves",
 		useCase: "mascot_traversal",
+		videoAction:
+			"Animate the mascot crossing within the left/top safe action region only. Hair tufts, jacket hem, tail fur, and leaves move independently while sharing one coherent wind direction.",
+	};
+}
+
+function hapningtonEventCardGarlandPrompt(): PromptFixture {
+	const prompt =
+		"Hapnington event-page ambient corner asset. A hand-painted parchment invitation seal tied with a leather ribbon and moss sprigs sits as a transparent overlay for an event card. Small warm amber motes and tiny paper leaves drift around it with restrained, whimsical motion. No text, no logo, no UI chrome, no shadows on the background.";
+	return {
+		chromaPrompt: chromaAdaptPrompt(prompt, "#2040ff"),
+		expectedHardParts:
+			"Non-character UI-adjacent asset, thin ribbon tails, moss sprigs, detached amber motes, small leaves, warm parchment/leather colors over a blue key.",
+		firstFrameAction:
+			"The seal sits in the upper-left half of the safe action region with ribbon tails relaxed and a few motes just visible nearby.",
+		foregroundElements: "parchment seal, leather ribbon, moss sprigs, detached amber motes, and tiny paper leaves",
+		id: "HP-01",
+		lastFrameAction:
+			"The ribbon tails have gently swayed, moss sprigs have breathed subtly, and motes have drifted a short arc while every element remains inside the safe action region.",
+		passCriteria:
+			"Usable as an event-card overlay: clean alpha, preserved thin ribbon/sprig detail, detached motes retained, no foreground in the reserved right/bottom zones.",
+		prompt,
+		source: "C:/Users/emrec/codebase/active-projects/hapnington/docs/product/VISION.md",
+		tests: "Hapnington event page theming, UI overlay alpha, thin organic detail, detached particles, non-green key generalization",
+		title: "Hapnington event-card invitation garland",
+		useCase: "hapnington_event_card_overlay",
+		videoAction:
+			"Create subtle alive-feeling motion for an event card: ribbon tails sway, moss sprigs shift, motes drift independently, and the seal remains stable enough to sit over UI.",
+	};
+}
+
+function hapningtonRsvpFlourishPrompt(): PromptFixture {
+	const prompt =
+		"Hapnington RSVP button success flourish. A carved wooden guest token, a small terracotta check charm, and two cream paper RSVP slips form a compact transparent micro-animation that can appear above a button after a guest confirms. The motion is tactile and restrained: a short press, a settling token, and a few paper confetti flecks. No words, no logo, no interface frame.";
+	return {
+		chromaPrompt: chromaAdaptPrompt(prompt, "#2040ff"),
+		expectedHardParts:
+			"Compact button-scale subject, hard icon-like silhouette, cream paper edges, detached confetti flecks, tactile micro-interaction motion.",
+		firstFrameAction:
+			"The wooden token and paper slips begin compactly near the upper-left center of the safe action region, ready for a subtle confirmation motion.",
+		foregroundElements: "wooden guest token, terracotta check charm, cream RSVP slips, and detached paper confetti flecks",
+		id: "HP-02",
+		lastFrameAction:
+			"The token has settled, the check charm is readable, and the paper flecks finish their tiny arc without leaving the safe action region.",
+		passCriteria:
+			"Usable over a button or slider control: alpha is clean at small scale, the check/token remains stable, and small detached flecks survive.",
+		prompt,
+		source: "C:/Users/emrec/codebase/active-projects/hapnington/web/features/event/components/RsvpSection.tsx",
+		tests: "button flourish, compact icon-like asset, detached flecks, temporal stability, alpha usability at UI scale",
+		title: "Hapnington RSVP confirmation flourish",
+		useCase: "hapnington_rsvp_button_flourish",
+		videoAction:
+			"Animate a single restrained confirmation beat: press, settle, and paper flecks drifting independently while the asset stays compact and UI-safe.",
+	};
+}
+
+function hapningtonKaraokeOverlayPrompt(): PromptFixture {
+	const prompt =
+		"Hapnington karaoke live-room overlay. A warm paper lantern garland, thin hanging strings, small brass music-note charms, and low amber equalizer bars sway and pulse as a transparent overlay for a karaoke screen. The object feels handmade and party-like, not neon or nightclub-like. No text, no logos, no dark background.";
+	return {
+		chromaPrompt: chromaAdaptPrompt(prompt, "#2040ff"),
+		expectedHardParts:
+			"Thin strings, repeated lantern shapes, brass music-note charms, small pulsing equalizer bars, UI background overlay with many fine alpha edges.",
+		firstFrameAction:
+			"The garland hangs across the upper-left portion of the safe action region with lanterns and note charms separated from the blue key plate.",
+		foregroundElements: "paper lantern garland, thin strings, brass music-note charms, and low amber equalizer bars",
+		id: "HP-03",
+		lastFrameAction:
+			"The lanterns have swayed gently, charms have shifted independently, and equalizer bars have pulsed without any element entering the reserved right or bottom zones.",
+		passCriteria:
+			"Usable as a karaoke-room overlay: thin strings remain intact, repeated small charms do not flicker away, and the asset leaves the watermark cleanup zones empty.",
+		prompt,
+		source: "C:/Users/emrec/codebase/active-projects/hapnington/web/features/karaoke/components/KaraokeScreen.tsx",
+		tests: "background overlay, thin repeated structures, small detached charms, subtle rhythmic motion, non-green key generalization",
+		title: "Hapnington karaoke lantern overlay",
+		useCase: "hapnington_karaoke_overlay",
+		videoAction:
+			"Animate a looping-feeling karaoke overlay: lanterns sway softly, strings flex, charms move independently, and equalizer bars pulse at low amplitude.",
 	};
 }
 
 async function selectedPromptSuite(): Promise<PromptFixture[]> {
-	return [flagshipPrompt(), blueScreenProbePrompt(), glowProbePrompt()];
+	return [
+		flagshipPrompt(),
+		hapningtonEventCardGarlandPrompt(),
+		hapningtonRsvpFlourishPrompt(),
+		hapningtonKaraokeOverlayPrompt(),
+		blueScreenProbePrompt(),
+		glowProbePrompt(),
+	];
 }
 
 async function loadPromptSuite(root: string): Promise<PromptFixture[]> {
@@ -254,7 +369,7 @@ async function writeReadme(root: string): Promise<void> {
 		[
 			"# Transparent Animation Spike Harness",
 			"",
-			"Throwaway local harness for `docs/product/TRANSPARENT-ANIMATION-RD-SPIKE.md`.",
+			"Throwaway local harness for `docs/archive/transparent-animation/TRANSPARENT-ANIMATION-RD-SPIKE.md`.",
 			"It does not call production workers or video providers. The next flow is one Veo 3.1 mascot video generated from a verified reference frame on a flat chroma background, then local keying/refinement/scoring.",
 			"",
 			"## Typical flow",
@@ -531,7 +646,7 @@ function providerGenerationOptions(args: ParsedArgs): ProviderGenerationOptions 
 function createSpikeGeminiClient(): GoogleGenAI {
 	const apiKey = process.env.GEMINI_API_KEY;
 	if (apiKey) {
-		return new GoogleGenAI({ apiKey });
+		return new GoogleGenAI({ apiKey, vertexai: false });
 	}
 	return createGeminiClient(readGeminiRuntimeConfigFromEnv());
 }
@@ -540,24 +655,28 @@ function firstFramePrompt(input: RunInput, options: ProviderGenerationOptions): 
 	const color = chromaKeyDescription(input.chroma.color);
 	return [
 		"Create one opaque RGB still image that will be used as the first frame of a video generation.",
-		`Canvas: ${options.aspectRatio} horizontal composition, full-body mascot fully inside frame with generous empty key-color space around the subject.`,
+		`Canvas: ${options.aspectRatio} horizontal composition with generous empty key-color space around the foreground asset.`,
+		SAFE_ACTION_REGION_TEXT,
 		`Scene contract: ${input.prompt.prompt}`,
-		"First-frame pose: the mascot is entering from the left third, mid-step toward screen right, readable silhouette, confident warm expression, leaves/particles just beginning to lift in the same wind direction.",
+		`Foreground elements: ${foregroundElements(input)}.`,
+		`First-frame action: ${firstFrameAction(input)}`,
 		`Background contract: every non-foreground pixel must be one perfectly flat, evenly lit ${color} color plate. The plate has no texture, floor, horizon, shadow, gradient, vignette, reflections, border, text, logo, or watermark.`,
-		`Color exclusion rule: ${color} is reserved only for the background plate. Do not use it on the mascot, costume, fur, eyes, edges, motion blur, leaves, particles, glow, smoke, reflections, shadows, or any foreground detail.`,
-		"Style: premium editorial mascot animation key art, clean silhouette, authored pose, no cheap sticker look.",
+		`Color exclusion rule: ${color} is reserved only for the background plate. Do not use it on the foreground asset, materials, edges, motion blur, detached details, reflections, shadows, or any foreground detail.`,
+		"Style: premium editorial motion-asset key art, clean silhouette, authored pose, no cheap sticker look.",
 	].join("\n");
 }
 
 function lastFramePrompt(input: RunInput, options: ProviderGenerationOptions): string {
 	const color = chromaKeyDescription(input.chroma.color);
 	return [
-		"Use the attached first-frame still as the exact character identity, costume, proportions, palette, line quality, and background contract.",
+		"Use the attached first-frame still as the exact foreground identity, proportions, palette, line quality, and background contract.",
 		"Create one opaque RGB still image that will be used as the final frame of the same video.",
 		`Canvas: ${options.aspectRatio}. Keep the same camera, scale, lighting, and solid key-color plate.`,
-		`End-frame action after ${options.durationSeconds} seconds: the same mascot has crossed to the right third, turns back toward the viewer with personality, and gestures while wind-blown leaves/particles trail coherently behind in the same wind direction.`,
+		SAFE_ACTION_REGION_TEXT,
+		`Foreground elements: ${foregroundElements(input)}.`,
+		`End-frame action: ${lastFrameAction(input, options)}`,
 		`Background contract: every non-foreground pixel remains the same perfectly flat, evenly lit ${color} color plate. No floor, horizon, contact shadow, studio gradient, vignette, reflection, border, text, logo, or watermark.`,
-		`Color exclusion rule: ${color} is reserved only for the background plate. Do not use it on the mascot, costume, fur, eyes, edges, motion blur, leaves, particles, glow, smoke, reflections, shadows, or any foreground detail.`,
+		`Color exclusion rule: ${color} is reserved only for the background plate. Do not use it on the foreground asset, materials, edges, motion blur, detached details, reflections, shadows, or any foreground detail.`,
 	].join("\n");
 }
 
@@ -566,11 +685,14 @@ function videoPrompt(input: RunInput, options: ProviderGenerationOptions): strin
 	return [
 		"Generate a single cohesive video from the supplied first and final frames.",
 		`Duration: ${options.durationSeconds} seconds. Aspect ratio: ${options.aspectRatio}.`,
-		"Honor the first frame as the exact opening frame and the supplied final frame as the exact ending target. Preserve character identity, costume, proportions, silhouette, and editorial style across the whole clip.",
+		"Honor the first frame as the exact opening frame and the supplied final frame as the exact ending target. Preserve foreground identity, proportions, silhouette, and editorial style across the whole clip.",
 		input.prompt.prompt,
+		SAFE_ACTION_REGION_TEXT,
+		`Foreground elements: ${foregroundElements(input)}.`,
 		`The background must remain a static, perfectly flat ${color} color plate for every frame. Do not introduce a floor, horizon, camera move, gradient, vignette, shadow, reflection, texture, text, logo, watermark, or border.`,
 		`The ${color} color is reserved only for the background plate. Do not use it on foreground details or motion blur.`,
-		"Animate only the foreground mascot plus wind-blown leaves/particles. Hair tufts, jacket hem, tail fur, and leaves should move independently while sharing one coherent wind direction. Avoid rigid sticker translation and avoid identity morphing.",
+		videoAction(input),
+		"Avoid rigid sticker translation, avoid identity morphing, and keep all surviving foreground alpha out of the reserved right/bottom cleanup zones.",
 	].join("\n");
 }
 
@@ -2460,6 +2582,1240 @@ async function writeCompositeStill(stageDirectory: string, still: string, width:
 	]);
 }
 
+const REVIEW_PACKAGE_VERSION = "transparent_animation_mvp_review_v1";
+
+const REVIEW_BACKGROUNDS = [
+	{ color: "#f5f3ed", id: "parchment", kind: "solid", label: "Parchment" },
+	{ color: "#050505", id: "black", kind: "solid", label: "Black" },
+	{ color: "#ffffff", id: "white", kind: "solid", label: "White" },
+	{ id: "checkerboard", kind: "checkerboard", label: "Checkerboard" },
+	{ color: "#0057ff", id: "saturated", kind: "solid", label: "Saturated blue" },
+] as const;
+
+type ReviewBackground = (typeof REVIEW_BACKGROUNDS)[number];
+
+interface WatermarkCleanupSummary {
+	readonly clearedPixelMax: number;
+	readonly clearedPixelMean: number;
+	readonly enabled: boolean;
+	readonly frameCount: number;
+	readonly region: {
+		readonly height: number;
+		readonly width: number;
+		readonly x: number;
+		readonly y: number;
+	};
+}
+
+interface PaddingNormalizationSummary {
+	readonly enabled: boolean;
+	readonly scale: number;
+}
+
+interface EdgeDespillSummary {
+	readonly changedPixelMax: number;
+	readonly changedPixelMean: number;
+	readonly enabled: boolean;
+	readonly frameCount: number;
+	readonly keyColor: string;
+}
+
+interface ReservedRegionAlphaMeasurement {
+	readonly alphaCoverage: number;
+	readonly maxAlpha: number;
+	readonly opaqueCoverage: number;
+}
+
+interface SafeActionRegionSummary {
+	readonly alphaCoverageMax: number;
+	readonly alphaCoverageMean: number;
+	readonly alphaPixelThreshold: number;
+	readonly bottomReservedRatio: number;
+	readonly enabled: boolean;
+	readonly frameCount: number;
+	readonly maxAlphaMax: number;
+	readonly opaqueCoverageMax: number;
+	readonly opaqueCoverageMean: number;
+	readonly opaquePixelThreshold: number;
+	readonly pass: boolean;
+	readonly rightReservedRatio: number;
+	readonly tolerance: {
+		readonly alphaCoverageMax: number;
+		readonly opaqueCoverageMax: number;
+	};
+}
+
+interface ReviewPackageGate {
+	readonly pass: boolean;
+	readonly reasons: readonly string[];
+}
+
+interface AlphaStats {
+	readonly alphaFrameCoverage: number;
+	readonly alphaMax: number;
+	readonly alphaMin: number;
+	readonly borderTransparencyMin: number;
+	readonly frameCount: number;
+	readonly height: number;
+	readonly opaquePixelRatioMean: number;
+	readonly partialAlphaPixelRatioMean: number;
+	readonly transparentPixelRatioMean: number;
+	readonly width: number;
+}
+
+interface DecodedExport {
+	readonly alphaPass: boolean;
+	readonly codecName: string;
+	readonly decodedDir: string;
+	readonly frameCount: number;
+	readonly frames: readonly string[];
+	readonly pixFmt: string;
+	readonly stats: AlphaStats;
+}
+
+interface WebmProresComparison {
+	readonly comparisonFrame: number;
+	readonly edgeAlphaMae: number;
+	readonly edgePixelCount: number;
+	readonly edgeRgbMae: number;
+	readonly exportSpecificArtifact: "none" | "webm";
+	readonly globalAlphaMae: number;
+	readonly reviewImages: readonly string[];
+}
+
+interface ExportQaReport {
+	readonly generatedAt: string;
+	readonly pass: boolean;
+	readonly schemaVersion: 1;
+	readonly version: typeof REVIEW_PACKAGE_VERSION;
+	readonly formats: {
+		readonly apng: DecodedExport;
+		readonly prores: DecodedExport;
+		readonly webm: DecodedExport;
+	};
+	readonly frameExtraction: {
+		readonly pass: boolean;
+		readonly png: string;
+	};
+	readonly webmVsProres: WebmProresComparison;
+}
+
+interface VisualDefectReview {
+	readonly detached_elements_preserved: "fail" | "pass";
+	readonly export_specific_artifact: "apng" | "none" | "prores" | "webm";
+	readonly green_outline_visible: "major" | "minor" | "none";
+	readonly overall_mvp_pass: boolean;
+	readonly subject_edge_quality: "fail" | "pass";
+	readonly temporal_flicker: "major" | "minor" | "none";
+	readonly watermark_visible: boolean;
+}
+
+const VISUAL_DEFECT_REVIEW_SCHEMA: Schema = {
+	type: Type.OBJECT,
+	propertyOrdering: [
+		"green_outline_visible",
+		"watermark_visible",
+		"subject_edge_quality",
+		"detached_elements_preserved",
+		"temporal_flicker",
+		"export_specific_artifact",
+		"overall_mvp_pass",
+	],
+	required: [
+		"green_outline_visible",
+		"watermark_visible",
+		"subject_edge_quality",
+		"detached_elements_preserved",
+		"temporal_flicker",
+		"export_specific_artifact",
+		"overall_mvp_pass",
+	],
+	properties: {
+		detached_elements_preserved: { enum: ["pass", "fail"], format: "enum", type: Type.STRING },
+		export_specific_artifact: { enum: ["none", "webm", "prores", "apng"], format: "enum", type: Type.STRING },
+		green_outline_visible: { enum: ["none", "minor", "major"], format: "enum", type: Type.STRING },
+		overall_mvp_pass: { type: Type.BOOLEAN },
+		subject_edge_quality: { enum: ["pass", "fail"], format: "enum", type: Type.STRING },
+		temporal_flicker: { enum: ["none", "minor", "major"], format: "enum", type: Type.STRING },
+		watermark_visible: { type: Type.BOOLEAN },
+	},
+};
+
+function dimensionsFromImage(image: RawRgbaImage | RawRgbImage | RawGrayImage): { height: number; width: number } {
+	return { height: image.height, width: image.width };
+}
+
+async function writeReviewBackground(background: ReviewBackground, width: number, height: number, outputPath: string): Promise<void> {
+	if (background.kind === "solid") {
+		await sharp({
+			create: {
+				background: background.color,
+				channels: 3,
+				height,
+				width,
+			},
+		}).png().toFile(outputPath);
+		return;
+	}
+
+	const data = Buffer.alloc(width * height * 3);
+	const light = parseRgbColor("#f5f3ed");
+	const dark = parseRgbColor("#d6d3cb");
+	const tile = Math.max(12, Math.round(Math.min(width, height) / 30));
+	for (let y = 0; y < height; y += 1) {
+		for (let x = 0; x < width; x += 1) {
+			const checker = (Math.floor(x / tile) + Math.floor(y / tile)) % 2 === 0 ? light : dark;
+			const offset = (y * width + x) * 3;
+			data[offset] = checker.r;
+			data[offset + 1] = checker.g;
+			data[offset + 2] = checker.b;
+		}
+	}
+	await writeRgbImage({ data, height, width }, outputPath);
+}
+
+async function writeCompositePng(backgroundPath: string, foregroundPath: string, outputPath: string): Promise<void> {
+	await sharp(backgroundPath)
+		.composite([{ input: foregroundPath, left: 0, top: 0 }])
+		.png()
+		.toFile(outputPath);
+}
+
+async function writeReviewAnimationComposite(
+	backgroundPath: string,
+	foregroundPath: string,
+	outputPath: string,
+	context: RunContext,
+): Promise<string | undefined> {
+	return runFfmpeg(
+		[
+			"-y",
+			"-loop",
+			"1",
+			"-framerate",
+			"24",
+			"-i",
+			backgroundPath,
+			"-i",
+			foregroundPath,
+			"-filter_complex",
+			"[0:v][1:v]overlay=shortest=1:format=auto[out]",
+			"-map",
+			"[out]",
+			"-c:v",
+			"libx264",
+			"-crf",
+			"18",
+			"-pix_fmt",
+			"yuv420p",
+			"-an",
+			outputPath,
+		],
+		`review animation composite ${path.basename(outputPath)}`,
+		context,
+	);
+}
+
+function watermarkCleanupRegion(width: number, height: number): WatermarkCleanupSummary["region"] {
+	const regionWidth = Math.ceil(width * 0.14);
+	const regionHeight = Math.ceil(height * 0.18);
+	return {
+		height: regionHeight,
+		width: regionWidth,
+		x: width - regionWidth,
+		y: height - regionHeight,
+	};
+}
+
+function isLikelyGeminiWatermarkPixel(r: number, g: number, b: number, alpha: number): boolean {
+	if (alpha <= 8) {
+		return false;
+	}
+	const max = Math.max(r, g, b);
+	const min = Math.min(r, g, b);
+	const nearWhite = min >= 205 && max - min <= 45;
+	const warmStar = r >= 190 && g >= 95 && g <= 210 && b <= 115;
+	const paleStarEdge = r >= 210 && g >= 170 && b >= 110 && max - min <= 130;
+	const greenStar = g >= 170 && r >= 90 && r <= 180 && b >= 95 && b <= 190 && g - r >= 35 && g - b >= 20;
+	return nearWhite || warmStar || paleStarEdge || greenStar;
+}
+
+function dilateMask(mask: Uint8Array, width: number, height: number, radius: number): Uint8Array {
+	const out = new Uint8Array(mask.length);
+	for (let y = 0; y < height; y += 1) {
+		for (let x = 0; x < width; x += 1) {
+			let hit = false;
+			for (let dy = -radius; dy <= radius && !hit; dy += 1) {
+				const yy = y + dy;
+				if (yy < 0 || yy >= height) {
+					continue;
+				}
+				for (let dx = -radius; dx <= radius; dx += 1) {
+					const xx = x + dx;
+					if (xx < 0 || xx >= width) {
+						continue;
+					}
+					if (mask[yy * width + xx] === 1) {
+						hit = true;
+						break;
+					}
+				}
+			}
+			if (hit) {
+				out[y * width + x] = 1;
+			}
+		}
+	}
+	return out;
+}
+
+function removeKnownGeminiWatermark(input: Buffer, width: number, height: number): { clearedPixels: number; data: Buffer } {
+	const data = Buffer.from(input);
+	const region = watermarkCleanupRegion(width, height);
+	const mask = new Uint8Array(width * height);
+	for (let y = region.y; y < height; y += 1) {
+		for (let x = region.x; x < width; x += 1) {
+			const pixel = y * width + x;
+			const offset = pixel * 4;
+			if (isLikelyGeminiWatermarkPixel(data[offset], data[offset + 1], data[offset + 2], data[offset + 3])) {
+				mask[pixel] = 1;
+			}
+		}
+	}
+	const dilated = dilateMask(mask, width, height, 3);
+	let clearedPixels = 0;
+	for (let pixel = 0; pixel < dilated.length; pixel += 1) {
+		if (dilated[pixel] !== 1) {
+			continue;
+		}
+		const offset = pixel * 4;
+		data[offset] = 0;
+		data[offset + 1] = 0;
+		data[offset + 2] = 0;
+		data[offset + 3] = 0;
+		clearedPixels += 1;
+	}
+	return { clearedPixels, data };
+}
+
+function measureReservedRegionAlpha(data: Buffer, width: number, height: number): ReservedRegionAlphaMeasurement {
+	const rightStart = Math.floor(width * (1 - RESERVED_RIGHT_FRAME_RATIO));
+	const bottomStart = Math.floor(height * (1 - RESERVED_BOTTOM_FRAME_RATIO));
+	let reservedPixels = 0;
+	let alphaPixels = 0;
+	let opaquePixels = 0;
+	let maxAlpha = 0;
+	for (let y = 0; y < height; y += 1) {
+		for (let x = 0; x < width; x += 1) {
+			if (x < rightStart && y < bottomStart) {
+				continue;
+			}
+			reservedPixels += 1;
+			const alpha = data[(y * width + x) * 4 + 3] ?? 0;
+			maxAlpha = Math.max(maxAlpha, alpha);
+			if (alpha > 8) {
+				alphaPixels += 1;
+			}
+			if (alpha >= 247) {
+				opaquePixels += 1;
+			}
+		}
+	}
+	return {
+		alphaCoverage: reservedPixels === 0 ? 0 : alphaPixels / reservedPixels,
+		maxAlpha,
+		opaqueCoverage: reservedPixels === 0 ? 0 : opaquePixels / reservedPixels,
+	};
+}
+
+function summarizeSafeActionRegion(measurements: readonly ReservedRegionAlphaMeasurement[]): SafeActionRegionSummary {
+	const alphaCoverageMax = Math.max(0, ...measurements.map((measurement) => measurement.alphaCoverage));
+	const opaqueCoverageMax = Math.max(0, ...measurements.map((measurement) => measurement.opaqueCoverage));
+	const maxAlphaMax = Math.max(0, ...measurements.map((measurement) => measurement.maxAlpha));
+	const alphaCoverageMean = measurements.length === 0
+		? 0
+		: measurements.reduce((sum, measurement) => sum + measurement.alphaCoverage, 0) / measurements.length;
+	const opaqueCoverageMean = measurements.length === 0
+		? 0
+		: measurements.reduce((sum, measurement) => sum + measurement.opaqueCoverage, 0) / measurements.length;
+	const tolerance = {
+		alphaCoverageMax: 0.002,
+		opaqueCoverageMax: 0.0005,
+	};
+	return {
+		alphaCoverageMax: Number(alphaCoverageMax.toFixed(6)),
+		alphaCoverageMean: Number(alphaCoverageMean.toFixed(6)),
+		alphaPixelThreshold: 8,
+		bottomReservedRatio: RESERVED_BOTTOM_FRAME_RATIO,
+		enabled: true,
+		frameCount: measurements.length,
+		maxAlphaMax,
+		opaqueCoverageMax: Number(opaqueCoverageMax.toFixed(6)),
+		opaqueCoverageMean: Number(opaqueCoverageMean.toFixed(6)),
+		opaquePixelThreshold: 247,
+		pass: alphaCoverageMax <= tolerance.alphaCoverageMax && opaqueCoverageMax <= tolerance.opaqueCoverageMax,
+		rightReservedRatio: RESERVED_RIGHT_FRAME_RATIO,
+		tolerance,
+	};
+}
+
+function isAlphaEdge(data: Buffer, width: number, height: number, x: number, y: number): boolean {
+	const alpha = data[(y * width + x) * 4 + 3] ?? 0;
+	if (alpha > 8 && alpha < 247) {
+		return true;
+	}
+	for (let dy = -1; dy <= 1; dy += 1) {
+		const yy = y + dy;
+		if (yy < 0 || yy >= height) {
+			continue;
+		}
+		for (let dx = -1; dx <= 1; dx += 1) {
+			const xx = x + dx;
+			if (xx < 0 || xx >= width) {
+				continue;
+			}
+			if ((data[(yy * width + xx) * 4 + 3] ?? 0) <= 8) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+function despillChromaEdge(input: Buffer, width: number, height: number, keyColor: string): { changedPixels: number; data: Buffer } {
+	const data = Buffer.from(input);
+	const key = parseRgbColor(keyColor);
+	let changedPixels = 0;
+	for (let y = 0; y < height; y += 1) {
+		for (let x = 0; x < width; x += 1) {
+			const offset = (y * width + x) * 4;
+			const alpha = data[offset + 3] ?? 0;
+			if (alpha <= 8 || !isAlphaEdge(data, width, height, x, y)) {
+				continue;
+			}
+			const r = data[offset] ?? 0;
+			const g = data[offset + 1] ?? 0;
+			const b = data[offset + 2] ?? 0;
+			if (keyDominance(r, g, b, key) <= 8) {
+				continue;
+			}
+			if (key.g >= key.r && key.g >= key.b) {
+				const target = Math.max(r, b) + 4;
+				if (g > target) {
+					data[offset + 1] = clampByte(target);
+					changedPixels += 1;
+				}
+			} else if (key.b >= key.r && key.b >= key.g) {
+				const target = Math.max(r, g) + 4;
+				if (b > target) {
+					data[offset + 2] = clampByte(target);
+					changedPixels += 1;
+				}
+			} else {
+				const target = Math.max(g, b) + 4;
+				if (r > target) {
+					data[offset] = clampByte(target);
+					changedPixels += 1;
+				}
+			}
+		}
+	}
+	return { changedPixels, data };
+}
+
+async function insetRgbaFrameOnTransparentCanvas(data: Buffer, width: number, height: number, scale: number): Promise<Buffer> {
+	const scaledWidth = Math.max(1, Math.round(width * scale));
+	const scaledHeight = Math.max(1, Math.round(height * scale));
+	const scaled = await sharp(data, {
+		raw: {
+			channels: 4,
+			height,
+			width,
+		},
+	})
+		.resize({ height: scaledHeight, width: scaledWidth })
+		.png()
+		.toBuffer();
+	const left = Math.floor((width - scaledWidth) / 2);
+	const top = Math.floor((height - scaledHeight) / 2);
+	const { data: inset } = await sharp({
+		create: {
+			background: { alpha: 0, b: 0, g: 0, r: 0 },
+			channels: 4,
+			height,
+			width,
+		},
+	})
+		.composite([{ input: scaled, left, top }])
+		.raw()
+		.toBuffer({ resolveWithObject: true });
+	return inset;
+}
+
+async function decodeRgbaFrames(sourcePath: string, outputDirectory: string, context: RunContext, inputCodec?: string): Promise<string[]> {
+	await rm(outputDirectory, { force: true, recursive: true });
+	await ensureDirectory(outputDirectory);
+	await runFfmpeg(
+		compact([
+			"-y",
+			inputCodec ? "-c:v" : undefined,
+			inputCodec,
+			"-i",
+			sourcePath,
+			"-pix_fmt",
+			"rgba",
+			"-vsync",
+			"0",
+			path.join(outputDirectory, "frame-%05d.png"),
+		]),
+		`decode rgba frames ${path.basename(sourcePath)}`,
+		context,
+	);
+	return listFrameFiles(outputDirectory);
+}
+
+function selectedFrameFromReport(report: unknown, fallback: number): number {
+	if (report && typeof report === "object") {
+		const settings = (report as { settings?: { selectedFrame?: unknown } }).settings;
+		const selected = settings?.selectedFrame;
+		if (typeof selected === "number" && Number.isInteger(selected) && selected > 0) {
+			return selected;
+		}
+	}
+	return fallback;
+}
+
+function frameRateFromReport(report: unknown, fallback: string): string {
+	if (report && typeof report === "object") {
+		const frameRate = (report as { frameRate?: unknown }).frameRate;
+		if (typeof frameRate === "string" && frameRate.length > 0) {
+			return frameRate;
+		}
+		if (typeof frameRate === "number" && Number.isFinite(frameRate) && frameRate > 0) {
+			return String(frameRate);
+		}
+	}
+	return fallback;
+}
+
+async function prepareCleanedReviewFrames(
+	reviewDirectory: string,
+	stageDirectory: string,
+	context: RunContext,
+	cleanupEnabled: boolean,
+	paddingNormalizeEnabled: boolean,
+): Promise<{
+	despill: EdgeDespillSummary;
+	frameCount: number;
+	height: number;
+	padding: PaddingNormalizationSummary;
+	safeActionRegion: SafeActionRegionSummary;
+	selectedFrame: number;
+	summary: WatermarkCleanupSummary;
+	width: number;
+}> {
+	const reportPath = path.join(reviewDirectory, "report.json");
+	const report = existsSync(reportPath) ? await readJson<unknown>(reportPath) : undefined;
+	const sourceFrameDirectory = path.join(stageDirectory, "rgba-frames");
+	let sourceFrames: string[] = [];
+	if (existsSync(sourceFrameDirectory)) {
+		sourceFrames = await listFrameFiles(sourceFrameDirectory);
+	}
+	if (sourceFrames.length === 0) {
+		sourceFrames = await decodeRgbaFrames(
+			path.join(reviewDirectory, "transparent-animation-prores.mov"),
+			path.join(reviewDirectory, "source-decoded-rgba-frames"),
+			context,
+		);
+	}
+	if (sourceFrames.length === 0) {
+		throw new Error("Cannot prepare review package without source RGBA frames or a decodable ProRes export.");
+	}
+
+	const outputDirectory = path.join(reviewDirectory, "rgba-frames");
+	await rm(outputDirectory, { force: true, recursive: true });
+	await ensureDirectory(outputDirectory);
+
+	let width = 0;
+	let height = 0;
+	let clearedPixelSum = 0;
+	let clearedPixelMax = 0;
+	let despillPixelSum = 0;
+	let despillPixelMax = 0;
+	const reservedRegionMeasurements: ReservedRegionAlphaMeasurement[] = [];
+	const paddingScale = 0.88;
+	const keyColor = report && typeof report === "object"
+		&& typeof (report as { settings?: { keyColor?: unknown } }).settings?.keyColor === "string"
+		? (report as { settings: { keyColor: string } }).settings.keyColor
+		: "#23af42";
+	for (let index = 0; index < sourceFrames.length; index += 1) {
+		const image = await readRgbaImage(sourceFrames[index]);
+		({ height, width } = dimensionsFromImage(image));
+		const cleaned = cleanupEnabled
+			? removeKnownGeminiWatermark(Buffer.from(image.data), image.width, image.height)
+			: { clearedPixels: 0, data: Buffer.from(image.data) };
+		reservedRegionMeasurements.push(measureReservedRegionAlpha(cleaned.data, image.width, image.height));
+		const padded = paddingNormalizeEnabled
+			? await insetRgbaFrameOnTransparentCanvas(cleaned.data, image.width, image.height, paddingScale)
+			: cleaned.data;
+		const final = cleanupEnabled && paddingNormalizeEnabled
+			? removeKnownGeminiWatermark(padded, image.width, image.height)
+			: { clearedPixels: 0, data: padded };
+		const despilled = despillChromaEdge(final.data, image.width, image.height, keyColor);
+		const clearedPixels = cleaned.clearedPixels + final.clearedPixels;
+		clearedPixelSum += clearedPixels;
+		clearedPixelMax = Math.max(clearedPixelMax, clearedPixels);
+		despillPixelSum += despilled.changedPixels;
+		despillPixelMax = Math.max(despillPixelMax, despilled.changedPixels);
+		await writeRgbaImage(despilled.data, image.width, image.height, path.join(outputDirectory, `frame-${String(index + 1).padStart(5, "0")}.png`));
+	}
+
+	const selectedFrame = Math.min(sourceFrames.length, selectedFrameFromReport(report, Math.ceil(sourceFrames.length / 2)));
+	const selectedPath = path.join(outputDirectory, `frame-${String(selectedFrame).padStart(5, "0")}.png`);
+	await copyFile(selectedPath, path.join(reviewDirectory, "transparent-still.png"));
+	await copyFile(selectedPath, path.join(reviewDirectory, "still.png"));
+
+	const frameRate = frameRateFromReport(
+		report,
+		frameRateFromProbe(await ffprobeJson(path.join(reviewDirectory, "transparent-animation-prores.mov"), context)),
+	);
+	await writeCompositeStill(reviewDirectory, path.join(reviewDirectory, "still.png"), width, height, context);
+	await encodeRgbaFrameOutputs(reviewDirectory, frameRate, width, height, context);
+	await copyFile(path.join(reviewDirectory, "prores.mov"), path.join(reviewDirectory, "transparent-animation-prores.mov"));
+	await copyFile(path.join(reviewDirectory, "webm.webm"), path.join(reviewDirectory, "transparent-animation.webm"));
+	await copyFile(path.join(reviewDirectory, "apng.png"), path.join(reviewDirectory, "transparent-animation.apng"));
+	await copyFile(path.join(reviewDirectory, "preview-on-cream.mp4"), path.join(reviewDirectory, "animation-on-cream-preview.mp4"));
+	await copyFile(path.join(reviewDirectory, "still-on-cream.png"), path.join(reviewDirectory, "transparent-still-on-cream.png"));
+	await copyFile(path.join(reviewDirectory, "still-on-dark.png"), path.join(reviewDirectory, "transparent-still-on-dark.png"));
+	await copyFile(path.join(reviewDirectory, "still-on-red.png"), path.join(reviewDirectory, "transparent-still-on-red.png"));
+	await copyFile(path.join(reviewDirectory, "still-on-texture.png"), path.join(reviewDirectory, "transparent-still-on-texture.png"));
+
+	return {
+		despill: {
+			changedPixelMax: despillPixelMax,
+			changedPixelMean: sourceFrames.length === 0 ? 0 : Number((despillPixelSum / sourceFrames.length).toFixed(2)),
+			enabled: true,
+			frameCount: sourceFrames.length,
+			keyColor,
+		},
+		frameCount: sourceFrames.length,
+		height,
+		padding: {
+			enabled: paddingNormalizeEnabled,
+			scale: paddingScale,
+		},
+		safeActionRegion: summarizeSafeActionRegion(reservedRegionMeasurements),
+		selectedFrame,
+		summary: {
+			clearedPixelMax,
+			clearedPixelMean: sourceFrames.length === 0 ? 0 : Number((clearedPixelSum / sourceFrames.length).toFixed(2)),
+			enabled: cleanupEnabled,
+			frameCount: sourceFrames.length,
+			region: watermarkCleanupRegion(width, height),
+		},
+		width,
+	};
+}
+
+async function writeReviewComposites(reviewDirectory: string, context: RunContext): Promise<string[]> {
+	const still = path.join(reviewDirectory, "transparent-still.png");
+	const foreground = path.join(reviewDirectory, "transparent-animation-prores.mov");
+	const metadata = await sharp(still).metadata();
+	if (!metadata.width || !metadata.height) {
+		throw new Error(`Cannot read dimensions for review still: ${still}`);
+	}
+	const outputDirectory = path.join(reviewDirectory, "review-composites");
+	await rm(outputDirectory, { force: true, recursive: true });
+	await ensureDirectory(outputDirectory);
+	const outputs: string[] = [];
+	for (const background of REVIEW_BACKGROUNDS) {
+		const backgroundPath = path.join(outputDirectory, `background-${background.id}.png`);
+		const stillComposite = path.join(outputDirectory, `still-on-${background.id}.png`);
+		const animationComposite = path.join(outputDirectory, `animation-on-${background.id}.mp4`);
+		await writeReviewBackground(background, metadata.width, metadata.height, backgroundPath);
+		await writeCompositePng(backgroundPath, still, stillComposite);
+		await writeReviewAnimationComposite(backgroundPath, foreground, animationComposite, context);
+		outputs.push(relativeToWorkspace(stillComposite), relativeToWorkspace(animationComposite));
+	}
+	return outputs;
+}
+
+function svgText(value: string): string {
+	return value
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;");
+}
+
+async function writeSideBySidePng(leftPath: string, rightPath: string, outputPath: string, leftLabel: string, rightLabel: string): Promise<void> {
+	const left = await sharp(leftPath).metadata();
+	const right = await sharp(rightPath).metadata();
+	const width = Math.max(left.width ?? 0, right.width ?? 0);
+	const height = Math.max(left.height ?? 0, right.height ?? 0);
+	if (width === 0 || height === 0) {
+		throw new Error(`Cannot build side-by-side comparison from ${leftPath} and ${rightPath}.`);
+	}
+	const labelHeight = 42;
+	const gap = 12;
+	const canvasWidth = width * 2 + gap;
+	const canvasHeight = height + labelHeight;
+	const labels = Buffer.from(`
+		<svg width="${canvasWidth}" height="${labelHeight}" xmlns="http://www.w3.org/2000/svg">
+			<rect width="${canvasWidth}" height="${labelHeight}" fill="#f5f3ed"/>
+			<text x="18" y="27" font-family="DM Sans, Arial, sans-serif" font-size="18" fill="#292524">${svgText(leftLabel)}</text>
+			<text x="${width + gap + 18}" y="27" font-family="DM Sans, Arial, sans-serif" font-size="18" fill="#292524">${svgText(rightLabel)}</text>
+		</svg>
+	`);
+	await sharp({
+		create: {
+			background: "#f5f3ed",
+			channels: 3,
+			height: canvasHeight,
+			width: canvasWidth,
+		},
+	})
+		.composite([
+			{ input: labels, left: 0, top: 0 },
+			{ input: leftPath, left: 0, top: labelHeight },
+			{ input: rightPath, left: width + gap, top: labelHeight },
+		])
+		.png()
+		.toFile(outputPath);
+}
+
+async function writePreviousCurrentComparisons(
+	reviewDirectory: string,
+	previousStageDirectory: string,
+	currentStageLabel: string,
+	previousStageLabel: string,
+): Promise<string[]> {
+	const previousStill = path.join(previousStageDirectory, "still.png");
+	if (!existsSync(previousStill)) {
+		return [];
+	}
+	const currentStill = path.join(reviewDirectory, "transparent-still.png");
+	const metadata = await sharp(currentStill).metadata();
+	if (!metadata.width || !metadata.height) {
+		return [];
+	}
+	const outputDirectory = path.join(reviewDirectory, "review-composites");
+	await ensureDirectory(outputDirectory);
+	const outputs: string[] = [];
+	for (const background of REVIEW_BACKGROUNDS) {
+		const backgroundPath = path.join(outputDirectory, `background-${background.id}.png`);
+		const previousComposite = path.join(outputDirectory, `previous-on-${background.id}.png`);
+		const currentComposite = path.join(outputDirectory, `still-on-${background.id}.png`);
+		const sideBySide = path.join(outputDirectory, `previous-vs-current-on-${background.id}.png`);
+		await writeCompositePng(backgroundPath, previousStill, previousComposite);
+		await writeSideBySidePng(previousComposite, currentComposite, sideBySide, previousStageLabel, currentStageLabel);
+		outputs.push(relativeToWorkspace(sideBySide));
+	}
+	return outputs;
+}
+
+function emptyAlphaStats(): AlphaStats {
+	return {
+		alphaFrameCoverage: 0,
+		alphaMax: 0,
+		alphaMin: 0,
+		borderTransparencyMin: 0,
+		frameCount: 0,
+		height: 0,
+		opaquePixelRatioMean: 0,
+		partialAlphaPixelRatioMean: 0,
+		transparentPixelRatioMean: 0,
+		width: 0,
+	};
+}
+
+async function analyzeRgbaFrameSet(frames: readonly string[]): Promise<AlphaStats> {
+	if (frames.length === 0) {
+		return emptyAlphaStats();
+	}
+	let alphaFrameCount = 0;
+	let alphaMax = 0;
+	let alphaMin = 255;
+	let borderTransparencyMin = 1;
+	let transparentPixelRatioSum = 0;
+	let opaquePixelRatioSum = 0;
+	let partialAlphaPixelRatioSum = 0;
+	let width = 0;
+	let height = 0;
+	for (const frame of frames) {
+		const image = await readRgbaImage(frame);
+		width = image.width;
+		height = image.height;
+		let transparent = 0;
+		let opaque = 0;
+		let partial = 0;
+		let frameAlphaMin = 255;
+		let frameAlphaMax = 0;
+		let borderTransparent = 0;
+		let borderPixels = 0;
+		for (let y = 0; y < image.height; y += 1) {
+			for (let x = 0; x < image.width; x += 1) {
+				const pixel = y * image.width + x;
+				const alpha = image.data[pixel * 4 + 3] ?? 0;
+				frameAlphaMin = Math.min(frameAlphaMin, alpha);
+				frameAlphaMax = Math.max(frameAlphaMax, alpha);
+				if (alpha <= 8) {
+					transparent += 1;
+				} else if (alpha >= 247) {
+					opaque += 1;
+				} else {
+					partial += 1;
+				}
+				if (x === 0 || y === 0 || x === image.width - 1 || y === image.height - 1) {
+					borderPixels += 1;
+					if (alpha <= 8) {
+						borderTransparent += 1;
+					}
+				}
+			}
+		}
+		const pixelCount = image.width * image.height;
+		if (transparent > 0 && (opaque > 0 || partial > 0)) {
+			alphaFrameCount += 1;
+		}
+		alphaMin = Math.min(alphaMin, frameAlphaMin);
+		alphaMax = Math.max(alphaMax, frameAlphaMax);
+		borderTransparencyMin = Math.min(borderTransparencyMin, borderPixels === 0 ? 0 : borderTransparent / borderPixels);
+		transparentPixelRatioSum += transparent / pixelCount;
+		opaquePixelRatioSum += opaque / pixelCount;
+		partialAlphaPixelRatioSum += partial / pixelCount;
+	}
+	return {
+		alphaFrameCoverage: alphaFrameCount / frames.length,
+		alphaMax,
+		alphaMin,
+		borderTransparencyMin,
+		frameCount: frames.length,
+		height,
+		opaquePixelRatioMean: opaquePixelRatioSum / frames.length,
+		partialAlphaPixelRatioMean: partialAlphaPixelRatioSum / frames.length,
+		transparentPixelRatioMean: transparentPixelRatioSum / frames.length,
+		width,
+	};
+}
+
+function firstVideoStream(probe: unknown): { codec_name?: string; pix_fmt?: string; tags?: Record<string, string> } {
+	if (!probe || typeof probe !== "object") {
+		return {};
+	}
+	const streams = (probe as { streams?: unknown }).streams;
+	if (!Array.isArray(streams)) {
+		return {};
+	}
+	const video = streams.find((stream) => stream && typeof stream === "object" && (stream as { codec_type?: unknown }).codec_type === "video");
+	if (!video || typeof video !== "object") {
+		return {};
+	}
+	const record = video as { codec_name?: unknown; pix_fmt?: unknown; tags?: unknown };
+	return {
+		codec_name: typeof record.codec_name === "string" ? record.codec_name : undefined,
+		pix_fmt: typeof record.pix_fmt === "string" ? record.pix_fmt : undefined,
+		tags: record.tags && typeof record.tags === "object" ? record.tags as Record<string, string> : undefined,
+	};
+}
+
+function alphaStatsPass(stats: AlphaStats): boolean {
+	return stats.frameCount > 0
+		&& stats.alphaFrameCoverage === 1
+		&& stats.alphaMax >= 247
+		&& stats.alphaMin <= 8
+		&& stats.transparentPixelRatioMean > 0.05
+		&& (stats.opaquePixelRatioMean + stats.partialAlphaPixelRatioMean) > 0.01
+		&& stats.borderTransparencyMin >= 0.85;
+}
+
+async function verifyDecodedExport(
+	reviewDirectory: string,
+	fileName: string,
+	format: "apng" | "prores" | "webm",
+	context: RunContext,
+): Promise<DecodedExport> {
+	const sourcePath = path.join(reviewDirectory, fileName);
+	const decodedDir = path.join(reviewDirectory, "decoded-exports", format);
+	const frames = await decodeRgbaFrames(sourcePath, decodedDir, context, format === "webm" ? "libvpx-vp9" : undefined);
+	const stats = await analyzeRgbaFrameSet(frames);
+	const stream = firstVideoStream(await ffprobeJson(sourcePath, context));
+	const codecName = stream.codec_name ?? "unknown";
+	const codecPass = format === "webm"
+		? codecName === "vp9"
+		: format === "prores"
+			? codecName.startsWith("prores")
+			: codecName === "apng" || codecName === "png";
+	return {
+		alphaPass: codecPass && alphaStatsPass(stats),
+		codecName,
+		decodedDir: relativeToWorkspace(decodedDir),
+		frameCount: frames.length,
+		frames,
+		pixFmt: stream.pix_fmt ?? "unknown",
+		stats,
+	};
+}
+
+function buildAlphaEdgeMask(alpha: Uint8Array, width: number, height: number): Uint8Array {
+	const boundary = new Uint8Array(width * height);
+	for (let y = 0; y < height; y += 1) {
+		for (let x = 0; x < width; x += 1) {
+			const pixel = y * width + x;
+			const currentVisible = alpha[pixel] >= 128;
+			const soft = alpha[pixel] > 8 && alpha[pixel] < 247;
+			const rightDiffers = x + 1 < width && (alpha[pixel + 1] >= 128) !== currentVisible;
+			const downDiffers = y + 1 < height && (alpha[pixel + width] >= 128) !== currentVisible;
+			if (soft || rightDiffers || downDiffers) {
+				boundary[pixel] = 1;
+				if (rightDiffers) {
+					boundary[pixel + 1] = 1;
+				}
+				if (downDiffers) {
+					boundary[pixel + width] = 1;
+				}
+			}
+		}
+	}
+	const distances = chamferDistanceToMask(boundary, width, height, 2);
+	const edge = new Uint8Array(width * height);
+	for (let pixel = 0; pixel < edge.length; pixel += 1) {
+		if (distances[pixel] <= 2) {
+			edge[pixel] = 1;
+		}
+	}
+	return edge;
+}
+
+function extractAlphaFromRgba(data: Buffer, pixelCount: number): Uint8Array {
+	const alpha = new Uint8Array(pixelCount);
+	for (let pixel = 0; pixel < pixelCount; pixel += 1) {
+		alpha[pixel] = data[pixel * 4 + 3] ?? 0;
+	}
+	return alpha;
+}
+
+async function compareWebmAndProresEdges(
+	reviewDirectory: string,
+	webm: DecodedExport,
+	prores: DecodedExport,
+	comparisonFrame: number,
+): Promise<WebmProresComparison> {
+	const frameIndex = Math.max(0, Math.min(Math.min(webm.frames.length, prores.frames.length) - 1, comparisonFrame - 1));
+	const webmFrame = await readRgbaImage(webm.frames[frameIndex]);
+	const proresFrame = await readRgbaImage(prores.frames[frameIndex]);
+	if (webmFrame.width !== proresFrame.width || webmFrame.height !== proresFrame.height) {
+		throw new Error("Decoded WebM and ProRes frames have mismatched dimensions.");
+	}
+	const pixelCount = webmFrame.width * webmFrame.height;
+	const proresAlpha = extractAlphaFromRgba(Buffer.from(proresFrame.data), pixelCount);
+	const edge = buildAlphaEdgeMask(proresAlpha, webmFrame.width, webmFrame.height);
+	let edgePixelCount = 0;
+	let edgeAlphaError = 0;
+	let edgeRgbError = 0;
+	let globalAlphaError = 0;
+	for (let pixel = 0; pixel < pixelCount; pixel += 1) {
+		const offset = pixel * 4;
+		const alphaDelta = Math.abs((webmFrame.data[offset + 3] ?? 0) - (proresFrame.data[offset + 3] ?? 0));
+		globalAlphaError += alphaDelta;
+		if (edge[pixel] !== 1) {
+			continue;
+		}
+		edgePixelCount += 1;
+		edgeAlphaError += alphaDelta;
+		edgeRgbError += (
+			Math.abs((webmFrame.data[offset] ?? 0) - (proresFrame.data[offset] ?? 0))
+			+ Math.abs((webmFrame.data[offset + 1] ?? 0) - (proresFrame.data[offset + 1] ?? 0))
+			+ Math.abs((webmFrame.data[offset + 2] ?? 0) - (proresFrame.data[offset + 2] ?? 0))
+		) / 3;
+	}
+
+	const outputDirectory = path.join(reviewDirectory, "review-composites");
+	await ensureDirectory(outputDirectory);
+	const reviewImages: string[] = [];
+	for (const backgroundId of ["parchment", "black"] as const) {
+		const backgroundPath = path.join(outputDirectory, `background-${backgroundId}.png`);
+		const webmComposite = path.join(outputDirectory, `webm-frame-${comparisonFrame}-on-${backgroundId}.png`);
+		const proresComposite = path.join(outputDirectory, `prores-frame-${comparisonFrame}-on-${backgroundId}.png`);
+		const comparison = path.join(outputDirectory, `webm-vs-prores-frame-${comparisonFrame}-on-${backgroundId}.png`);
+		await writeCompositePng(backgroundPath, webm.frames[frameIndex], webmComposite);
+		await writeCompositePng(backgroundPath, prores.frames[frameIndex], proresComposite);
+		await writeSideBySidePng(webmComposite, proresComposite, comparison, "WebM VP9 alpha", "ProRes 4444");
+		reviewImages.push(relativeToWorkspace(comparison));
+	}
+
+	const edgeAlphaMae = edgePixelCount === 0 ? 0 : edgeAlphaError / edgePixelCount / 255;
+	const edgeRgbMae = edgePixelCount === 0 ? 0 : edgeRgbError / edgePixelCount / 255;
+	return {
+		comparisonFrame: frameIndex + 1,
+		edgeAlphaMae: Number(edgeAlphaMae.toFixed(6)),
+		edgePixelCount,
+		edgeRgbMae: Number(edgeRgbMae.toFixed(6)),
+		exportSpecificArtifact: edgeAlphaMae > 0.035 || edgeRgbMae > 0.04 ? "webm" : "none",
+		globalAlphaMae: Number((globalAlphaError / pixelCount / 255).toFixed(6)),
+		reviewImages,
+	};
+}
+
+async function verifyReviewExports(reviewDirectory: string, selectedFrame: number, context: RunContext): Promise<ExportQaReport> {
+	const [webm, prores, apng] = await Promise.all([
+		verifyDecodedExport(reviewDirectory, "transparent-animation.webm", "webm", context),
+		verifyDecodedExport(reviewDirectory, "transparent-animation-prores.mov", "prores", context),
+		verifyDecodedExport(reviewDirectory, "transparent-animation.apng", "apng", context),
+	]);
+	const extractedFrame = path.join(reviewDirectory, "still-frame-extraction.png");
+	const proresFrame = prores.frames[Math.max(0, Math.min(prores.frames.length - 1, selectedFrame - 1))];
+	await copyFile(proresFrame, extractedFrame);
+	const webmVsProres = await compareWebmAndProresEdges(reviewDirectory, webm, prores, selectedFrame);
+	const report: ExportQaReport = {
+		formats: {
+			apng,
+			prores,
+			webm,
+		},
+		frameExtraction: {
+			pass: existsSync(extractedFrame),
+			png: relativeToWorkspace(extractedFrame),
+		},
+		generatedAt: new Date().toISOString(),
+		pass: webm.alphaPass && prores.alphaPass && apng.alphaPass && existsSync(extractedFrame),
+		schemaVersion: 1,
+		version: REVIEW_PACKAGE_VERSION,
+		webmVsProres,
+	};
+	await writeJson(path.join(reviewDirectory, "export-qa.json"), report);
+	return report;
+}
+
+async function writeDropInSurfaces(reviewDirectory: string): Promise<string[]> {
+	const still = path.join(reviewDirectory, "transparent-still.png");
+	const outputDirectory = path.join(reviewDirectory, "drop-in-review");
+	await rm(outputDirectory, { force: true, recursive: true });
+	await ensureDirectory(outputDirectory);
+	const resized = await sharp(still)
+		.resize({ width: 760, withoutEnlargement: true })
+		.png()
+		.toBuffer({ resolveWithObject: true });
+	const asset = resized.data;
+	const assetWidth = resized.info.width;
+	const assetHeight = resized.info.height;
+	const outputs: string[] = [];
+	const surfaces = [
+		{
+			file: "website-app-surface.png",
+			svg: `
+				<svg width="1600" height="1000" xmlns="http://www.w3.org/2000/svg">
+					<rect width="1600" height="1000" fill="#f5f3ed"/>
+					<rect x="0" y="0" width="1600" height="72" fill="#e7e1d4"/>
+					<rect x="96" y="152" width="470" height="44" rx="4" fill="#292524" opacity="0.85"/>
+					<rect x="96" y="230" width="560" height="18" rx="4" fill="#78716c" opacity="0.55"/>
+					<rect x="96" y="270" width="485" height="18" rx="4" fill="#a8a29e" opacity="0.48"/>
+					<rect x="96" y="350" width="170" height="48" rx="4" fill="#c2410c"/>
+					<rect x="812" y="128" width="680" height="744" rx="8" fill="#eee9dd" stroke="#d6d3cb"/>
+				</svg>
+			`,
+			x: 772,
+			y: 132,
+		},
+		{
+			file: "slide-deck-surface.png",
+			svg: `
+				<svg width="1600" height="1000" xmlns="http://www.w3.org/2000/svg">
+					<rect width="1600" height="1000" fill="#d6d3cb"/>
+					<rect x="112" y="68" width="1376" height="864" rx="6" fill="#f5f3ed"/>
+					<rect x="188" y="150" width="540" height="56" fill="#292524" opacity="0.82"/>
+					<rect x="188" y="242" width="420" height="14" fill="#c2410c"/>
+					<rect x="188" y="300" width="500" height="20" fill="#78716c" opacity="0.42"/>
+					<rect x="188" y="342" width="430" height="20" fill="#a8a29e" opacity="0.42"/>
+				</svg>
+			`,
+			x: 720,
+			y: 184,
+		},
+		{
+			file: "editor-canvas-surface.png",
+			svg: `
+				<svg width="1600" height="1000" xmlns="http://www.w3.org/2000/svg">
+					<defs>
+						<pattern id="checker" width="40" height="40" patternUnits="userSpaceOnUse">
+							<rect width="20" height="20" fill="#f5f3ed"/>
+							<rect x="20" y="0" width="20" height="20" fill="#d6d3cb"/>
+							<rect x="0" y="20" width="20" height="20" fill="#d6d3cb"/>
+							<rect x="20" y="20" width="20" height="20" fill="#f5f3ed"/>
+						</pattern>
+					</defs>
+					<rect width="1600" height="1000" fill="#e7e1d4"/>
+					<rect x="0" y="0" width="260" height="1000" fill="#d6d3cb"/>
+					<rect x="1340" y="0" width="260" height="1000" fill="#d6d3cb"/>
+					<rect x="332" y="86" width="936" height="828" fill="url(#checker)" stroke="#78716c" stroke-width="2"/>
+					<rect x="430" y="154" width="740" height="620" fill="none" stroke="#c2410c" stroke-width="3" stroke-dasharray="16 10"/>
+				</svg>
+			`,
+			x: 420,
+			y: 144,
+		},
+	] as const;
+	for (const surface of surfaces) {
+		const outputPath = path.join(outputDirectory, surface.file);
+		await sharp(Buffer.from(surface.svg))
+			.composite([{ input: asset, left: surface.x, top: surface.y }])
+			.png()
+			.toFile(outputPath);
+		outputs.push(relativeToWorkspace(outputPath));
+	}
+	return outputs;
+}
+
+function aiReviewPrompt(exportQa: ExportQaReport, safeActionRegion: SafeActionRegionSummary): string {
+	return [
+		"You are reviewing a transparent animation MVP candidate for Celstate.",
+		"Scope: character/subject animations, mascot/editorial overlays, Hapnington-style UI motion overlays, detached leaves/particles/small details, transparent padding, WebM/ProRes/APNG/still exports.",
+		"Explicitly out of scope for this MVP: smoke, glow, wispy volumetrics, and extreme soft-alpha effects.",
+		"Inspect the attached fixed composites and side-by-side export comparisons. Return only the requested JSON object.",
+		"Pass policy: no major green/blue key outline, no visible watermark, subject edge quality passes, detached elements are preserved, no major temporal flicker, reserved right/bottom cleanup zones remain empty, and any WebM-specific artifact is acceptable only if ProRes/APNG are otherwise clean.",
+		`Deterministic export QA summary: pass=${exportQa.pass}; webmPass=${exportQa.formats.webm.alphaPass}; proresPass=${exportQa.formats.prores.alphaPass}; apngPass=${exportQa.formats.apng.alphaPass}; webmVsProresArtifact=${exportQa.webmVsProres.exportSpecificArtifact}.`,
+		`Deterministic reserved-zone summary: pass=${safeActionRegion.pass}; rightReservedRatio=${safeActionRegion.rightReservedRatio}; bottomReservedRatio=${safeActionRegion.bottomReservedRatio}; alphaCoverageMax=${safeActionRegion.alphaCoverageMax}; opaqueCoverageMax=${safeActionRegion.opaqueCoverageMax}.`,
+	].join("\n");
+}
+
+async function writeAiVisualReviewRequest(
+	reviewDirectory: string,
+	exportQa: ExportQaReport,
+	safeActionRegion: SafeActionRegionSummary,
+): Promise<string> {
+	const compositeDirectory = path.join(reviewDirectory, "review-composites");
+	const assets = [
+		"still-on-parchment.png",
+		"still-on-black.png",
+		"still-on-white.png",
+		"still-on-checkerboard.png",
+		"still-on-saturated.png",
+		`webm-vs-prores-frame-${exportQa.webmVsProres.comparisonFrame}-on-parchment.png`,
+		`webm-vs-prores-frame-${exportQa.webmVsProres.comparisonFrame}-on-black.png`,
+	].map((file) => ({
+		mimeType: "image/png",
+		path: relativeToWorkspace(path.join(compositeDirectory, file)),
+	}));
+	const request = {
+		assets,
+		generatedAt: new Date().toISOString(),
+		modelDefault: "gemini-2.5-flash",
+		passPolicy: {
+			detached_elements_preserved: "pass",
+			green_outline_visible: ["none", "minor"],
+			reserved_right_bottom_zones_empty: true,
+			subject_edge_quality: "pass",
+			temporal_flicker: ["none", "minor"],
+			watermark_visible: false,
+			webm_artifact_allowed_when_export_specific: true,
+		},
+		prompt: aiReviewPrompt(exportQa, safeActionRegion),
+		schema: VISUAL_DEFECT_REVIEW_SCHEMA,
+		version: REVIEW_PACKAGE_VERSION,
+	};
+	const outputPath = path.join(reviewDirectory, "ai-visual-review-request.json");
+	await writeJson(outputPath, request);
+	await writeJson(path.join(reviewDirectory, "visual-defect-review-schema.json"), VISUAL_DEFECT_REVIEW_SCHEMA);
+	return relativeToWorkspace(outputPath);
+}
+
+function isVisualDefectReview(value: unknown): value is VisualDefectReview {
+	if (!value || typeof value !== "object") {
+		return false;
+	}
+	const review = value as Partial<Record<keyof VisualDefectReview, unknown>>;
+	return (review.green_outline_visible === "none" || review.green_outline_visible === "minor" || review.green_outline_visible === "major")
+		&& typeof review.watermark_visible === "boolean"
+		&& (review.subject_edge_quality === "pass" || review.subject_edge_quality === "fail")
+		&& (review.detached_elements_preserved === "pass" || review.detached_elements_preserved === "fail")
+		&& (review.temporal_flicker === "none" || review.temporal_flicker === "minor" || review.temporal_flicker === "major")
+		&& (review.export_specific_artifact === "none" || review.export_specific_artifact === "webm" || review.export_specific_artifact === "prores" || review.export_specific_artifact === "apng")
+		&& typeof review.overall_mvp_pass === "boolean";
+}
+
+function visualDefectReviewGate(review: VisualDefectReview): { pass: boolean; reasons: readonly string[] } {
+	const reasons: string[] = [];
+	if (review.green_outline_visible === "major") {
+		reasons.push("major_green_outline");
+	}
+	if (review.watermark_visible) {
+		reasons.push("watermark_visible");
+	}
+	if (review.subject_edge_quality !== "pass") {
+		reasons.push("subject_edge_quality_failed");
+	}
+	if (review.detached_elements_preserved !== "pass") {
+		reasons.push("detached_elements_missing");
+	}
+	if (review.temporal_flicker === "major") {
+		reasons.push("major_temporal_flicker");
+	}
+	if (review.export_specific_artifact === "prores" || review.export_specific_artifact === "apng") {
+		reasons.push(`${review.export_specific_artifact}_artifact`);
+	}
+	if (!review.overall_mvp_pass) {
+		reasons.push("review_overall_mvp_failed");
+	}
+	return { pass: reasons.length === 0, reasons };
+}
+
+async function writeReviewPackage(
+	reviewDirectory: string,
+	stageDirectory: string,
+	stage: Stage,
+	previousStageDirectory: string,
+	previousStage: Stage,
+	context: RunContext,
+	cleanupEnabled: boolean,
+	paddingNormalizeEnabled: boolean,
+): Promise<ReviewPackageGate> {
+	const cleaned = await prepareCleanedReviewFrames(reviewDirectory, stageDirectory, context, cleanupEnabled, paddingNormalizeEnabled);
+	const reviewComposites = await writeReviewComposites(reviewDirectory, context);
+	const previousComparisons = await writePreviousCurrentComparisons(reviewDirectory, previousStageDirectory, stage, previousStage);
+	const exportQa = await verifyReviewExports(reviewDirectory, cleaned.selectedFrame, context);
+	const dropInSurfaces = await writeDropInSurfaces(reviewDirectory);
+	const aiReviewRequest = await writeAiVisualReviewRequest(reviewDirectory, exportQa, cleaned.safeActionRegion);
+	const mvpGate: ReviewPackageGate = {
+		pass: exportQa.pass && cleaned.safeActionRegion.pass,
+		reasons: [
+			...(exportQa.pass ? [] : ["export_qa_failed"]),
+			...(cleaned.safeActionRegion.pass ? [] : ["reserved_right_bottom_zone_has_foreground_alpha"]),
+		],
+	};
+	const manifest = {
+		aiReviewRequest,
+		dropInSurfaces,
+		exportQa: relativeToWorkspace(path.join(reviewDirectory, "export-qa.json")),
+		generatedAt: new Date().toISOString(),
+		humanReviewChecklist: [
+			"Would I use this asset without manual cleanup?",
+			"Is there any visible green edge?",
+			"Is the watermark gone?",
+			"Are any detached elements obviously missing?",
+			"Does the transparent padding behave correctly?",
+			"Are the rightmost 20% and bottommost 20% empty after watermark cleanup?",
+			"Does any export format look unacceptable?",
+		],
+		mvpScope: {
+			excluded: ["smoke", "glow", "wispy volumetrics", "extreme soft-alpha content"],
+			included: ["character/subject animations", "mascot/editorial overlays", "Hapnington UI motion overlays", "detached leaves/particles/small details", "transparent padding", "safe watermark cleanup zones", "WebM", "ProRes MOV", "APNG", "still PNG exports"],
+		},
+		edgeDespill: cleaned.despill,
+		mvpGate,
+		previousComparisons,
+		paddingNormalization: cleaned.padding,
+		reviewComposites,
+		safeActionRegion: cleaned.safeActionRegion,
+		schemaVersion: 1,
+		selectedFrame: cleaned.selectedFrame,
+		stage,
+		version: REVIEW_PACKAGE_VERSION,
+		watermarkCleanup: cleaned.summary,
+	};
+	await writeJson(path.join(reviewDirectory, "review-package.json"), manifest);
+	return mvpGate;
+}
+
 async function encodeRgbaFrameOutputs(stageDirectory: string, frameRate: string, width: number, height: number, context: RunContext): Promise<string[]> {
 	const framePattern = path.join(stageDirectory, "rgba-frames", "frame-%05d.png");
 	const prores = path.join(stageDirectory, "prores.mov");
@@ -3127,6 +4483,8 @@ async function runVideoPrior(args: ParsedArgs): Promise<void> {
 		if (settings.maxSize !== undefined) {
 			matanyoneCliArgs.push("--max-size", String(settings.maxSize));
 		}
+		const matanyoneArgsPath = path.join(stageDirectory, "matanyone-args.json");
+		await writeJson(matanyoneArgsPath, matanyoneCliArgs);
 
 		let matanyoneStatus: "failed" | "skipped" | "succeeded" = "skipped";
 		let matanyoneError: string | undefined;
@@ -3134,7 +4492,15 @@ async function runVideoPrior(args: ParsedArgs): Promise<void> {
 			const matanyoneResult = settings.matanyoneViaWsl
 				? await runCommand(
 						"powershell",
-						["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path.join(process.cwd(), "scripts", "wsl", "matanyone2.ps1"), ...matanyoneCliArgs],
+						[
+							"-NoProfile",
+							"-ExecutionPolicy",
+							"Bypass",
+							"-File",
+							path.join(process.cwd(), "scripts", "wsl", "matanyone2.ps1"),
+							"-ArgsJsonPath",
+							matanyoneArgsPath,
+						],
 						"video prior matanyone2 inference (wsl)",
 						context,
 					)
@@ -3307,9 +4673,13 @@ async function generateProbeSources(args: ParsedArgs, options: { skipBanner?: bo
 async function promoteReviewCandidate(args: ParsedArgs): Promise<void> {
 	const root = spikeRoot(args);
 	const runId = getRequiredOption(args, "run-id");
-	const stage = (getOption(args, "stage") ?? "celstate-alpha-v7") as Stage;
+	const stage = requireStage(getOption(args, "stage") ?? "celstate-alpha-v7");
+	const previousStage = requireStage(getOption(args, "previous-stage") ?? "celstate-alpha-v6-projection");
+	const cleanupEnabled = getOption(args, "no-watermark-cleanup") !== "true";
+	const paddingNormalizeEnabled = getOption(args, "no-padding-normalize") !== "true";
 	const { directory } = await requireRunInput(root, runId);
 	const stageDirectory = path.join(directory, stage);
+	const previousStageDirectory = path.join(directory, previousStage);
 	const reviewDirectory = path.join(root, "review", runId);
 	await rm(reviewDirectory, { force: true, recursive: true });
 	await ensureDirectory(reviewDirectory);
@@ -3317,6 +4687,7 @@ async function promoteReviewCandidate(args: ParsedArgs): Promise<void> {
 		"animation-on-cream-preview.mp4": "preview-on-cream.mp4",
 		"report.json": "report.json",
 		"spill-heatmap.png": "spill-heatmap.png",
+		"transparent-animation.apng": "apng.png",
 		"transparent-animation-prores.mov": "prores.mov",
 		"transparent-animation.webm": "webm.webm",
 		"transparent-still-on-cream.png": "still-on-cream.png",
@@ -3334,7 +4705,92 @@ async function promoteReviewCandidate(args: ParsedArgs): Promise<void> {
 		}
 		await copyFile(sourcePath, path.join(reviewDirectory, destinationName));
 	}
+	const mvpGate = await writeReviewPackage(
+		reviewDirectory,
+		stageDirectory,
+		stage,
+		previousStageDirectory,
+		previousStage,
+		{ directory: reviewDirectory, runId },
+		cleanupEnabled,
+		paddingNormalizeEnabled,
+	);
 	console.log(`promoted ${stage} review candidate to ${relativeToWorkspace(reviewDirectory)}`);
+	if (!mvpGate.pass) {
+		console.error(`review package failed MVP gate: ${mvpGate.reasons.join(", ")}`);
+		process.exitCode = 1;
+	}
+}
+
+interface AiVisualReviewRequestFile {
+	readonly assets: readonly { readonly mimeType: string; readonly path: string }[];
+	readonly prompt: string;
+}
+
+function reviewDirectoryFromArgs(root: string, args: ParsedArgs): string {
+	const explicitReviewDir = getOption(args, "review-dir");
+	if (explicitReviewDir) {
+		return path.resolve(process.cwd(), explicitReviewDir);
+	}
+	return path.join(root, "review", getRequiredOption(args, "run-id"));
+}
+
+async function runAiVisualReview(args: ParsedArgs): Promise<void> {
+	const root = spikeRoot(args);
+	const reviewDirectory = reviewDirectoryFromArgs(root, args);
+	const requestPath = path.resolve(
+		process.cwd(),
+		getOption(args, "request") ?? path.join(reviewDirectory, "ai-visual-review-request.json"),
+	);
+	const request = await readJson<AiVisualReviewRequestFile>(requestPath);
+	const parts: Part[] = [{ text: request.prompt }];
+	for (const asset of request.assets) {
+		const assetPath = path.isAbsolute(asset.path) ? asset.path : path.resolve(process.cwd(), asset.path);
+		parts.push({
+			inlineData: {
+				data: (await readFile(assetPath)).toString("base64"),
+				mimeType: asset.mimeType,
+			},
+		});
+	}
+
+	const model = getOption(args, "model") ?? "gemini-2.5-flash";
+	const client = createSpikeGeminiClient();
+	const response = await client.models.generateContent({
+		config: {
+			responseMimeType: "application/json",
+			responseSchema: VISUAL_DEFECT_REVIEW_SCHEMA,
+			temperature: 0,
+		},
+		contents: parts,
+		model,
+	});
+	const text = response.text ?? "";
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(text);
+	} catch {
+		throw new Error(`AI visual review returned invalid JSON: ${text.slice(0, 500)}`);
+	}
+	if (!isVisualDefectReview(parsed)) {
+		throw new Error(`AI visual review did not match the required schema: ${JSON.stringify(parsed)}`);
+	}
+	const gate = visualDefectReviewGate(parsed);
+	const output = {
+		gate,
+		generatedAt: new Date().toISOString(),
+		model,
+		rawText: text,
+		review: parsed,
+		schemaVersion: 1,
+		version: REVIEW_PACKAGE_VERSION,
+	};
+	await writeJson(path.join(reviewDirectory, "ai-visual-review.json"), output);
+	console.log(`wrote ${relativeToWorkspace(path.join(reviewDirectory, "ai-visual-review.json"))}`);
+	if (!gate.pass) {
+		console.error(`AI visual review failed MVP gate: ${gate.reasons.join(", ")}`);
+		process.exitCode = 1;
+	}
 }
 
 async function runGeneralizationProbes(args: ParsedArgs): Promise<void> {
@@ -3986,13 +5442,14 @@ function printHelp(): void {
 		"  celstate-alpha-v3-core-fringe --run-id <id> [--key-color #00ff00] [--similarity 0.12] [--blend 0.08] [--core-alpha 242] [--fringe-radius 4] [--transparent-cutoff 4] [--still-frame 96] [--despill-mix 1.25]",
 		"  celstate-alpha-v4-prior-fusion --run-id <id> [--prior-model bria-rmbg] [--prior-package rembg[cpu,cli]] [--key-color #00ff00] [--similarity 0.12] [--blend 0.08] [--core-alpha 244] [--fringe-radius 3] [--transparent-cutoff 3] [--chroma-transparent-cutoff 8] [--still-frame 96] [--despill-mix 0.65]",
 		"  celstate-alpha-v5-video-prior --run-id <id> [--prior-alpha-dir <dir>] [--key-color #00ff00] [--similarity 0.12] [--blend 0.08] [--core-alpha 235] [--core-despill-band 20] [--core-despill-mix 0.6] [--fringe-radius 6] [--guard-radius 8] [--subject-alpha 32] [--transparent-cutoff 2] [--spill-gain 3] [--spill-pull-max 0.85] [--residual-despill-mix 0.6] [--leaf-despill-mix 0.55] [--leaf-alpha-floor 24] [--leaf-gate-ramp 4] [--still-frame 96]",
-		"  video-prior --run-id <id> [--prior-model bria-rmbg] [--prior-package rembg[cpu,cli]] [--mask-threshold 16] [--matanyone-package matanyone2@git+https://github.com/pq-yang/MatAnyone2.git] [--matanyone-command matanyone2] [--matanyone-via-wsl] [--max-size 1280] [--force]",
+		"  video-prior --run-id <id> [--prior-model bria-rmbg] [--prior-package rembg[cpu,cli]] [--mask-threshold 16] [--matanyone-package matanyone2@git+https://github.com/pq-yang/MatAnyone2.git] [--matanyone-command matanyone2] [--matanyone-via-wsl] [--max-size <pixels>] [--force]",
 		"  celstate-alpha-v6-projection --run-id <id> [--prior-alpha-dir <dir>] [--key-color #00ff00] [--similarity 0.12] [--blend 0.08] [--core-alpha 235] [--core-projection-band 20] [--fringe-radius 6] [--guard-radius 8] [--subject-alpha 32] [--transparent-cutoff 2] [--chroma-transparent-cutoff 8] [--leaf-alpha-floor 24] [--leaf-edge-band 4] [--leaf-interior-min-distance 3] [--leaf-gate-ramp 4] [--bg-plate-iterations 24] [--still-frame 96]",
 		"  celstate-alpha-v7 --run-id <id> [--prior-alpha-dir <dir>] [--key-color #00ff00] [--similarity 0.12] [--blend 0.08] [--core-alpha 235] [--core-projection-band 20] [--fringe-radius 6] [--guard-radius 8] [--subject-alpha 32] [--transparent-cutoff 2] [--chroma-transparent-cutoff 8] [--leaf-alpha-floor 24] [--leaf-edge-band 4] [--leaf-interior-min-distance 3] [--leaf-gate-ramp 4] [--bg-plate-iterations 24] [--still-frame 96]",
 		"  generate-probe-sources [--probe-duration 1]  (plumbing smoke test — not quality eval; see pnpm alpha-eval)",
 		"  per-frame-prior --run-id <id> [--prior-model bria-rmbg] [--prior-package rembg[cpu,cli]] [--prior-alpha-dir <dir>] [--force]",
 		"  generalization-probes [--probe-duration 1] [--blue-run-id probe-blue-screen-gp01] [--glow-run-id probe-green-glow-gp02] [--force]  (plumbing smoke test — not quality eval; see pnpm alpha-eval)",
-		"  promote-review --run-id <id> [--stage celstate-alpha-v7]",
+		"  promote-review --run-id <id> [--stage celstate-alpha-v7] [--previous-stage celstate-alpha-v6-projection] [--no-watermark-cleanup] [--no-padding-normalize]",
+		"  ai-visual-review --run-id <id> [--review-dir <dir>] [--request <json>] [--model gemini-2.5-flash]",
 		"  score --run-id <id> --stage <stage> --alpha-usability 1..5 --temporal-coherence 1..5 --edge-spill-halo 1..5 --identity-stability 1..5 --internal-motion 1..5 --secondary-motion-coupling 1..5 --prompt-compliance 1..5 --editor-compatibility 1..5 --overall-awe 1..5 [--failure <name>] [--notes <text>]",
 		"  status --run-id <id> [--events 12]",
 		"  summary",
@@ -4076,6 +5533,9 @@ async function main(): Promise<void> {
 			return;
 		case "promote-review":
 			await promoteReviewCandidate(args);
+			return;
+		case "ai-visual-review":
+			await runAiVisualReview(args);
 			return;
 		case "score":
 			await scoreRun(args);
