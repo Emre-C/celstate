@@ -1,0 +1,43 @@
+{
+  "bundle": "celstate-living-button",
+  "component": "CelstateLivingButton",
+  "pipeline": "celstate_living_ui_control_v1",
+  "primitive": "button",
+  "generatedAt": "2026-06-14",
+  "phase": "F+P (feel proof + primitive generalisation), model-free",
+  "machineVerified": {
+    "source": "packages/living-ui-runtime/src/control.test.ts",
+    "command": "pnpm exec vitest run packages/living-ui-runtime/",
+    "gates": {
+      "states_observable": { "status": "pass", "detail": "idle/hover/pressed/held/cancelled/released/disabled/loading/success via the pure reducer (P-gate: button semantics)." },
+      "press_compression_kappa_lt_1": { "status": "pass", "detail": "kappa_press = 0.92 <= 0.94 < 1, a real squash (vs the §3.9 kappa = 0.998 no-deformation failure)." },
+      "passive_body_center_invariant": { "status": "pass", "detail": "All passive phases share one resting transform -> identical bodyCenterY." },
+      "hold_cancel_release_semantics": { "status": "pass", "detail": "Long-press -> held; pointer-leave -> cancelled (no onPress); release inside bounds fires onPress." },
+      "theming_reskin_ge_3_palettes": { "status": "pass", "detail": "resolveLayerTints is deterministic across >= 3 host palettes (G-gate theming row)." },
+      "manifest_contract_valid": { "status": "pass", "detail": "celstate.manifest.json passes assertLivingControlManifest; motionPath is procedural (never sprite-sheet)." },
+      "interaction_latency_le_1_frame": { "status": "pass", "detail": "Press driven by a shared value + withSpring on the UI thread; no setInterval/JS timer (architectural guarantee; on-device confirmation pending)." }
+    }
+  },
+  "measuredWebRuntimeProxy": {
+    "disclaimer": "Captured by rendering the SHARED pure core (packages/living-ui-runtime/src/control.ts: buttonTransform, springStep, foliageTransform) on a real browser GPU surface via bundles/web-harness. This is an honest proxy that de-risks the C-gate — NOT the §9.3/§9 device gate. iOS + Android fps/memory/right-size remain pending below.",
+    "surface": "Chromium preview, devicePixelRatio 1",
+    "command": "pnpm exec node bundles/web-harness/serve.mjs  (then load / and read window.__harness)",
+    "capturedAt": "2026-06-14",
+    "metrics": {
+      "idle_fps": 59.6,
+      "active_fps_press_plus_foliage": 60.5,
+      "kappa_press_observed": 0.92,
+      "press_spring_overshoot_peak": 1.054,
+      "press_spring_settles_to": 1.0
+    },
+    "notes": "kappa_press 0.92 observed == buttonTransform(1).scaleY; body transform at full press measured translateY(3) scaleX(1.025) scaleY(0.92). Spring shows a real underdamped rebound (squash-and-stretch), not a dead ramp."
+  },
+  "pendingHumanOrDevice": {
+    "aliveness_2afc": { "status": "pending", "gate": "F-gate / §9.3", "requires": "N >= 30 blind viewers, living vs static, living preferred at p < 0.05 and effect >= 70/30, no rise in distraction/discomfort.", "harness": "bundles/expo-harness" },
+    "founder_review": { "status": "pending", "gate": "F-gate", "requires": ">= 4/5 on press/hold/cancel/release feel." },
+    "fps_ge_58_ios_android": { "status": "pending", "gate": "P-gate / C-gate", "requires": "Real iOS + Android devices, fps >= 58 at 1/10/50 instances." },
+    "memory_at_50": { "status": "pending", "gate": "C-gate", "requires": "Within device memory budget at K = 50." },
+    "right_size_density_1_2_3": { "status": "pending", "gate": "C-gate", "requires": "Crisp (s <= 1) at density 1/2/3." },
+    "installability_blank_expo_app": { "status": "pending", "gate": "C-gate / §9.2", "requires": "A generic coding agent installs this bundle into a blank Expo app from README.md with no manual asset surgery." }
+  }
+}

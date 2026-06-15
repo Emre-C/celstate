@@ -179,7 +179,7 @@
 		<header>
 			<h1>Living-UI Animation Spike</h1>
 			<p class="meta">
-				Active R&amp;D direction for Celstate motion assets: <strong>matted motion assets from our own difference-matting image pipeline</strong> — animated as stepped sprite cells, rigged deformations, or procedurally-driven stills — consumed by a <strong>React&nbsp;Native</strong> runtime. Replaces the video-source + alpha-matting line, whose full record is archived in
+				Active R&amp;D direction for Celstate living UI: <strong>agent-installable component bundles</strong> made from generated transparent art layers, strict semantic manifests, and deterministic runtime motion. Initial platform: <strong>Expo / React&nbsp;Native / TypeScript</strong>. Replaces the video-source + alpha-matting line, whose full record is archived in
 				<a href="../archive/transparent-animation/TRANSPARENT-ANIMATION-RD-SPIKE.md">TRANSPARENT-ANIMATION-RD-SPIKE.md</a>.
 				Read that archive's §0 for <em>why</em> we pivoted; this doc is <em>where we are going</em>.
 			</p>
@@ -190,23 +190,23 @@
 			<ul class="status-grid">
 				<li>
 					<span class="label">Phase</span>
-					<span><span class="pill pill-info">Hypothesis</span> Direction chosen and reasoned. No sprite sheet has yet been generated or measured. Nothing here is validated.</span>
+					<span><span class="pill pill-info">Build</span> The runtime control spine is built <strong>model-free</strong>: <code>&lt;CelstateLivingButton&gt;</code> and <code>&lt;CelstateLivingSlider&gt;</code> ship as agent-installable bundles (parts + manifest + README + QA) over <code>@celstate/living-ui-runtime</code>. The §3.0 behaviour invariants — real press compression (<code>κ_press = 0.92 &lt; 1</code>, the fix for the §3.9 <code>0.998</code> failure), value-exact thumb, hold/cancel/release, deterministic theming, and the typed manifest contract — are proven by machine test. What remains is human/device evidence: the 2AFC aliveness study and on-device fps/memory.</span>
 				</li>
 				<li>
 					<span class="label">Core bet</span>
-					<span>Matte <strong>one generated image</strong> with the existing white/black difference matte, then make it move — by stepping sprite cells (Path&nbsp;A), or by animating a single still in the runtime (procedural Path&nbsp;C / rigged Path&nbsp;B, §6). Alpha, cost, and cross-platform consumption collapse to solved or near-solved; the open work is coherence and the runtime.</span>
+					<span>AI generates <strong>transparent parts and skins</strong>; Celstate generates the <strong>typed manifest + React&nbsp;Native component + runtime motion</strong>. Sprite sheets remain a format for bounded loops and effects, not the primary abstraction for controls.</span>
 				</li>
 				<li>
 					<span class="label">Platform</span>
-					<span>React Native (iOS + Android). Chosen because RN has <strong>no robust transparent-video primitive</strong>, which makes a PNG/WebP sprite sheet the natural — not the compromise — choice.</span>
+					<span>Initial MVP target: <strong>Expo React&nbsp;Native + TypeScript</strong>. The user is often an LLM coding agent; the deliverable must be a third-party-installable bundle with code, assets, manifest, and QA evidence.</span>
 				</li>
 				<li>
 					<span class="label">Key unknown</span>
-					<span><strong>Temporal coherence</strong> of generated frames (per-cell "boil"). The resolution ceiling is now <em>bounded</em> — both candidate models render a native 4K square (§3.8) — so the live unknown is coherence plus the <strong>crisp-cell floor</strong>: how much per-cell detail survives once N frames share the canvas. Both are cheap to test against the pipeline today.</span>
+					<span><strong>Not whether it feels alive</strong> — a hand-rigged control beating static is high-confidence and model-free. The real unknowns are <strong>(1) reliable layer decomposition</strong> from generation, <strong>(2) theming / host-app fit</strong>, and <strong>(3) cross-component art-direction coherence</strong> across a kit. Alpha and tactile feel are no longer the central risks.</span>
 				</li>
 				<li>
 					<span class="label">Next decision</span>
-					<span>Run the two-phase spike (§7): can we <em>generate</em> usable sheets (G-gate), and can RN <em>consume</em> them at density and right-size them (C-gate)?</span>
+					<span>Run the 2AFC aliveness test (§9.3) and the on-device C-gate on the new <a href="../../bundles/expo-harness/README.md">Expo harness</a> — the hand-rigged controls now exist and clear every machine gate, so the open question is whether they beat static with real viewers. Only once they do do we wire generation in as a constrained skinner (Phase&nbsp;G). Feel is the spine; generation is the feeder.</span>
 				</li>
 			</ul>
 		</section>
@@ -225,58 +225,93 @@
 				<li><a href="#mvp">9. MVP Definition &amp; Measures</a></li>
 				<li><a href="#scope">10. Out of Scope</a></li>
 				<li><a href="#open">11. Open Questions</a></li>
+				<li><a href="#record">12. Durable Lessons</a></li>
 			</ol>
 		</nav>
 
 		<section id="vision">
 			<h2>1. Vision</h2>
 			<p>
-				Every app looks alike now: sterile, flat, modern, dead. Celstate makes apps feel <strong>alive</strong>. Not "another pretty image" — <strong>motion assets that inhabit the interface</strong> and are dropped straight into a running app.
+				Every app looks alike now: sterile, flat, modern, dead. Celstate makes apps feel <strong>alive</strong>. Not "another pretty image" and not "a video with alpha" — <strong>agent-installable UI components that behave like tactile game UI</strong>.
 			</p>
 			<ul>
-				<li>A button whose <strong>overgrown bushes sway</strong> in the wind.</li>
-				<li>A <strong>slider that rides railroad tracks</strong> as you drag it.</li>
-				<li>A <strong>background that teems with life</strong> — drifting fireflies, swaying grass, falling leaves — instead of a static gradient.</li>
+				<li>An AI coding agent asks for a button; Celstate returns a React&nbsp;Native component bundle whose <strong>body presses, holds, cancels, releases, and rebounds</strong>, while overgrown foliage breathes around it.</li>
+				<li>An AI coding agent asks for a slider; Celstate returns a component whose <strong>thumb position is a function of value</strong>, with rails, moss, particles, and haptics-friendly timing supplied by the runtime.</li>
+				<li>An AI coding agent asks for atmosphere; Celstate returns a <strong>Skia/Reanimated field</strong> of fireflies, grass, leaves, shimmer, or other bounded effects that can be installed into a third-party app.</li>
 			</ul>
 			<p>
-				The asset class we serve, stated precisely, is <code>A* = { stylized, mostly-opaque objects in motion, with bounded soft edges }</code>. Soft volumetrics (smoke, glow, mist, fine hair) are <strong>corner cases, explicitly out of MVP scope</strong> — see <a href="../archive/transparent-animation/TRANSPARENT-ANIMATION-RD-SPIKE.md">archive §0.1</a>. This narrowing is not a retreat; it is the unlock. It removes the only regime where alpha recovery is genuinely hard.
+				The MVP product class is not merely <code>A* = { stylized, mostly-opaque objects in motion, with bounded soft edges }</code>. It is:
+			</p>
+			<pre class="math"><code>Bundle E = (C, M, A, R, Q)
+C = typed component code installable by an agent into a third-party app
+M = semantic manifest: primitive, states, props, layer roles, dimensions, timing
+A = generated transparent art layers / skins / bounded sprite effects
+R = deterministic runtime motion mapping UI state → visual state
+Q = machine + human QA evidence for alpha, behaviour, installability, and aliveness</code></pre>
+			<p>
+				Soft volumetrics (smoke, glow clouds, mist, fine hair) are <strong>corner cases, explicitly out of MVP scope</strong> — see <a href="../archive/transparent-animation/TRANSPARENT-ANIMATION-RD-SPIKE.md">archive §0.1</a>. The first MVP may be narrower still: Expo React&nbsp;Native + TypeScript, one or two primitives, and a strict generated bundle contract.
 			</p>
 		</section>
 
 		<section id="thesis">
 			<h2>2. Strategic Thesis</h2>
-			<p>Three pillars, each chosen to fix a specific failure of the archived video path.</p>
+			<p>Four pillars, each chosen to fix a specific failure of the archived video path <em>and</em> the first generated-sheet capability result.</p>
 			<table>
 				<thead>
 					<tr><th>Pillar</th><th>Claim</th><th>Fixes</th></tr>
 				</thead>
 				<tbody>
 					<tr>
-						<td><strong>Motion = sprite sheets</strong></td>
-						<td>An animation is an <code>R×C</code> grid of frames in one image; play by stepping cells. Optionally an <em>animated</em> WebP/APNG for the no-interaction case.</td>
-						<td>Cross-platform consumption, looping, interactivity, density.</td>
+						<td><strong>Motion = semantic runtime primitive</strong></td>
+						<td>A control's behaviour is a state machine / continuous mapping, not a bag of frames. The runtime owns press, hold, cancel, release, value, loading, success, and disabled states.</td>
+						<td>The "12 pretty frames but no UI behaviour" failure (§3.9).</td>
 					</tr>
 					<tr>
 						<td><strong>Alpha = our difference matte</strong></td>
-						<td>Generate the sheet once on white and once on black; recover exact alpha with the pipeline we already ship. No chroma key, no MatAnyone2, no spill repair, no watermark.</td>
+						<td>Generate layers/effects/sheets once on white and once on black; recover exact alpha with the pipeline we already ship. No chroma key, no MatAnyone2, no spill repair, no watermark.</td>
 						<td>The entire alpha-recovery problem and the watermark blocker.</td>
 					</tr>
 					<tr>
-						<td><strong>Moat = the runtime</strong></td>
-						<td>Generation is a commodity input. Defensibility lives in the consumption layer: a drop-in RN component library + atlas runtime that right-sizes, performs at density, loops, and themes.</td>
-						<td>The "no moat in owning a generator" problem.</td>
+						<td><strong>Moat = the generation→rig pipeline</strong></td>
+						<td>We don't own the base model, but "generation is the commodity, the runtime is the moat" is backwards: the runtime (Reanimated/Skia/Rive) is standard RN technique a studio reproduces in a quarter. The scarce, defensible link is the craft of getting <strong>themeable, decomposable, art-directed-coherent layers</strong> out of the model and into rigs. The moat is the integrated pipeline; its least-commodity part is the generation craft, not the runtime.</td>
+						<td>Both the "no moat in owning a generator" problem and the inverse error of trusting the runtime to defend by itself.</td>
+					</tr>
+					<tr>
+						<td><strong>User = coding agent</strong></td>
+						<td>The output must be installable by an LLM agent: code, assets, manifest, README, dependency list, test IDs, and QA report. A naked image or APNG is insufficient.</td>
+						<td>The "looks nice in a folder but cannot be used by a third party" failure mode.</td>
 					</tr>
 				</tbody>
 			</table>
-			<pre class="math"><code>M ≠ f(generator)            # the model that draws the frames is not the product
-M  = f(runtime, curation)   # the thing that makes a generated asset trivially usable, is</code></pre>
-			<p><strong>What "commodity" does and doesn't mean.</strong> The base model is a commodity — we don't build it and we swap it freely. The <em>craft</em> of getting coherent, registration-clean, loop-clean frames out of it (reference-image anchoring, prompt structure, loop authoring) is <strong>not</strong> commodity; it is one of the two hard problems — the other being the runtime — and a sanctioned workstream. "No moat in the generator" means we don't <em>depend on owning</em> the model, not that generation is easy.</p>
-			<p>Likewise the runtime is <strong>open design space</strong>. The component names in §5 (<code>&lt;LivingButton&gt;</code>, …) are illustrative, not a spec. How the library is factored, what its API is, and where it draws the seam between asset and motion are the decisions where the product is won — deliberately left to whoever builds it.</p>
+			<pre class="math"><code>Wrong product:  prompt → finished animated asset
+Right product:  prompt → (parts, manifest, component, runtime, QA)
+
+UI state u(t)   ∈ U                 # pressed, held, cancelled, value∈[0,1], loading, success...
+Runtime R       : U × time × theme → visual transform field
+Generated art A : style/theme/content; never the sole owner of interaction semantics
+Render          = compose(A, R(u(t), t, theme))</code></pre>
+			<p><strong>What "commodity" does and doesn't mean.</strong> The base model is a commodity — we don't build it and we swap it freely. What is <strong>not</strong> commodity is the craft of getting registration-clean, <em>decomposable</em>, <em>themeable</em>, art-directed-coherent layers out of it (reference-image anchoring, prompt structure, layer decomposition, loop authoring) and feeding them into rigs. The runtime is largely standard RN technique — do not mistake it for the moat. "No moat in the generator" means we don't depend on owning the model; it does not mean generation is easy, nor that the runtime defends us by itself.</p>
+			<p><strong>The runtime is no longer open-ended prose.</strong> The MVP runtime is a product surface: an Expo RN package plus generated component bundles. The component names in §5 (<code>&lt;LivingButton&gt;</code>, <code>&lt;LivingSlider&gt;</code>, …) are now the natural first API shape, even if their exact props change.</p>
 		</section>
 
 		<section id="method">
 			<h2>3. The Method, Formally</h2>
 			<p>English is lossy here; the symbols are the contract.</p>
+
+			<h3>3.0 UI behaviour is a function, not a frame sequence</h3>
+			<p>The central correction after the first capability test: a UI control is not primarily an animation. It is a stateful function with visual output.</p>
+			<pre class="math"><code>Primitive P      = (U, Props, Theme, A, R)
+U_button         = {idle, hover?, pressed, held, cancelled, disabled, loading, success}
+U_slider         = {value ∈ [0,1], dragging ∈ Bool, disabled ∈ Bool, focused ∈ Bool}
+A                = generated transparent layers and bounded effects
+R_P              : U × Props × Theme × t → transforms, filters, particles, frame ranges
+visual(t)        = compose(A, R_P(u(t), props, theme, t))
+
+Button invariant:   bodyCenter(passive frames) ≈ constant
+Button press:       height(pressed) / height(idle) ≤ κ_press   where κ_press &lt; 1
+Slider invariant:   thumbX(value) = lerp(trackStart, trackEnd, value)
+Agent contract:     install(E, app) ⇒ component renders + responds without manual asset surgery</code></pre>
+			<p>A sprite sequence can encode a sampled path through <code>U</code>. It does not own <code>U</code>. Any implementation that cannot answer "what happens when the user holds, cancels, drags halfway, changes theme, or changes label?" is not a living UI primitive.</p>
 
 			<h3>3.1 Difference matting on a single sheet</h3>
 			<p>Generate the same content on white (<code>B=255</code>) and black (<code>B=0</code>). Per the live pipeline, alpha is exact:</p>
@@ -284,7 +319,7 @@ M  = f(runtime, curation)   # the thing that makes a generated asset trivially u
 C_b = F·α
   ⇒  α = 1 − (C_w − C_b)/255      (per channel; α = max over channels)
   ⇒  F = C_b / α                  (α > 0)</code></pre>
-			<p>Applied to <strong>one sheet image</strong>, this yields clean alpha for <em>every</em> frame at once — <em>provided the white and black passes register sub-pixel</em>. That registration is neither free nor automatic. Because the Gemini&nbsp;3.x image family is autoregressive and exposes <strong>no seed</strong> (§3.8), the pipeline gets it the only way available: the <strong>black pass is generated img2img, conditioned on the white pass as a reference image</strong> (live code: <code>blackSession.sendMessageWithImages(buildBlackBgPrompt(), [whiteImage])</code>). For a single subject this holds well. For an <code>R×C</code> sheet it is the central unproven step — every one of the <code>N</code> cells must reproduce pixel-aligned on black, and a few px of drift in any one cell turns that cell's matte into edge fringe. <strong>Per-cell white↔black registration is therefore a first-class G-gate measurement</strong> (§7), distinct from temporal coherence (§3.6).</p>
+			<p>Applied to <strong>one sheet image or one generated layer</strong>, this yields clean alpha — <em>provided the white and black passes register sub-pixel</em>. That registration is neither free nor automatic. Because the Gemini&nbsp;3.x image family is autoregressive and exposes <strong>no seed</strong> (§3.8), the pipeline gets it the only way available: the <strong>black pass is generated img2img, conditioned on the white pass as a reference image</strong> (live code: <code>blackSession.sendMessageWithImages(buildBlackBgPrompt(), [whiteImage])</code>). For a single subject or generated layer this holds well. For an <code>R×C</code> sheet every one of the <code>N</code> cells must reproduce pixel-aligned on black, and a few px of drift in any one cell turns that cell's matte into edge fringe. <strong>Per-cell white↔black registration is therefore a first-class G-gate measurement</strong> (§7), distinct from temporal coherence (§3.6).</p>
 
 			<h3>3.2 Sheet geometry</h3>
 			<pre class="math"><code>Sheet S: canvas W×H, grid R rows × C cols, N = R·C frames
@@ -362,35 +397,62 @@ choose R, C   s.t. ⌊W/C⌋ : ⌊H/R⌋ ≈ asset aspect,   R·C ≥ N_min(asse
 				<strong>Spec provenance — verified 2026-06-13; both models are preview</strong>
 				Native 4K (4096²) and the Flash-only 4:1/8:1 ratios: Gemini 3.1 Flash Image model card + Vertex AI model doc. Gemini 3.0 Pro Image 1K/2K/4K tiers and 21:9 ceiling: Vertex AI listings. No-seed (autoregressive) and the Flash <code>imageSize</code>-ignored bug: Google parameter docs + <code>googleapis/js-genai</code> #1461 — the latter is filed against <code>@google/genai</code>, our exact client, so it is the first thing to retest. Re-confirm ceilings, ratios, and the bug before any production cutover.
 			</div>
+
+			<h3>3.9 Capability result — Gemini 3 Pro Image button sheet</h3>
+			<p>On 2026-06-14 we ran a single-shot capability test with <code>gemini-3-pro-image-preview</code> at 2K square. The prompt requested a 4×3 / 12-cell living button sheet: idle → press → hold → release. White pass plus black img2img passed through the existing difference matte. Artifacts live under <code>tmp/living-ui-sprite-sheet-capability/2026-06-14_17-18-38/</code>.</p>
+			<table>
+				<thead><tr><th>Criterion</th><th>Result</th><th>Meaning</th></tr></thead>
+				<tbody>
+					<tr><td>Raw output size</td><td class="num">2048×2048</td><td>2K request honoured for this run.</td></tr>
+					<tr><td>Grid</td><td>Requested 4×3; detected <strong>3×4</strong></td><td>The model made a regular grid but transposed orientation while claiming it did not.</td></tr>
+					<tr><td>Cell size</td><td class="num">682×512</td><td>Per-cell detail was sufficient; resolution was not the limiter.</td></tr>
+					<tr><td>White↔black registration</td><td>10/12 cells ≤ 1 px; worst 1.414 px</td><td>Difference matte on a generated multi-cell sheet is credible.</td></tr>
+					<tr><td>Grid contamination</td><td>Dark grid lines on white; removed on black</td><td>Asymmetry leaked a faint scaffold into the matte. Production generation must forbid or symmetrically include grid guides.</td></tr>
+					<tr><td>Button compression</td><td>Idle 214 px; press 214 px; held 211 px; <code>κ = 0.998</code></td><td>No real press deformation. Top and bottom shifted together: slight translation, not compression.</td></tr>
+					<tr><td>Loop return</td><td>Frame 0 vs last whole-foreground IoU 0.94</td><td>Near duplicate stills; not a designed UI state progression.</td></tr>
+					<tr><td>Model self-report</td><td>Claimed 4×3, no grid lines, idle/press/hold/release</td><td>The text rationale cannot be trusted as behavioural evidence.</td></tr>
+				</tbody>
+			</table>
+			<pre class="math"><code>Capability answer from n=1:
+  alpha(sheet)         = pass
+  registration(sheet)  = pass / marginal pass
+  layout obedience     = fail   # 4×3 → 3×4
+  UI behaviour         = fail   # κ_press = 0.998 ≈ no compression
+
+Inference:
+  Path A can be probed for bounded ambient/effect loops.
+  Path A is not a high-confidence source for structured controls.
+  Structured controls must route to runtime-owned Path B/C semantics.</code></pre>
 		</section>
 
 		<section id="why-rn">
 			<h2>4. Why React Native Makes This the Obvious Primitive</h2>
-			<p>Choosing RN as the focus is not incidental — it strengthens the thesis.</p>
+			<p>Choosing RN as the first target is not incidental — it strengthens the thesis and gives coding agents a narrow, testable install target.</p>
 			<ul>
 				<li><strong>RN has no robust transparent-video primitive.</strong> <code>react-native-video</code> can play HEVC-alpha on iOS but Android transparent-video support is poor and inconsistent. The cross-platform codec pain that plagues web video (<a href="../archive/transparent-animation/TRANSPARENT-ANIMATION-RD-SPIKE.md">archive §0.5</a>) is <em>worse</em> on RN. So video is not even a real option here.</li>
 				<li><strong>Alpha images are first-class.</strong> PNG and WebP with alpha render natively in <code>&lt;Image&gt;</code> on both platforms. A sprite sheet is just an image. No codec matrix, no fallbacks, no iOS multi-<code>&lt;video&gt;</code> crashes.</li>
-				<li><strong>The runtime is the moat, and RN gives us the surface for it.</strong> A small set of components (<code>&lt;LivingButton&gt;</code>, <code>&lt;LivingBackground&gt;</code>, <code>&lt;LivingSlider&gt;</code>) backed by an atlas runtime is exactly the defensible consumption layer §2 calls for.</li>
+				<li><strong>RN gives the runtime its surface.</strong> A small set of components (<code>&lt;LivingButton&gt;</code>, <code>&lt;LivingSlider&gt;</code>, <code>&lt;LivingToggle&gt;</code>, <code>&lt;LivingField&gt;</code>) backed by Reanimated, Skia Atlas, and optionally Rive rigs is the consumption layer. It is necessary but not sufficient for defensibility: the moat is the generation→rig pipeline as a whole (§2), of which this runtime is the standard, reproducible half.</li>
+				<li><strong>Agents can install it.</strong> Expo RN projects have predictable dependency installation, TypeScript imports, file placement, and emulator/device verification. That makes "third-party usable" falsifiable.</li>
 			</ul>
 		</section>
 
 		<section id="rn-arch">
 			<h2>5. React Native Architecture</h2>
-			<p>Three rendering tiers, ranked by where each wins. All consume the same matted sheet.</p>
+			<p>Rendering tiers, ranked by where each wins. They consume the same generated transparent parts, but they do not all consume a full generated motion sheet.</p>
 			<table>
 				<thead><tr><th>Tier</th><th>Tech</th><th>Best for</th><th>Why</th></tr></thead>
 				<tbody>
 					<tr>
-						<td>0 — Simplest</td>
+						<td>0 — Bounded effect</td>
 						<td><code>expo-image</code> plays an <strong>animated WebP / APNG</strong></td>
-						<td>Set-and-forget loops, low instance counts</td>
-						<td>Zero stepping logic; the runtime decodes the loop. Trade-off: no per-frame interactivity/state control.</td>
+						<td>Success blooms, tiny loaders, decorative loops</td>
+						<td>Zero stepping logic; the runtime decodes the loop. Trade-off: no meaningful UI state control.</td>
 					</tr>
 					<tr>
-						<td>1 — Interactive</td>
-						<td><code>&lt;Image&gt;</code> + clipping <code>View</code> + <code>react-native-reanimated</code></td>
-						<td>Buttons, sliders, state-driven motion</td>
-						<td>Frame index driven on the UI thread (60fps, off JS). Hover/press can change speed, direction, or which frame-range plays.</td>
+						<td>1 — Semantic control</td>
+						<td><code>&lt;Pressable&gt;</code> / gestures + <code>react-native-reanimated</code></td>
+						<td>Buttons, sliders, toggles, state-driven motion</td>
+						<td>Shared values and animated styles map UI state to transforms, opacity, filters, and frame ranges. This is the default for tactile controls.</td>
 					</tr>
 					<tr>
 						<td>2 — Density</td>
@@ -398,40 +460,59 @@ choose R, C   s.t. ⌊W/C⌋ : ⌊H/R⌋ ≈ asset aspect,   R·C ≥ N_min(asse
 						<td>"Teeming" backgrounds: tens–hundreds of instances</td>
 						<td>One GPU texture, batched per-sprite transforms (RSXform). The right primitive for many simultaneous elements without N draws.</td>
 					</tr>
+					<tr>
+						<td>3 — Authored rig</td>
+						<td>Rive state machine or equivalent rig runtime</td>
+						<td>High-craft hero controls and complex deformations</td>
+						<td>Interactive animation logic lives in a state machine or rig. Generated art skins the rig; the rig owns behaviour.</td>
+					</tr>
 				</tbody>
 			</table>
 
-			<h3>5.1 Tier 1 — interactive frame-stepper (sketch)</h3>
-			<pre><code>// SpriteSheet.tsx — step one cell of an R×C atlas, UI-thread driven.
-import { Image } from 'expo-image';
-import Animated, {
-  useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing,
-} from 'react-native-reanimated';
+			<h3>5.1 Agent-facing bundle shape</h3>
+			<pre><code>celstate-living-button/
+  CelstateLivingButton.tsx
+  celstate.manifest.json
+  assets/
+    body.png
+    foliage-front.png
+    foliage-back.png
+    sparkle-sheet.webp
+  README.md
+  qa-report.json</code></pre>
+			<pre><code>&lt;CelstateLivingButton
+  label="Generate"
+  disabled={isLoading}
+  loading={isLoading}
+  onPress={handleGenerate}
+/&gt;
 
-function SpriteSheet({ source, W, H, rows, cols, fps, cell }) {
-  const N = rows * cols;
-  const f = useSharedValue(0);                       // frame index (UI thread)
-  useEffect(() => {
-    f.value = withRepeat(
-      withTiming(N, { duration: (N / fps) * 1000, easing: Easing.steps(N, true) }),
-      -1, false);                                    // loop forever
-  }, [N, fps]);
-  const style = useAnimatedStyle(() => {
-    'worklet';
-    const i = Math.floor(f.value) % N;
-    const col = i % cols, row = Math.floor(i / cols);
-    return { transform: [{ translateX: -col * cell.w }, { translateY: -row * cell.h }] };
-  });
-  return (
-    &lt;View style={{ width: cell.w, height: cell.h, overflow: 'hidden' }}&gt;
-      &lt;Animated.View style={style}&gt;
-        &lt;Image source={source} style={{ width: W, height: H }} contentFit="cover" /&gt;
-      &lt;/Animated.View&gt;
-    &lt;/View&gt;
-  );
-}</code></pre>
+&lt;CelstateLivingSlider
+  value={strength}
+  onValueChange={setStrength}
+  min={0}
+  max={1}
+/&gt;</code></pre>
 
-			<h3>5.2 Tier 2 — density via Skia atlas (sketch, illustrative API)</h3>
+			<h3>5.2 Tier 1 — semantic Reanimated control (sketch)</h3>
+			<pre><code>// Button body behaviour: runtime-owned, art-agnostic.
+const pressed = useSharedValue(0);
+const active = useAnimatedStyle(() =&gt; {
+  'worklet';
+  const p = pressed.value;       // 0 idle, 1 pressed, continuous during transition
+  return {
+    transform: [
+      { translateY: interpolate(p, [0, 1], [0, 3]) },
+      { scaleX: interpolate(p, [0, 1], [1, 1.025]) },
+      { scaleY: interpolate(p, [0, 1], [1, 0.94]) },
+    ],
+  };
+});
+
+// Slider behaviour: value-owned, not sprite-owned.
+thumbX.value = trackStart + value.value * (trackEnd - trackStart);</code></pre>
+
+			<h3>5.3 Tier 2 — density via Skia atlas (sketch, illustrative API)</h3>
 			<pre><code>// Teeming.tsx — K instances from ONE texture, GPU-batched.
 import { Canvas, Atlas, useImage, rect, useRSXformBuffer } from '@shopify/react-native-skia';
 
@@ -448,71 +529,102 @@ function Teeming({ sheetUri, cell, cols, rows, count, frame, X, Y }) {
   return &lt;Canvas style={{ flex: 1 }}&gt;&lt;Atlas image={tex} sprites={sprites} transforms={transforms} /&gt;&lt;/Canvas&gt;;
 }</code></pre>
 
-			<h3>5.3 Format &amp; performance budget</h3>
+			<h3>5.4 Format &amp; performance budget</h3>
 			<ul>
 				<li><strong>Format:</strong> WebP-alpha for sheets (smaller than PNG, alpha-correct on both platforms); PNG for tiny hero accents; AVIF to evaluate. Animated WebP / APNG for Tier 0.</li>
 				<li><strong>Never drive frames with <code>setInterval</code></strong> — JS-thread timers jank under load. Use Reanimated (UI thread) or Skia (GPU).</li>
 				<li><strong>GPU memory ≈ W·H·4 bytes per decoded sheet</strong> (uncompressed in texture memory, regardless of file size). Budget it; pack/atlas; downscale-on-load to the largest size actually shown.</li>
 				<li><strong>Right-sizing:</strong> author at <code>d_max · ρ_max</code>; let RN scale down. Use <code>PixelRatio.get()</code> to pick a variant.</li>
 			</ul>
+			<div class="callout info">
+				<strong>Runtime-doc provenance — checked 2026-06-14</strong>
+				Expo documents Reanimated as the included path for smooth RN animation, Reanimated exposes animated styles driven by shared values, React Native Skia's Atlas is built for many transformed instances of the same texture, and Rive's current RN runtime supports view-model/state-machine style data binding. See official docs before cutting a production dependency set.
+			</div>
 		</section>
 
 		<section id="variants">
 			<h2>6. Three Paths to Living Motion</h2>
-			<p>One instinct — a matted asset that moves — has three realisations. They are complementary, not competing, and they split the asset range cleanly. Crucially, <strong>A is not the default with B/C as fallbacks</strong>: because <code>N</code> is coherence-bound to ~6–18 cells (§3.3), the many-frame regime belongs to C and the large-asset regime to B <em>from the start</em>.</p>
+			<p>One instinct — generated transparent art that makes the app feel alive — has three realisations. They split the asset range cleanly, and the routing is now explicit: <strong>controls belong to authored runtime motion (C or B), ambient to C, and A to bounded effects only.</strong> A is not a default with B/C as fallbacks — because generated sheets are coherence-bound and not reliably state-semantic (§3.9), controls are runtime-owned from the start. The decisive principle: <strong>author the motion first; let generation only skin it.</strong> That keeps generation reliability off the critical path of <em>feel</em> — what the vision lives or dies on — while preserving infinite visual variety.</p>
 			<div class="criteria">
 				<div>
-					<h3>A. Generated Sprite Sheet</h3>
-					<p>The model draws all <code>N</code> cells; we matte once and step them. <strong>Fastest to prove.</strong> Risk: coherence <code>B</code>, per-cell registration (§3.1), and the ~6–18-cell ceiling. Best for <strong>short ambient loops on small/medium assets</strong> that fit inside the coherent-cell budget.</p>
+					<h3>C. Generate-One + Procedural Motion <span class="pill pill-pass">controls + ambient</span></h3>
+					<p>Model draws <strong>one or more matted layers</strong>; runtime code (Reanimated/Skia) animates them — transforms, springs, displacement, flow/noise fields, particles. <strong>Zero generated-frame boil, unlimited frames, naturally coherent, runtime-themeable.</strong> Primary path for ambient life and for most tactile controls: the motion is authored, the art is generated.</p>
 				</div>
 				<div>
-					<h3>C. Generate-One + Procedural Motion</h3>
-					<p>Model draws <strong>one</strong> matted still; a GPU shader animates it — displacement / flow / noise fields (Skia, Reanimated, or a fragment shader). <strong>Zero boil, unlimited frames, sub-100&nbsp;KB, runtime-themeable.</strong> For the actual vision — sway, drift, shimmer, fireflies — this is often the <em>primary</em> technique, not a fallback: ambient motion is a continuous field, and a generated sprite grid is only a lossy sampling of it.</p>
+					<h3>B. Authored Rig + Generated Skin <span class="pill pill-pass">high-craft controls</span></h3>
+					<p>A hand-authored mesh/skeleton/state machine owns behaviour — Rive / Skia mesh, Spine/Live2D-style; generation supplies <strong>the skin and variants</strong> that fill the rig's defined slots. <strong>Zero boil, strong interaction semantics, small files, and — decisively — feel guaranteed independent of generation.</strong> For controls whose deformation is too rich for plain procedural motion. The rig is finite and excellent; the skins are infinite.</p>
 				</div>
 				<div>
-					<h3>B. Generate-One + Rigged Deformation</h3>
-					<p>Model draws <strong>one</strong> gorgeous asset; a runtime mesh/skeleton animates it — Rive / Lottie / Skia mesh, Spine/Live2D-style. <strong>Zero boil, vector-like right-sizing, tiny files.</strong> Best for <strong>hero/background and large assets</strong>, and for structured motion (a slider riding rails) where a deformation field beats sampled pixels.</p>
+					<h3>A. Generated Sprite Sheet <span class="pill pill-info">bounded effects only</span></h3>
+					<p>The model draws all <code>N</code> cells; we matte once and step them. Use only for <strong>short bounded loops</strong>: success blooms, sparkles, leaf wiggles, tiny loaders, firefly wing flaps. Risks: coherence <code>B</code>, per-cell registration (§3.1), layout obedience, semantic drift. <strong>Never the path for button presses, sliders, or toggles.</strong></p>
 				</div>
 			</div>
 			<p>
-				A is the cheap empirical probe and the only path that needs many <em>coherent generated</em> frames. C and B move the motion out of generated pixels and into the runtime — exactly where §2 says the value lives. All three reuse the difference-matting pipeline on a single sheet or still; none touches a commodity video model. The decision tree (§8) routes each asset to the cheapest path that clears its quality bar.
+				C and B keep motion in the runtime and off the critical path of feel — exactly where §2 says the value lives. A is the cheap empirical probe and an export target for effects only. All three reuse the difference-matting pipeline on sheets, stills, or layers; none touches a commodity video model. The decision tree (§8) routes each primitive to the lowest-risk path that clears its behaviour bar — for controls, never A.
 			</p>
 		</section>
 
 		<section id="spike">
 			<h2>7. The Spike Plan</h2>
 			<p>
-				Cheap, two-phase, runnable against the <strong>live pipeline today</strong>. Three target assets exercise the real range: <strong>(1)</strong> swaying-bush button overlay, <strong>(2)</strong> slider-on-rails, <strong>(3)</strong> teeming-background element (drifting fireflies / swaying grass).
+				Original plan: cheap two-phase generation + consumption spike. Current plan after §3.9: <strong>prove feel before generation.</strong> The phases are ordered to fail cheap — the model-free aliveness proof (Phase&nbsp;F) is the kill-fast gate; generation (Phase&nbsp;G) is wired in only once the rig and the feel are proven; installability is sequenced last because it is known-solvable engineering, not a strategic risk.
 			</p>
 
-			<h3>Phase G — Generation (does our pipeline produce usable sheets?)</h3>
+			<h3>Phase F — Feel proof (model-free; the kill-fast gate)</h3>
 			<ul>
-				<li>Prompt the model for an <code>R×C</code> sprite sheet of each asset; sweep <code>(R,C)</code> from inside the coherent-cell budget (~6–18) outward to find where it breaks. <strong>First verify the requested size is honoured</strong> — Flash 3.1 may silently return ~1K (§3.8); fall back to 3.0 Pro Image if so.</li>
+				<li>Hand-author one <code>&lt;LivingButton&gt;</code> in <strong>Reanimated/Skia — the MVP default rig; Rive only if Path C can't clear the 2AFC on a high-craft control</strong> — with hand-made art, no generation in the loop. Make it as alive and tactile as craft allows.</li>
+				<li>Run the 2AFC aliveness test (§9.3) against the static equivalent.</li>
+				<li>This is the cheapest decisive test we have: a <em>hand-crafted</em> living control either beats static or the vision is dead. Spend days, not weeks, before committing to generation.</li>
+			</ul>
+			<pre class="math"><code>F-gate (pass requires all):
+  aliveness     living preferred at p &lt; 0.05, effect ≥ 70/30   (§9.3)
+  feel          founder review ≥ 4/5 on press/hold/cancel/release
+  model-free    achieved with zero generated art     # proves feel is ours to control
+Fail ⇒ the vision is not ready; park the motion bet before any generation spend.</code></pre>
+
+			<h3>Phase P — Primitive generalisation (does one rig shape span the types?)</h3>
+			<ul>
+				<li>Extend the proven authored approach to <code>&lt;LivingSlider&gt;</code> and one ambient field (Path C), still with hand-made art.</li>
+				<li>Confirm one runtime/rig shape covers press-controls, value-controls, and ambient without bespoke per-component re-engineering.</li>
+				<li>Measure press latency, hold/cancel correctness, slider value correctness, disabled/loading states, accessibility labels/roles, and frame rate.</li>
+			</ul>
+			<pre class="math"><code>P-gate (pass requires all):
+  button semantics    idle, press, hold, cancel, release, disabled, loading all observable
+  slider semantics    thumbX(value) monotonic and exact within 1 px at sampled values
+  latency             interaction visual response ≤ 1 frame
+  fps                 ≥ 58 on representative iOS + Android devices
+  abstraction         one rig/runtime shape spans control + ambient, no bespoke rebuild</code></pre>
+
+			<h3>Phase G — Generation as constrained skinner (can it feed the proven rig?)</h3>
+			<p>Runs only after F/P prove the rig and the feel. Generation fills <em>defined slots</em> in an existing rig (skins, palettes, variants); it never owns behaviour and never decomposes an arbitrary control unaided.</p>
+			<ul>
+				<li>For controls, generate the rig's slot art to a fixed spec — body skin, rail, thumb, foliage front/back, particles, masks — not free-form. Do not ask the model to own press/drag semantics.</li>
+				<li>For bounded effects (Path A), prompt an <code>R×C</code> sheet; sweep <code>(R,C)</code> from inside the coherent-cell budget (~6–18) outward. <strong>First verify the requested size is honoured</strong> — Flash 3.1 may silently return ~1K (§3.8); fall back to 3.0 Pro Image if so.</li>
 				<li>Run the existing white/black pipeline: white pass, then black as img2img anchored on white (§3.1).</li>
-				<li>Measure per-cell white↔black <strong>registration</strong>, per-frame fidelity, coherence <code>B</code> (§3.6), loop seam <code>ε_loop</code>, and file size.</li>
+				<li>Measure the three real unknowns — <strong>decomposition reliability</strong>, <strong>theming / host-fit</strong>, <strong>cross-component coherence</strong> — alongside registration, alpha, file size, and (sheets only) coherence <code>B</code> and loop seam <code>ε_loop</code>.</li>
 			</ul>
 			<pre class="math"><code>G-gate (pass requires all):
-  per-frame fidelity      ≥ 4/5   founder review, on ≥ 2 of 3 assets
-  per-cell registration   white↔black ≤ 1 px drift on every cell   (§3.1 — else matte fringes)
-  coherence               B ≤ B_max        (ambient motion reads as coherent, no boil)
-  loop seam               d(S_{N−1}, S_0) ≤ ε_loop
-  usable frames at size   N ≥ N_min(asset),  N within the coherent-cell budget (§3.3)
-  reachable resolution    requested imageSize honoured; crisp-cell px recorded (§3.8)</code></pre>
+  decomposition       clean separable slot layers on ≥ 4/5 runs, no manual surgery
+  theming / host-fit  same rig reskins to ≥ 3 distinct host palettes and reads native
+  kit coherence       button + slider + ambient generate as one art-directed world
+  registration        white↔black ≤ 1 px drift per cell/layer   (§3.1 — else fringes)
+  fidelity            ≥ 4/5 founder review, on ≥ 2 of 3 assets
+  bounded effects:    B ≤ B_max,  loop seam ≤ ε_loop,  N within coherent budget (§3.3)
+  resolution          requested imageSize honoured; crisp-cell px recorded (§3.8)</code></pre>
 
-			<h3>Phase C — Consumption (can RN use them at density &amp; right-size them?)</h3>
+			<h3>Phase C — Consumption &amp; install (density, right-size, agent-installable)</h3>
 			<ul>
 				<li>Expo harness rendering each asset via Tier 1 (Image+Reanimated) and Tier 2 (Skia atlas).</li>
+				<li>Verify an agent installs the bundle into a blank third-party Expo app with no manual asset surgery (§9.2). Sequenced last: this is engineering, not a strategic unknown.</li>
 				<li>Measure on real iOS + Android devices.</li>
 			</ul>
 			<pre class="math"><code>C-gate (pass requires all):
-  framerate    fps ≥ 58  at K instances, K ∈ {1, 10, 50}, both platforms
-  memory       within device budget at K = 50
-  right-size   crisp (s ≤ 1) at ρ ∈ {1, 2, 3}
-  loop         seamless; no visible seam or hitch
-  interactivity state change (press → speed/range) lands within 1 frame</code></pre>
-
-			<h3>Phase R — Rigged sibling (optional, run if G-gate is marginal on large assets)</h3>
-			<p>Take one generated asset; rig it (Rive/Lottie/Skia mesh); compare coherence, right-sizing, and file size against the sheet for the hero/background case.</p>
+  framerate      fps ≥ 58  at K instances, K ∈ {1, 10, 50}, both platforms
+  memory         within device budget at K = 50
+  right-size     crisp (s ≤ 1) at ρ ∈ {1, 2, 3}
+  loop           seamless; no visible seam or hitch
+  interactivity  state change (press → speed/range) lands within 1 frame
+  installability blank Expo app + generated README succeeds, no bespoke human help</code></pre>
 		</section>
 
 		<section id="gates">
@@ -520,42 +632,51 @@ function Teeming({ sheetUri, cell, cols, rows, count, frame, X, Y }) {
 			<div class="criteria">
 				<div>
 					<h3>Go</h3>
-					<p>G-gate <strong>and</strong> C-gate pass for ≥ 2 of 3 assets. Build the runtime component library; that is the product.</p>
+					<p>F-gate proves feel model-free; P/G/C-gates then pass for <code>&lt;LivingButton&gt;</code> and <code>&lt;LivingSlider&gt;</code>, with at least one <em>generated-skin</em> bundle installed into a blank Expo app by an agent. Build the rig library + generation feeder; that is the product.</p>
 				</div>
 				<div>
-					<h3>Coherence fails (B too high)</h3>
-					<p>Sprite generation boils or cells drift. <strong>Route to Path C (procedural) for ambient motion and Path B (rigged) for hero/structured motion:</strong> generate one matted still, animate it in the runtime. Sheets retained only for the small/ambient cases that passed.</p>
+					<h3>Feel fails model-free (F-gate)</h3>
+					<p>If a <em>hand-rigged</em> control can't beat static in the 2AFC, the vision is not ready — and no amount of generation fixes it. Park the motion bet cheaply, before any generation spend. The transparent-<em>still</em> product still stands.</p>
 				</div>
 				<div>
-					<h3>Both fail</h3>
-					<p>Generation can't yet make coherent living assets at fidelity. Park the motion bet; the transparent-<em>still</em> product still stands. Re-probe when the image model improves. A respectable outcome, not a failure.</p>
+					<h3>Generation can't feed the rig (G-gate)</h3>
+					<p>Feel is proven but generation won't reliably decompose, theme, or stay coherent across a kit. Fall back to <strong>authored / curated skins</strong> for MVP and mature generation behind the proven runtime — the rigs still ship. Generated sheets stay bounded-effects only (§3.9).</p>
 				</div>
 			</div>
 			<p>
-				Note the asymmetry with the archived path: here a failure has <strong>cheap, already-specified fallbacks</strong> (Paths B and C) that still reuse our IP. We are not betting the company on a single unproven mechanism.
+				Note the asymmetry with the archived path: failures are cheap and ordered. F-gate can kill the whole vision in days, not a quarter; a G-gate failure falls back to authored skins without losing the rig runtime. We are not betting the company on generated sprite sheets — or on generation at all for the <em>feel</em>.
 			</p>
 		</section>
 
 		<section id="mvp">
 			<h2>9. MVP — Definition &amp; Objective Measures</h2>
-			<p>The gates in §7–8 prove the <em>mechanism</em>. This section defines the <em>product</em>: when have we built an MVP of "apps feel alive," covering the element/background range minus the soft-volumetric corner case? Three things must be measurable — coverage, aliveness, and the gate constants the spike otherwise leaves as bare symbols.</p>
+			<p>The gates in §7–8 prove the <em>mechanism</em>. This section defines the <em>product</em>: when have we built an MVP of "apps feel alive" that an AI coding agent can actually install into a third-party app? Five things must be settled — installability, coverage, aliveness, theming, and the gate constants the spike otherwise leaves as bare symbols.</p>
 
 			<h3>9.1 Coverage — the tickable definition of "everything except corner cases"</h3>
-			<p>MVP = the runtime + a starter asset set that clears the per-class bar on the elements below. Soft volumetrics (smoke, glow, mist, fine hair) are explicitly excluded (§10).</p>
+			<p>MVP = the runtime + generated bundle pipeline + starter asset/component set that clears the per-class bar on the elements below. Soft volumetrics (smoke, glow clouds, mist, fine hair) are explicitly excluded (§10).</p>
 			<table>
 				<thead><tr><th>Element class</th><th>Example</th><th>Likely path (§6)</th><th>In MVP?</th></tr></thead>
 				<tbody>
+					<tr><td>Button primitive</td><td>press/hold/cancel/release with living surround</td><td>C (B if needed)</td><td><span class="pill pill-pass">Yes — first proof</span></td></tr>
+					<tr><td>Slider primitive</td><td>thumb rides rails as value changes</td><td>C (B if needed)</td><td><span class="pill pill-pass">Yes — first proof</span></td></tr>
 					<tr><td>Small accent / icon</td><td>swaying leaf, pulsing dot</td><td>A or C</td><td><span class="pill pill-pass">Yes</span></td></tr>
-					<tr><td>Interactive control</td><td>slider-on-rails, toggle</td><td>B (rigged)</td><td><span class="pill pill-pass">Yes</span></td></tr>
-					<tr><td>Button overlay</td><td>swaying-bush button</td><td>A or C</td><td><span class="pill pill-pass">Yes</span></td></tr>
-					<tr><td>Background / ambient field</td><td>fireflies, grass, leaves</td><td>C (procedural)</td><td><span class="pill pill-pass">Yes</span></td></tr>
-					<tr><td>Loader / state feedback</td><td>living spinner, success bloom</td><td>A or C</td><td><span class="pill pill-pass">Yes</span></td></tr>
+					<tr><td>Background / ambient field</td><td>fireflies, grass, leaves</td><td>C</td><td><span class="pill pill-info">After controls</span></td></tr>
+					<tr><td>Loader / state feedback</td><td>living spinner, success bloom</td><td>A or C</td><td><span class="pill pill-info">After controls</span></td></tr>
 					<tr><td>Soft volumetric</td><td>smoke, glow, mist, hair</td><td>—</td><td><span class="pill pill-warn">Corner case</span></td></tr>
 				</tbody>
 			</table>
-			<p><strong>Coverage bar:</strong> MVP ships when <strong>≥ 4 of the 5 in-scope classes</strong> have at least one asset that passes both gates <em>and</em> renders through a runtime component, on both platforms. That is the falsifiable line for "covers the range minus corner cases."</p>
+			<p><strong>The MVP, landed.</strong> A Celstate runtime package plus two agent-installable bundles — <code>&lt;LivingButton&gt;</code> and <code>&lt;LivingSlider&gt;</code> — for Expo&nbsp;RN&nbsp;+&nbsp;TypeScript, with motion authored in <strong>Reanimated/Skia</strong> (Rive reserved for a high-craft escalation), art delivered as the §5.1 bundle (parts + manifest + README + QA), and theming via manifest tokens (§9.5). It ships only when, on both iOS and Android: F-gate proves feel model-free, then the two bundles — generated skin where it clears G-gate, authored skin where it doesn't — pass P/G/C-gates in a blank Expo app installed by an agent. Broader coverage (≥ 4 of 5 classes) is the next milestone, not the first MVP.</p>
 
-			<h3>9.2 Aliveness — the one outcome metric that isn't taste</h3>
+			<h3>9.2 Installability — the agent-facing product metric</h3>
+			<pre class="math"><code>Install test:
+  Input:  blank Expo RN TS app A0, generated bundle E, README instructions I
+  Agent:  generic coding agent with shell access
+  Pass:   agent applies I, app builds, component renders, state props work
+
+No manual asset surgery, no hidden local paths, no bespoke human explanation.</code></pre>
+			<p>Installability is the product boundary that defines "done": our users are often LLM coding agents, so the bundle must be explicit enough for an agent to execute. But it is a <em>definitional</em> boundary, not a strategic risk — it is known-solvable engineering (peer deps + manifest + README), which is why §7 sequences it last, after feel and generation are proven.</p>
+
+			<h3>9.3 Aliveness — the one outcome metric that isn't taste</h3>
 			<p>The vision is a perception claim ("alive, not dead"), so its top-line metric must be a perception test, not founder review. Forced-choice, blind:</p>
 			<pre class="math"><code>2AFC: N ≥ 30 viewers, each shown the living vs static build of the same screen
 aliveness ⇔ living preferred as "more alive / more premium" at p < 0.05
@@ -563,7 +684,7 @@ aliveness ⇔ living preferred as "more alive / more premium" at p < 0.05
 guardrail  ⇔ no rise in self-reported distraction / discomfort vs static</code></pre>
 			<p>Founder review (≥ 4/5) stays as the fast inner-loop filter; the 2AFC is the gate that says the motion <em>earns its place</em> rather than merely renders.</p>
 
-			<h3>9.3 Calibrating the gate constants (objective in substance, not just form)</h3>
+			<h3>9.4 Calibrating the gate constants (objective in substance, not just form)</h3>
 			<p><code>B_max</code>, <code>ε_loop</code>, and <code>N_min</code> are symbols until pinned. Each earns a number by calibration against human judgement, not by guess:</p>
 			<table>
 				<thead><tr><th>Constant</th><th>Meaning</th><th>How it gets a number</th></tr></thead>
@@ -573,7 +694,10 @@ guardrail  ⇔ no rise in self-reported distraction / discomfort vs static</code
 					<tr><td><code>N_min</code></td><td>min frames for motion to read as smooth, per asset</td><td>lowest <code>N</code> at fixed fps where the panel stops reporting "steppy"; expect ~8–12 for ambient</td></tr>
 				</tbody>
 			</table>
-			<p>Calibrating these on the three spike assets converts every G-gate row from "objective in form" to "objective in substance," and they then hold for every asset after. Note the numbers interlock: <code>N_min</code> (≈ 8–12) sits just under the coherence ceiling (~6–18, §3.3) — confirmation that Path A's usable window is real but narrow, and that anything above it belongs to Paths B/C.</p>
+			<p>Calibrating these on bounded-effect assets converts every G-gate row from "objective in form" to "objective in substance." Structured controls additionally need P-gate constants: press response latency, compression ratio, cancellation correctness, slider value error, and accessibility correctness.</p>
+
+			<h3>9.5 Theming — the decided MVP mechanism (was an open fork)</h3>
+			<p>The vision is the <em>host</em> app feeling alive, so theming is required, not optional. The decision: <strong>manifest theme tokens applied by the runtime — no model call at install.</strong> Art ships in two layer roles: <strong>structural</strong> layers (form, shadow, geometry) palette-neutral and used as-is; <strong>tintable</strong> layers (foliage, accent, glow) authored neutral/grayscale-with-alpha so the runtime multiplies the host token colour through them. Re-generation per palette is deferred post-MVP; runtime tint without the neutral-authoring discipline is rejected (hue-shifting baked-in colour degrades). This is exactly what the G-gate "reskins to ≥ 3 host palettes" row measures.</p>
 		</section>
 
 		<section id="scope">
@@ -581,32 +705,88 @@ guardrail  ⇔ no rise in self-reported distraction / discomfort vs static</code
 			<ul>
 				<li><strong>Soft volumetrics</strong> — smoke, glow, mist, fine hair. The corner case (<a href="../archive/transparent-animation/TRANSPARENT-ANIMATION-RD-SPIKE.md">archive §0.1</a>); not an MVP requirement.</li>
 				<li><strong>Transparent video</strong> as a delivery format — cross-platform-hostile, and worse on RN than web.</li>
-				<li><strong>Owning / depending on a commodity generator</strong> (Wan-Alpha, Veo, Runway, …) as the source of defensibility. Use whatever is cheapest to make frames; the moat is the runtime.</li>
+				<li><strong>Owning / depending on a commodity generator</strong> (Wan-Alpha, Veo, Runway, …) as the source of defensibility. Use whatever is cheapest to make frames; the moat is the generation→rig pipeline (§2), not any one model.</li>
 				<li><strong>The Alpha Compiler as a primary alpha source.</strong> Kept only as an optional raster edge-refinement pass if ever needed (archive §0.7).</li>
 				<li><strong>Web-first.</strong> We have chosen RN as the focus. Web is a later port, not the proving ground.</li>
+				<li><strong>Arbitrary-framework output.</strong> MVP is allowed to be Expo RN only. Cross-framework generation comes after one runtime has real proof.</li>
+				<li><strong>Prompt-only finished UI behaviour.</strong> We may keep probing it, but it is not the product path after §3.9.</li>
 			</ul>
 		</section>
 
 		<section id="open">
 			<h2>11. Open Questions</h2>
+			<p>Triaged so the MVP is genuinely landed: <strong>none of these blocks the control MVP build.</strong> Each is already resolved, empirical (a gate measures it — no decision to make), or scoped to a later milestone.</p>
 			<ul>
 				<li><strong>Reproducibility / seed — resolved.</strong> Neither model exposes a seed; the Gemini 3.x image family is autoregressive, not diffusion. Consistency comes only from <strong>reference-image anchoring</strong>, which the pipeline already does (white → black img2img, §3.1). Implication: cross-cell identity is a prompt/conditioning problem, not a seed-pinning one; design for the 60–95% band, not bit-exactness.</li>
 				<li><strong>Model resolution ceiling — bounded, with a caveat (§3.8).</strong> Both <strong>Gemini 3.1 Flash Image</strong> and <strong>Gemini 3.0 Pro Image</strong> can render a native 4K square (4096² = 16.78&nbsp;MP) on Vertex. Caveat to confirm first: <code>gemini-3.1-flash-image-preview</code> reportedly ignores <code>imageConfig.imageSize</code> and returns ~1K — so reaching 2K/4K may require 3.0 Pro Image until fixed. The live question is no longer the ceiling but how many of those pixels survive as <em>coherent</em> cells (§3.3) — order ~12, not ~784.</li>
 				<li><strong>Coherence on ambient motion.</strong> Does single-sheet generation hold identity across cells well enough that <code>B ≤ B_max</code> without per-frame conditioning? If not, does img2img/reference conditioning between cells fix it, or do we move to Paths B/C?</li>
 				<li><strong>Loop authoring.</strong> Can we reliably prompt cyclic motion so <code>S_{N−1} → S_0</code> is seamless, or do we need a synthesis step (ping-pong, cross-fade, learned loop)?</li>
-				<li><strong>Theming.</strong> Re-generate per palette, or tint at runtime? Living UI implies assets that match the host app's theme.</li>
+				<li><strong>Decomposition, theming &amp; kit coherence — promoted to G-gates (§7), no longer open musings.</strong> The three things that actually decide the vision — reliable layer decomposition, theming / host-app fit, and art-direction coherence across a component kit — are now first-class generation gates. They are the real unknowns; "does it feel alive" is not.</li>
 				<li><strong>File-size budget.</strong> A hi-fidelity multi-frame WebP sheet vs the &lt;200 KB mobile guideline — where does each asset class land?</li>
 				<li><strong>Density ceiling.</strong> How many Skia-atlas instances before the C-gate framerate breaks on a mid-tier Android device?</li>
+				<li><strong>Agent install ceiling.</strong> How much dependency setup and native configuration can a generic coding agent handle without user intervention?</li>
 			</ul>
 			<div class="callout info">
 				<strong>One-line summary for future-us</strong>
-				The hard, valuable problem is no longer "make alpha from video." It is "generate coherent, right-sizeable living assets and make them trivially consumable in a React Native app." Alpha is solved by our existing difference matte on a single sheet; the bet is coherence + the runtime.
+				The hard, valuable problem is no longer "make alpha from video." It is "generate transparent parts and ship agent-installable React&nbsp;Native components whose runtime motion makes UI feel tactile, delightful, and alive." Alpha is solved enough to stop being the central risk.
 			</div>
+		</section>
+
+		<section id="record">
+			<h2>12. Durable Lessons</h2>
+			<p>This section is intentionally redundant. Future agents should be able to recover the enduring decision context from this file alone.</p>
+			<table>
+				<thead><tr><th>Lesson</th><th>Durable Form</th></tr></thead>
+				<tbody>
+					<tr>
+						<td>Generated full-control sprite sheets are not the high-confidence path.</td>
+						<td>They can be beautiful and matte-clean while failing the UI contract. A button press, slider drag, toggle snap, or cancel gesture is a semantic runtime behaviour.</td>
+					</tr>
+					<tr>
+						<td>Alpha is a strength, not the product.</td>
+						<td>The 2026-06-14 Gemini 3 Pro sheet produced a clean 2K matte with strong registration. The differentiator must move up-stack into installable components and runtime behaviour.</td>
+					</tr>
+					<tr>
+						<td>Model self-report is not evidence.</td>
+						<td>The model claimed 4×3, no grid lines, and idle/press/hold/release. The image was 3×4, had asymmetric grid contamination, and did not compress. Always inspect pixels and behaviour metrics.</td>
+					</tr>
+					<tr>
+						<td>Sprite sheets remain useful.</td>
+						<td>Use them for bounded loops and effects: blooms, sparkles, loaders, small ambient cycles. Do not make them own arbitrary UI state.</td>
+					</tr>
+					<tr>
+						<td>The MVP user is often an AI coding agent.</td>
+						<td>Return an explicit bundle: component code, assets, manifest, README, dependencies, QA report, and test hooks. A folder of images is not enough.</td>
+					</tr>
+					<tr>
+						<td>Quality bar: video-game feel or do not ship.</td>
+						<td>If runtime-authored controls still feel mediocre, park the motion product. Do not ship weak "living UI" that undermines the brand.</td>
+					</tr>
+					<tr>
+						<td>Prove feel before generation.</td>
+						<td>Making a control feel alive is model-free and high-confidence. Reliably generating themeable, decomposable, coherent art to feed it is the real risk. Sequence so a hand-rigged 2AFC validates or kills the vision first, for days of spend — not after a generation pipeline is built.</td>
+					</tr>
+					<tr>
+						<td>The moat is the pipeline, not the runtime.</td>
+						<td>Reanimated / Skia / Rive are standard RN technique a studio reproduces in a quarter. The defensible, least-commodity link is the generation→rig craft: decomposition, theming, and art-direction coherence. Spend confidence-building effort there.</td>
+					</tr>
+				</tbody>
+			</table>
+			<pre class="math"><code>High-confidence path (ordered to fail cheap):
+  1. prove feel model-free      # hand-rigged control beats static in 2AFC
+  2. generalise the rig         # one runtime shape spans control + ambient
+  3. generation skins the rig   # constrained slots, not free decomposition
+  4. theme + agent-install      # known-solvable engineering, sequenced last
+  + behaviour QA + aliveness test throughout
+
+Low-confidence path:
+  prompt → finished animated UI control sprite sheet → hope it behaves
+  also wrong: betting the feel on generation, or calling the runtime the moat</code></pre>
 		</section>
 
 		<footer>
 			<p>
-				Opened 2026-06-13 as the active successor to the video-matting line. Full prior history and the pivot reasoning: <a href="../archive/transparent-animation/TRANSPARENT-ANIMATION-RD-SPIKE.md">archive record §0</a>. Keep this file decision-shaped; move raw run notes to a chronological appendix as the spike produces evidence.
+				Opened 2026-06-13 as the active successor to the video-matting line. Updated 2026-06-14 after the Gemini&nbsp;3 Pro generated-sheet capability test and the agent-facing runtime-bundle decision, then re-sequenced the same day: <strong>prove feel model-free first, treat generation (decomposition / theming / kit coherence) as the real risk, and read the moat as the generation→rig pipeline rather than the runtime alone.</strong> Full prior history and the pivot reasoning: <a href="../archive/transparent-animation/TRANSPARENT-ANIMATION-RD-SPIKE.md">archive record §0</a>. Keep this file decision-shaped; move raw run notes to a chronological appendix as the spike produces evidence.
 			</p>
 		</footer>
 	</div>

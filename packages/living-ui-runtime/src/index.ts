@@ -1,3 +1,5 @@
+export * from "./control.js";
+
 export const LIVING_UI_PIPELINE = "celstate_living_ui_runtime_v1" as const;
 
 export const LIVING_UI_ASSET_CLASSES = [

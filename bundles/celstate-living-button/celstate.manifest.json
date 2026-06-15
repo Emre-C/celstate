@@ -1,0 +1,45 @@
+{
+  "pipeline": "celstate_living_ui_control_v1",
+  "schemaVersion": 1,
+  "primitive": "button",
+  "component": "CelstateLivingButton",
+  "label": "Celstate Living Button",
+  "states": [
+    "idle",
+    "hover",
+    "pressed",
+    "held",
+    "cancelled",
+    "released",
+    "disabled",
+    "loading",
+    "success"
+  ],
+  "props": [
+    { "name": "label", "type": "string", "required": true, "description": "Visible button text." },
+    { "name": "onPress", "type": "() => void", "required": true, "description": "Fires once on a committed release (press-in then release inside bounds)." },
+    { "name": "disabled", "type": "boolean", "required": false, "description": "Modal disabled state; presses are inert." },
+    { "name": "loading", "type": "boolean", "required": false, "description": "Modal loading state; presses are inert and the label shows the working state." },
+    { "name": "theme", "type": "Record<string, string>", "required": false, "description": "Host palette tokens; tintable foliage layers multiply the accent token." },
+    { "name": "loadingLabel", "type": "string", "required": false, "description": "Label shown while loading (defaults to \"Working…\")." },
+    { "name": "accessibilityLabel", "type": "string", "required": false, "description": "Overrides the spoken label (defaults to `label`)." },
+    { "name": "testID", "type": "string", "required": false, "description": "Test hook; the inner Pressable is `${testID}-pressable`." }
+  ],
+  "layers": [
+    { "id": "body", "role": "structural", "source": "procedural" },
+    { "id": "foliageBack", "role": "tintable", "token": "accent", "source": "procedural" },
+    { "id": "foliageFront", "role": "tintable", "token": "accent", "source": "procedural" }
+  ],
+  "dimensions": { "widthDp": 220, "heightDp": 56, "densityMax": 3 },
+  "timing": { "pressInMs": 90, "releaseMs": 220, "holdThresholdMs": 350, "ambientPeriodMs": 4200 },
+  "themeTokens": {
+    "accent": "#C2410C",
+    "onAccent": "#FFFFFF",
+    "surface": "#FAF8F4",
+    "border": "#E2DED6",
+    "text": "#1C1917"
+  },
+  "motionPath": "procedural_still",
+  "generatedAt": "2026-06-14T00:00:00.000Z",
+  "assets": {}
+}

@@ -139,6 +139,15 @@ export const LivingAccent = LivingSprite;
 export const LivingButtonOverlay = LivingSprite;
 export const LivingFeedback = LivingSprite;
 
+// Tier 1 semantic controls — the runtime-owned, model-free MVP spine (§5.2).
+export {
+  CelstateLivingButton,
+  CelstateLivingSlider,
+  type CelstateLivingButtonProps,
+  type CelstateLivingSliderProps,
+  type LivingControlTheme,
+} from "./controls.js";
+
 const styles = StyleSheet.create({
   viewport: {
     overflow: "hidden",

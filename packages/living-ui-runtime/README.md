@@ -1,14 +1,47 @@
 # Celstate Living UI Runtime
 
-React Native consumption layer for Celstate living UI assets.
+React Native runtime for Celstate living UI. Two surfaces:
 
-This package consumes the `celstate_living_ui_runtime_v1` manifest emitted by
-the animation worker. The pure entrypoint (`@celstate/living-ui-runtime`) covers
-manifest validation, sprite-cell math, frame selection, and right-size checks.
-The React Native entrypoint (`@celstate/living-ui-runtime/react-native`) renders
-Tier 1 sprite sheets through a Reanimated UI-thread frame callback.
+1. **Semantic controls (the MVP spine).** `CelstateLivingButton` and
+   `CelstateLivingSlider` — runtime-owned, model-free Tier 1 controls (§5.2).
+   Per §3.0 a control's behaviour is a deterministic *function* of state, not a
+   frame sequence; the pure core in `control.ts` is that function, and the RN
+   components are thin Reanimated shells over it. This is the path the §3.9
+   capability test routed controls onto after generated sheets failed the UI
+   contract (`kappa_press = 0.998`, no real press).
+2. **Bounded-effect sprites (Path A only).** `LivingSprite` steps a generated
+   sprite sheet for blooms, sparkles, loaders, and small ambient cycles — never
+   for controls. It consumes the `celstate_living_ui_runtime_v1` manifest emitted
+   by the animation worker.
 
-## Runtime Contract
+The pure entrypoint (`@celstate/living-ui-runtime`) exports the control core
+(state machine, slider geometry, ambient motion, theming, the
+`celstate_living_ui_control_v1` manifest contract) plus the sprite manifest /
+cell math / right-size helpers. The React Native entrypoint
+(`@celstate/living-ui-runtime/react-native`) exports the components.
+
+## Controls
+
+```tsx
+import {
+  CelstateLivingButton,
+  CelstateLivingSlider,
+} from "@celstate/living-ui-runtime/react-native";
+
+<CelstateLivingButton label="Generate" loading={busy} onPress={run} />;
+<CelstateLivingSlider value={strength} onValueChange={setStrength} min={0} max={1} />;
+```
+
+Requires `react-native-reanimated` (>= 4) and, for the slider,
+`react-native-gesture-handler` (wrap the app in `GestureHandlerRootView`). Press
+motion runs on the UI thread (shared value + spring, no JS timer); the slider
+thumb is a pure function of value (`thumbX = lerp(trackStart, trackEnd, value)`).
+Theming follows §9.5: structural layers are used as-is, tintable layers multiply
+a host palette token. Agent-installable bundles live in `bundles/`.
+
+## Sprite runtime (Path A bounded effects)
+
+### Runtime contract
 
 - `spriteSheet.frameCount` is expected to sit in the coherent-cell MVP range
   (normally 8-12 cells, hard capped by the generator spike at roughly 6-18).

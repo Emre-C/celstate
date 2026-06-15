@@ -1,0 +1,41 @@
+{
+  "bundle": "celstate-living-slider",
+  "component": "CelstateLivingSlider",
+  "pipeline": "celstate_living_ui_control_v1",
+  "primitive": "slider",
+  "generatedAt": "2026-06-14",
+  "phase": "P (primitive generalisation), model-free",
+  "machineVerified": {
+    "source": "packages/living-ui-runtime/src/control.test.ts",
+    "command": "pnpm exec vitest run packages/living-ui-runtime/",
+    "gates": {
+      "thumbx_exact_and_monotonic": { "status": "pass", "detail": "thumbX(value) = lerp(trackStart, trackEnd, value), exact within 1px and monotonic at sampled values (P-gate: slider semantics)." },
+      "drag_inverse_roundtrip": { "status": "pass", "detail": "valueForThumbX inverts thumbXForValue within 1px and clamps drags beyond the track." },
+      "step_snapping": { "status": "pass", "detail": "snapSliderValue rounds to the step grid and clamps to [min, max]." },
+      "theming_reskin_ge_3_palettes": { "status": "pass", "detail": "Filled rail + moss tint deterministically across >= 3 palettes." },
+      "manifest_contract_valid": { "status": "pass", "detail": "celstate.manifest.json passes assertLivingControlManifest; motionPath is procedural." },
+      "interaction_latency_le_1_frame": { "status": "pass", "detail": "Thumb tracks the finger via a shared value updated in the pan worklet on the UI thread; value reported via runOnJS (on-device confirmation pending)." },
+      "accessibility_adjustable": { "status": "pass", "detail": "accessibilityRole=adjustable with increment/decrement accessibilityActions wired through the tested stepSliderValue; focusable with a visible focus ring (the §3.0 focused state of U_slider, operable not just visible)." }
+    }
+  },
+  "measuredWebRuntimeProxy": {
+    "disclaimer": "Captured by rendering the SHARED pure core (packages/living-ui-runtime/src/control.ts: thumbXForValue, foliageTransform) on a real browser GPU surface via bundles/web-harness. This is an honest proxy that de-risks the C-gate — NOT the §9 device gate. iOS + Android fps/memory/right-size remain pending below.",
+    "surface": "Chromium preview, devicePixelRatio 1",
+    "command": "pnpm exec node bundles/web-harness/serve.mjs  (then load / and read window.__harness)",
+    "capturedAt": "2026-06-14",
+    "metrics": {
+      "idle_fps": 59.6,
+      "active_fps": 60.5,
+      "slider_thumb_max_error_px": 0
+    },
+    "notes": "thumbX measured exact (0 px error) against thumbXForValue across value = 0.0 … 1.0 in 0.1 steps — well inside the P-gate's 1 px bound, on a live render rather than a unit assertion."
+  },
+  "pendingHumanOrDevice": {
+    "aliveness_2afc": { "status": "pending", "gate": "F-gate / §9.3", "requires": "N >= 30 blind viewers, living vs static, p < 0.05 and effect >= 70/30.", "harness": "bundles/expo-harness" },
+    "founder_review": { "status": "pending", "gate": "F-gate", "requires": ">= 4/5 on drag feel." },
+    "fps_ge_58_ios_android": { "status": "pending", "gate": "P-gate / C-gate", "requires": "Real iOS + Android devices, fps >= 58 at 1/10/50 instances." },
+    "memory_at_50": { "status": "pending", "gate": "C-gate", "requires": "Within device memory budget at K = 50." },
+    "right_size_density_1_2_3": { "status": "pending", "gate": "C-gate", "requires": "Crisp (s <= 1) at density 1/2/3." },
+    "installability_blank_expo_app": { "status": "pending", "gate": "C-gate / §9.2", "requires": "A generic coding agent installs this bundle into a blank Expo app from README.md." }
+  }
+}

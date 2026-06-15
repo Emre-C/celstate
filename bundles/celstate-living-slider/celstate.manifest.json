@@ -1,0 +1,36 @@
+{
+  "pipeline": "celstate_living_ui_control_v1",
+  "schemaVersion": 1,
+  "primitive": "slider",
+  "component": "CelstateLivingSlider",
+  "label": "Celstate Living Slider",
+  "states": ["value", "dragging", "disabled", "focused"],
+  "props": [
+    { "name": "value", "type": "number", "required": true, "description": "Controlled current value (within [min, max])." },
+    { "name": "onValueChange", "type": "(value: number) => void", "required": true, "description": "Called with the snapped value as the thumb is dragged." },
+    { "name": "min", "type": "number", "required": false, "description": "Range minimum (default 0)." },
+    { "name": "max", "type": "number", "required": false, "description": "Range maximum (default 1)." },
+    { "name": "step", "type": "number", "required": false, "description": "Optional snap increment in value units." },
+    { "name": "disabled", "type": "boolean", "required": false, "description": "Disables the pan gesture and dims the control." },
+    { "name": "theme", "type": "Record<string, string>", "required": false, "description": "Host palette tokens; the filled rail and moss use the accent token." },
+    { "name": "testID", "type": "string", "required": false, "description": "Test hook on the container." }
+  ],
+  "layers": [
+    { "id": "rail", "role": "structural", "source": "procedural" },
+    { "id": "railFill", "role": "tintable", "token": "accent", "source": "procedural" },
+    { "id": "moss", "role": "tintable", "token": "accent", "source": "procedural" },
+    { "id": "thumb", "role": "structural", "source": "procedural" }
+  ],
+  "dimensions": { "widthDp": 296, "heightDp": 44, "densityMax": 3 },
+  "timing": { "pressInMs": 60, "releaseMs": 180, "holdThresholdMs": 350, "ambientPeriodMs": 5200 },
+  "themeTokens": {
+    "accent": "#C2410C",
+    "onAccent": "#FFFFFF",
+    "surface": "#FAF8F4",
+    "border": "#E2DED6",
+    "text": "#1C1917"
+  },
+  "motionPath": "procedural_still",
+  "generatedAt": "2026-06-14T00:00:00.000Z",
+  "assets": {}
+}
