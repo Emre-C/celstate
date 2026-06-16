@@ -39,7 +39,6 @@ import {
 } from "../lib/analytics/generation.js";
 import { applyCreditsToUser, getCurrentAppUser, upsertCurrentUser } from "./users.js";
 import { validateReferenceImageMetadata } from "./lib/validation/validation.js";
-import { mergedReferenceStorageIds } from "./lib/referenceStorageIds.js";
 import { assertVerificationRunnerSecret } from "./lib/verification/verificationRunnerSecret.js";
 
 const generationWithUrlsValidator = v.object({
@@ -58,7 +57,6 @@ const generationWithUrlsValidator = v.object({
   whiteBgStorageId: v.optional(v.id("_storage")),
   blackBgStorageId: v.optional(v.id("_storage")),
   optimizedStorageId: v.optional(v.id("_storage")),
-  referenceStorageId: v.optional(v.id("_storage")),
   referenceStorageIds: v.optional(v.array(v.id("_storage"))),
   creditsCost: v.number(),
   aspectRatio: v.string(),
@@ -171,7 +169,7 @@ async function resolveGenerationWithUrls(
   referenceUrls: string[];
   resultUrl: string | null;
 }> {
-  const referenceStorageIds = mergedReferenceStorageIds(generation);
+  const referenceStorageIds = generation.referenceStorageIds ?? [];
   const referenceUrls = await Promise.all(
     referenceStorageIds.map((storageId) => ctx.storage.getUrl(storageId)),
   );
@@ -754,7 +752,6 @@ export const getById = internalQuery({
       whiteBgStorageId: v.optional(v.id("_storage")),
       blackBgStorageId: v.optional(v.id("_storage")),
       optimizedStorageId: v.optional(v.id("_storage")),
-      referenceStorageId: v.optional(v.id("_storage")),
       referenceStorageIds: v.optional(v.array(v.id("_storage"))),
       creditsCost: v.number(),
       aspectRatio: v.string(),
@@ -945,7 +942,7 @@ export const getGenerationStorageIdPage = internalQuery({
 
     const storageIds: Id<"_storage">[] = [];
     for (const gen of page) {
-      storageIds.push(...mergedReferenceStorageIds(gen));
+      storageIds.push(...(gen.referenceStorageIds ?? []));
       if (gen.resultStorageId) storageIds.push(gen.resultStorageId);
       if (gen.whiteBgStorageId) storageIds.push(gen.whiteBgStorageId);
       if (gen.blackBgStorageId) storageIds.push(gen.blackBgStorageId);
@@ -953,56 +950,6 @@ export const getGenerationStorageIdPage = internalQuery({
     }
 
     return { storageIds, continueCursor, isDone };
-  },
-});
-
-export const backfillReferenceStorageIdPage = internalMutation({
-  args: { cursor: v.union(v.string(), v.null()) },
-  returns: v.object({
-    continueCursor: v.string(),
-    isDone: v.boolean(),
-    patched: v.number(),
-  }),
-  handler: async (ctx, args) => {
-    const { page, continueCursor, isDone } = await ctx.db
-      .query("generations")
-      .paginate({ numItems: 100, cursor: args.cursor });
-
-    let patched = 0;
-    for (const gen of page) {
-      if (!gen.referenceStorageId) continue;
-      const existing = gen.referenceStorageIds ?? [];
-      const merged: Id<"_storage">[] = existing.includes(gen.referenceStorageId)
-        ? existing
-        : [...existing, gen.referenceStorageId];
-      await ctx.db.patch(gen._id, {
-        referenceStorageIds: merged.length > 0 ? merged : undefined,
-        referenceStorageId: undefined,
-      });
-      patched += 1;
-    }
-    return { continueCursor, isDone, patched };
-  },
-});
-
-export const backfillReferenceStorageId = internalAction({
-  args: {},
-  returns: v.object({ totalPatched: v.number() }),
-  handler: async (ctx) => {
-    let cursor: string | null = null;
-    let totalPatched = 0;
-    for (;;) {
-      const result: {
-        continueCursor: string;
-        isDone: boolean;
-        patched: number;
-      } = await ctx.runMutation(internal.generations.backfillReferenceStorageIdPage, { cursor });
-      totalPatched += result.patched;
-      if (result.isDone) {
-        return { totalPatched };
-      }
-      cursor = result.continueCursor;
-    }
   },
 });
 

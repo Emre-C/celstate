@@ -33,7 +33,6 @@ import type * as lib_generation_prompts from "../lib/generation/prompts.js";
 import type * as lib_ops from "../lib/ops.js";
 import type * as lib_qa_qaUserResetSecret from "../lib/qa/qaUserResetSecret.js";
 import type * as lib_qa_transparentQa from "../lib/qa/transparentQa.js";
-import type * as lib_referenceStorageIds from "../lib/referenceStorageIds.js";
 import type * as lib_stripeEnv from "../lib/stripeEnv.js";
 import type * as lib_validation_validation from "../lib/validation/validation.js";
 import type * as lib_validation_validators from "../lib/validation/validators.js";
@@ -86,7 +85,6 @@ declare const fullApi: ApiFromModules<{
   "lib/ops": typeof lib_ops;
   "lib/qa/qaUserResetSecret": typeof lib_qa_qaUserResetSecret;
   "lib/qa/transparentQa": typeof lib_qa_transparentQa;
-  "lib/referenceStorageIds": typeof lib_referenceStorageIds;
   "lib/stripeEnv": typeof lib_stripeEnv;
   "lib/validation/validation": typeof lib_validation_validation;
   "lib/validation/validators": typeof lib_validation_validators;

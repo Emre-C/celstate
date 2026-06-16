@@ -19,7 +19,6 @@ function storageIdsFromGeneration(gen: Doc<"generations">): Id<"_storage">[] {
   push(gen.whiteBgStorageId);
   push(gen.blackBgStorageId);
   push(gen.optimizedStorageId);
-  push(gen.referenceStorageId);
   if (gen.referenceStorageIds) {
     for (const id of gen.referenceStorageIds) {
       ids.push(id);

@@ -33,8 +33,6 @@ export default defineSchema({
   users: defineTable({
     tokenIdentifier: v.optional(v.string()),
     clerkUserId: v.optional(v.string()),
-    /** Legacy WorkOS subject — retained until prod rows are backfilled or re-bound via Clerk sign-in. */
-    workosUserId: v.optional(v.string()),
     name: v.optional(v.string()),
     image: v.optional(v.string()),
     email: v.optional(v.string()),
@@ -60,7 +58,6 @@ export default defineSchema({
     whiteBgStorageId: v.optional(v.id("_storage")),
     blackBgStorageId: v.optional(v.id("_storage")),
     optimizedStorageId: v.optional(v.id("_storage")),
-    referenceStorageId: v.optional(v.id("_storage")),
     referenceStorageIds: v.optional(v.array(v.id("_storage"))),
     creditsCost: v.number(),
     aspectRatio: v.string(),

@@ -6,7 +6,6 @@ import { internal } from "./_generated/api.js";
 import type { Doc, Id } from "./_generated/dataModel.js";
 import sharp from "sharp";
 import { GENERATION_CONFIG } from "./lib/config.js";
-import { mergedReferenceStorageIds } from "./lib/referenceStorageIds.js";
 import {
   createChatSession,
   type GeminiImageResult,
@@ -463,7 +462,7 @@ export const generateWhiteBackground = internalAction({
 
     try {
       const runtimeConfig = readGeminiRuntimeConfigFromEnv();
-      const referenceImages = await loadStoredImages(ctx, mergedReferenceStorageIds(generation));
+      const referenceImages = await loadStoredImages(ctx, generation.referenceStorageIds ?? []);
       const session = createChatSession(runtimeConfig, { aspectRatio: generation.aspectRatio });
       const retryInstruction = retryCount > 0 ? generation.whiteBgRetryInstruction : undefined;
       const prompt = referenceImages.length > 0
