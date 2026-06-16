@@ -190,11 +190,15 @@
 			<ul class="status-grid">
 				<li>
 					<span class="label">Phase</span>
-					<span><span class="pill pill-info">Build</span> The runtime control spine is built <strong>model-free</strong>: <code>&lt;CelstateLivingButton&gt;</code> and <code>&lt;CelstateLivingSlider&gt;</code> ship as agent-installable bundles (parts + manifest + README + QA) over <code>@celstate/living-ui-runtime</code>. The §3.0 behaviour invariants — real press compression (<code>κ_press = 0.92 &lt; 1</code>, the fix for the §3.9 <code>0.998</code> failure), value-exact thumb, hold/cancel/release, deterministic theming, and the typed manifest contract — are proven by machine test. What remains is human/device evidence: the 2AFC aliveness study and on-device fps/memory.</span>
+					<span><span class="pill pill-info">Build + first generation evidence</span> The runtime control spine is built model-free and hardened: <code>&lt;CelstateLivingButton&gt;</code> and <code>&lt;CelstateLivingSlider&gt;</code> ship as agent-installable bundles over <code>@celstate/living-ui-runtime</code>. The §3.0 behaviour invariants (real press compression <code>κ_press = 0.92 &lt; 1</code>, value-exact thumb, hold/cancel/release, deterministic theming, the typed manifest contract) are machine-proven and <strong>measured on a real GPU surface</strong> via the web-runtime harness (≈60&nbsp;fps, <code>κ_press = 0.92</code> observed, 0&nbsp;px thumb error).</span>
+				</li>
+				<li>
+					<span class="label">Generation evidence</span>
+					<span><span class="pill pill-pass">G-gate decomposition — first positive</span> The skin-layer probe (2026-06-15, Gemini&nbsp;3 Pro Image, prod difference-matte; §3.10) generated isolated transparent <strong>skin layers</strong> — foliage, seed-pod, soft bloom — that matted <strong>clean, isolated, at 0&nbsp;px white↔black registration</strong>, premium quality, on first drafts. The vision's central unknown — can generation decompose the rig's organic slots? — has its first strong yes.</span>
 				</li>
 				<li>
 					<span class="label">Core bet</span>
-					<span>AI generates <strong>transparent parts and skins</strong>; Celstate generates the <strong>typed manifest + React&nbsp;Native component + runtime motion</strong>. Sprite sheets remain a format for bounded loops and effects, not the primary abstraction for controls.</span>
+					<span>Generation owns the <strong>organic / decorative transparent layers</strong> (foliage, accents, ambient, blooms — proven viable). The runtime owns <strong>all behaviour</strong> and the <strong>structural chrome</strong> (button face, rail, thumb — simple gradient shapes themed by tokens, §9.5). The button-face matte refusing to isolate (§3.10) confirms the split: do not generate flat structural elements.</span>
 				</li>
 				<li>
 					<span class="label">Platform</span>
@@ -202,11 +206,11 @@
 				</li>
 				<li>
 					<span class="label">Key unknown</span>
-					<span><strong>Not whether it feels alive</strong> — a hand-rigged control beating static is high-confidence and model-free. The real unknowns are <strong>(1) reliable layer decomposition</strong> from generation, <strong>(2) theming / host-app fit</strong>, and <strong>(3) cross-component art-direction coherence</strong> across a kit. Alpha and tactile feel are no longer the central risks.</span>
+					<span>No longer "feels alive" (model-free, high-confidence) <em>or</em> "can generation decompose at all" (first positive, §3.10). The live unknowns narrow to: <strong>(1) black-pass / matte reliability at scale</strong> (≈1/4 raw misses — prod background-purity validation + retry must lift it to ≥&nbsp;4/5), <strong>(2) theming / host-fit</strong> and <strong>(3) kit coherence</strong>, and the human <strong>F-gate</strong> — does living actually beat static with real viewers.</span>
 				</li>
 				<li>
 					<span class="label">Next decision</span>
-					<span>Run the 2AFC aliveness test (§9.3) and the on-device C-gate on the new <a href="../../bundles/expo-harness/README.md">Expo harness</a> — the hand-rigged controls now exist and clear every machine gate, so the open question is whether they beat static with real viewers. Only once they do do we wire generation in as a constrained skinner (Phase&nbsp;G). Feel is the spine; generation is the feeder.</span>
+					<span><strong>Close the loop:</strong> wire generated matted layers into the rig (replace the hand-authored stand-in) so the real product is visible — generated transparent art skinning a runtime-owned control. Then harden black-pass reliability through the prod pipeline (§3.10) and run the <strong>F-gate 2AFC</strong> (§9.3) on the <a href="../../bundles/expo-harness/README.md">Expo harness</a>.</span>
 				</li>
 			</ul>
 		</section>
@@ -423,6 +427,35 @@ Inference:
   Path A can be probed for bounded ambient/effect loops.
   Path A is not a high-confidence source for structured controls.
   Structured controls must route to runtime-owned Path B/C semantics.</code></pre>
+
+			<h3>3.10 Skin-layer decomposition — the positive result (2026-06-15)</h3>
+			<p>§3.9 answered the <em>motion</em> question (no). This probe answers the half the whole vision rests on: can generation produce the rig's still <strong>skin layers</strong> as clean, isolated, transparent decompositions? It reuses prod auth and the white/black difference-matte, drives Gemini&nbsp;3 Pro Image @ 1K, and prompts <strong>one isolated subject per slot</strong> (white pass, then black img2img). Harness: <code>scripts/living-ui/g-gate-skin-probe.ts</code>.</p>
+			<table>
+				<thead><tr><th>Slot</th><th>White↔black drift</th><th>Isolation</th><th>Result</th></tr></thead>
+				<tbody>
+					<tr><td>Foliage sprig (×4)</td><td class="num">0 px</td><td>border 100% transparent</td><td><span class="pill pill-pass">clean</span> Premium first-draft; 3/4 clean (see reliability below).</td></tr>
+					<tr><td>Glowing seed-pod</td><td class="num">0 px</td><td>100%</td><td><span class="pill pill-pass">clean</span> Premium, isolated.</td></tr>
+					<tr><td>Soft light-bloom <em>(§3.9 "soft corner case")</em></td><td class="num">0 px</td><td>100%</td><td><span class="pill pill-pass">clean</span> Glow matted with correct <em>partial</em> alpha.</td></tr>
+					<tr><td>Button face <em>(structural)</em></td><td>—</td><td>0% (opaque)</td><td><span class="pill pill-info">runtime</span> Art good; matte found no transparency → belongs to the runtime, not generation.</td></tr>
+				</tbody>
+			</table>
+			<pre class="math"><code>Capability answer (skin layers):
+  decomposition(organic)    = pass    # foliage / seed / bloom isolate cleanly, premium
+  registration(white↔black) = pass    # 0 px drift on every clean layer
+  soft-edge matte           = pass    # bloom glow matted with partial alpha
+  reliability(raw)          ≈ 3/4     # misses are black-pass background failures, not art
+  structural chrome         = n/a     # a flat button face won't isolate → runtime draws it
+
+Inference:
+  Generation decomposes the rig's ORGANIC/DECORATIVE slots cleanly and premium.
+  The matte's failure mode is the BLACK PASS — a non-black background yields an opaque
+    matte (the ART was perfect); caught by background-purity validation
+    (config.blackBgMaxMean) + retry, which the bare probe skipped. NOT an art failure.
+  Structural chrome (face, rail, thumb) stays runtime-drawn + token-themed (§9.5).</code></pre>
+			<div class="callout">
+				<strong>This is the G-gate "decomposition" row's first real measurement — and it passed.</strong>
+				The unknown that had us weighing abandonment ("can the model actually produce decomposable transparent art?") now has a strong positive answer for the layers that matter. What's left is reliability engineering (black-pass purity + retry), theming/coherence, and the human F-gate — not a capability cliff.
+			</div>
 		</section>
 
 		<section id="why-rn">
@@ -596,7 +629,8 @@ Fail ⇒ the vision is not ready; park the motion bet before any generation spen
   abstraction         one rig/runtime shape spans control + ambient, no bespoke rebuild</code></pre>
 
 			<h3>Phase G — Generation as constrained skinner (can it feed the proven rig?)</h3>
-			<p>Runs only after F/P prove the rig and the feel. Generation fills <em>defined slots</em> in an existing rig (skins, palettes, variants); it never owns behaviour and never decomposes an arbitrary control unaided.</p>
+			<p>Generation fills <em>defined slots</em> in an existing rig (skins, palettes, variants); it never owns behaviour and never decomposes an arbitrary control unaided.</p>
+			<p><strong>Status (2026-06-15):</strong> the <em>decomposition</em> row was pulled forward as a standalone probe (§3.10), ahead of the F-gate, to de-risk the central capability question directly — and it returned a strong positive for organic slots (0&nbsp;px registration, premium first-drafts). What remains of Phase&nbsp;G: lift black-pass reliability to ≥&nbsp;4/5, then theming and kit coherence.</p>
 			<ul>
 				<li>For controls, generate the rig's slot art to a fixed spec — body skin, rail, thumb, foliage front/back, particles, masks — not free-form. Do not ask the model to own press/drag semantics.</li>
 				<li>For bounded effects (Path A), prompt an <code>R×C</code> sheet; sweep <code>(R,C)</code> from inside the coherent-cell budget (~6–18) outward. <strong>First verify the requested size is honoured</strong> — Flash 3.1 may silently return ~1K (§3.8); fall back to 3.0 Pro Image if so.</li>
@@ -703,13 +737,15 @@ guardrail  ⇔ no rise in self-reported distraction / discomfort vs static</code
 		<section id="scope">
 			<h2>10. Out of Scope (Explicit)</h2>
 			<ul>
-				<li><strong>Soft volumetrics</strong> — smoke, glow, mist, fine hair. The corner case (<a href="../archive/transparent-animation/TRANSPARENT-ANIMATION-RD-SPIKE.md">archive §0.1</a>); not an MVP requirement.</li>
+				<li><strong>Generating structural control chrome.</strong> The button face, slider rail, and thumb are flat gradient shapes — the difference-matte can't isolate a frame-filling flat element (§3.10), and theme tokens reskin them for free. Draw them in the runtime; spend generation only on organic / decorative layers.</li>
+				<li><strong>Over-investing in hand-authored art.</strong> Hand-made art is the F-gate <em>stunt double</em> — built "good enough to test feel," then replaced. Polishing it past that bar is wasted motion; the shippable art is generated (§3.10).</li>
+				<li><strong>Generated sprite sheets owning UI behaviour</strong> (press, drag, toggle, cancel). Proven unreliable (§3.9, <code>κ_press = 0.998</code>); behaviour is runtime-owned, always (§6, Path&nbsp;C/B). Sheets stay for bounded effects only.</li>
+				<li><strong>Continuous soft volumetrics</strong> — smoke, mist, fine hair (<a href="../archive/transparent-animation/TRANSPARENT-ANIMATION-RD-SPIKE.md">archive §0.1</a>); not an MVP requirement. Note: <em>bounded</em> soft effects (a success bloom) matte cleanly with partial alpha (§3.10) and are in scope via Path&nbsp;A.</li>
 				<li><strong>Transparent video</strong> as a delivery format — cross-platform-hostile, and worse on RN than web.</li>
 				<li><strong>Owning / depending on a commodity generator</strong> (Wan-Alpha, Veo, Runway, …) as the source of defensibility. Use whatever is cheapest to make frames; the moat is the generation→rig pipeline (§2), not any one model.</li>
 				<li><strong>The Alpha Compiler as a primary alpha source.</strong> Kept only as an optional raster edge-refinement pass if ever needed (archive §0.7).</li>
 				<li><strong>Web-first.</strong> We have chosen RN as the focus. Web is a later port, not the proving ground.</li>
 				<li><strong>Arbitrary-framework output.</strong> MVP is allowed to be Expo RN only. Cross-framework generation comes after one runtime has real proof.</li>
-				<li><strong>Prompt-only finished UI behaviour.</strong> We may keep probing it, but it is not the product path after §3.9.</li>
 			</ul>
 		</section>
 
@@ -721,15 +757,15 @@ guardrail  ⇔ no rise in self-reported distraction / discomfort vs static</code
 				<li><strong>Model resolution ceiling — bounded, with a caveat (§3.8).</strong> Both <strong>Gemini 3.1 Flash Image</strong> and <strong>Gemini 3.0 Pro Image</strong> can render a native 4K square (4096² = 16.78&nbsp;MP) on Vertex. Caveat to confirm first: <code>gemini-3.1-flash-image-preview</code> reportedly ignores <code>imageConfig.imageSize</code> and returns ~1K — so reaching 2K/4K may require 3.0 Pro Image until fixed. The live question is no longer the ceiling but how many of those pixels survive as <em>coherent</em> cells (§3.3) — order ~12, not ~784.</li>
 				<li><strong>Coherence on ambient motion.</strong> Does single-sheet generation hold identity across cells well enough that <code>B ≤ B_max</code> without per-frame conditioning? If not, does img2img/reference conditioning between cells fix it, or do we move to Paths B/C?</li>
 				<li><strong>Loop authoring.</strong> Can we reliably prompt cyclic motion so <code>S_{N−1} → S_0</code> is seamless, or do we need a synthesis step (ping-pong, cross-fade, learned loop)?</li>
-				<li><strong>Decomposition, theming &amp; kit coherence — promoted to G-gates (§7), no longer open musings.</strong> The three things that actually decide the vision — reliable layer decomposition, theming / host-app fit, and art-direction coherence across a component kit — are now first-class generation gates. They are the real unknowns; "does it feel alive" is not.</li>
+				<li><strong>Layer decomposition — first positive evidence (§3.10), now a reliability question.</strong> Generation isolates the rig's organic slots cleanly at 0&nbsp;px registration. The open part is no longer "can it" but "how reliably": the raw black-pass miss rate (~1/4) must drop under background-purity validation + retry to clear the G-gate's ≥&nbsp;4/5 bar.</li>
+				<li><strong>Theming / host-fit &amp; kit coherence — still open G-gates.</strong> Does the same rig reskin to ≥&nbsp;3 host palettes and read native, and do button + slider + ambient generate as one art-directed world? These, not "does it feel alive," are what remain to decide the vision.</li>
 				<li><strong>File-size budget.</strong> A hi-fidelity multi-frame WebP sheet vs the &lt;200 KB mobile guideline — where does each asset class land?</li>
 				<li><strong>Density ceiling.</strong> How many Skia-atlas instances before the C-gate framerate breaks on a mid-tier Android device?</li>
 				<li><strong>Agent install ceiling.</strong> How much dependency setup and native configuration can a generic coding agent handle without user intervention?</li>
 			</ul>
 			<div class="callout info">
 				<strong>One-line summary for future-us</strong>
-				The hard, valuable problem is no longer "make alpha from video." It is "generate transparent parts and ship agent-installable React&nbsp;Native components whose runtime motion makes UI feel tactile, delightful, and alive." Alpha is solved enough to stop being the central risk.
-			</div>
+				Alpha is solved; decomposition of organic layers is now <em>shown</em> to work (§3.10). The hard, valuable problems left are <strong>generation reliability</strong> (black-pass purity, theming, kit coherence) and the one human gate — <strong>does living actually beat static in the 2AFC</strong>. Feel and "can the model make the art" are no longer the central risks.</div>
 		</section>
 
 		<section id="record">
@@ -743,8 +779,20 @@ guardrail  ⇔ no rise in self-reported distraction / discomfort vs static</code
 						<td>They can be beautiful and matte-clean while failing the UI contract. A button press, slider drag, toggle snap, or cancel gesture is a semantic runtime behaviour.</td>
 					</tr>
 					<tr>
-						<td>Alpha is a strength, not the product.</td>
-						<td>The 2026-06-14 Gemini 3 Pro sheet produced a clean 2K matte with strong registration. The differentiator must move up-stack into installable components and runtime behaviour.</td>
+						<td>Alpha <em>and organic decomposition</em> are strengths, not the product.</td>
+						<td>The 2026-06-14 sheet matted clean; the 2026-06-15 skin probe (§3.10) isolated foliage / seed / soft-bloom layers at 0&nbsp;px registration, premium, first-draft. "Can the model make decomposable transparent art?" is answered yes. The differentiator is up-stack: reliability, theming, coherence, and runtime behaviour.</td>
+					</tr>
+					<tr>
+						<td>Generate organic; draw structural.</td>
+						<td>Generation excels at organic / decorative transparent layers (foliage, accents, blooms). Structural control chrome (button face, rail, thumb) is a flat shape the matte can't isolate (§3.10) and tokens reskin for free — the runtime draws it. Routing art to the wrong half wastes spend and fails the matte.</td>
+					</tr>
+					<tr>
+						<td>An opaque matte is a black-pass failure, not an art failure.</td>
+						<td>~1/4 of raw generations leave a non-black background on the black pass, so the difference-matte sees no difference and returns fully opaque — while the subject art is perfect. Gate with background-purity validation (<code>config.blackBgMaxMean</code>) + retry; never read an opaque matte as "the model can't make the art."</td>
+					</tr>
+					<tr>
+						<td>Hand-authored art is the F-gate stunt double, never the product.</td>
+						<td>Hand art exists only to test whether living motion is preferred at all — build it "good enough to test," then replace it with generated layers (§3.10). Polishing the stand-in past that bar is the easiest way to waste a week.</td>
 					</tr>
 					<tr>
 						<td>Model self-report is not evidence.</td>
@@ -773,20 +821,23 @@ guardrail  ⇔ no rise in self-reported distraction / discomfort vs static</code
 				</tbody>
 			</table>
 			<pre class="math"><code>High-confidence path (ordered to fail cheap):
-  1. prove feel model-free      # hand-rigged control beats static in 2AFC
-  2. generalise the rig         # one runtime shape spans control + ambient
-  3. generation skins the rig   # constrained slots, not free decomposition
-  4. theme + agent-install      # known-solvable engineering, sequenced last
-  + behaviour QA + aliveness test throughout
+  1. build the runtime control spine       # DONE  — κ_press 0.92, value-exact, ~60 fps (proxy)
+  2. generation decomposes organic slots   # DONE  — first evidence §3.10: 0 px reg, premium
+  3. close the loop                         # NEXT  — wire generated layers into the rig
+  4. harden black-pass reliability          # background-purity validation + retry → ≥ 4/5
+  5. F-gate 2AFC                            # does living beat static with real viewers?
+  6. theme + kit coherence + agent-install  # remaining G/C-gates, known-solvable
+  + behaviour QA throughout
 
-Low-confidence path:
-  prompt → finished animated UI control sprite sheet → hope it behaves
-  also wrong: betting the feel on generation, or calling the runtime the moat</code></pre>
+Low-confidence path (do NOT pursue):
+  prompt → finished animated UI control sprite sheet → hope it behaves      (§3.9)
+  generating the structural chrome, betting the feel on generation, calling the runtime the moat
+  polishing hand-authored art past the F-gate stunt double                  (§3.10)</code></pre>
 		</section>
 
 		<footer>
 			<p>
-				Opened 2026-06-13 as the active successor to the video-matting line. Updated 2026-06-14 after the Gemini&nbsp;3 Pro generated-sheet capability test and the agent-facing runtime-bundle decision, then re-sequenced the same day: <strong>prove feel model-free first, treat generation (decomposition / theming / kit coherence) as the real risk, and read the moat as the generation→rig pipeline rather than the runtime alone.</strong> Full prior history and the pivot reasoning: <a href="../archive/transparent-animation/TRANSPARENT-ANIMATION-RD-SPIKE.md">archive record §0</a>. Keep this file decision-shaped; move raw run notes to a chronological appendix as the spike produces evidence.
+				Opened 2026-06-13 as the active successor to the video-matting line. Updated 2026-06-14 after the Gemini&nbsp;3 Pro generated-sheet capability test (§3.9): prove feel model-free first, treat generation as the real risk, read the moat as the generation→rig pipeline. Updated 2026-06-15: the control spine is built, hardened, and measured on a real surface, and the <strong>G-gate skin probe (§3.10) returned the first positive decomposition evidence</strong> — generation cleanly isolates the rig's organic layers. The settled split: <strong>generate organic / decorative art, draw structural chrome in the runtime; the live risk is generation reliability + the human 2AFC, not capability.</strong> Full prior history and pivot reasoning: <a href="../archive/transparent-animation/TRANSPARENT-ANIMATION-RD-SPIKE.md">archive record §0</a>. Keep this file decision-shaped.
 			</p>
 		</footer>
 	</div>

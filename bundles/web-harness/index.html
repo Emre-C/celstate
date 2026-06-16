@@ -6,96 +6,81 @@
     <title>Celstate Living Controls — web runtime harness</title>
     <style>
       :root {
-        --bg: #f5f3ed;
-        --surface: #faf8f4;
-        --border: #e2ded6;
-        --accent: #c2410c;
+        --bg: #f3efe7;
+        --surface: #fbf9f4;
+        --border: #e6e0d5;
         --text: #1c1917;
-        --dim: #78716c;
+        --dim: #8b8378;
       }
       * { box-sizing: border-box; }
       body {
-        margin: 0; background: var(--bg); color: var(--text);
-        font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
-        padding: 40px;
+        margin: 0; background: radial-gradient(120% 90% at 50% 0%, #fbf9f4 0%, var(--bg) 70%);
+        color: var(--text);
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        padding: 44px 32px 64px; min-height: 100vh;
       }
-      h1 { font-size: 22px; margin: 0 0 4px; }
-      .meta { color: var(--dim); font-size: 13px; margin: 0 0 28px; }
+      h1 { font-size: 23px; margin: 0 0 4px; letter-spacing: -0.2px; }
+      .meta { color: var(--dim); font-size: 13px; margin: 0 0 32px; max-width: 720px; line-height: 1.5; }
       #fps {
-        position: fixed; top: 12px; right: 16px; background: var(--text); color: #fff;
-        padding: 4px 10px; border-radius: 6px; font: 600 13px ui-monospace, monospace;
+        position: fixed; top: 14px; right: 18px; background: #1c1917; color: #fff;
+        padding: 5px 11px; border-radius: 7px; font: 600 13px ui-monospace, monospace;
+        box-shadow: 0 6px 18px rgba(28,25,23,0.18);
       }
-      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; max-width: 760px; }
+      .grid { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 26px; max-width: 860px; }
       .panel {
-        background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
-        padding: 28px; display: flex; flex-direction: column; align-items: center;
-        gap: 18px; min-height: 180px; justify-content: center;
+        background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
+        padding: 22px 22px 26px; display: flex; flex-direction: column; gap: 18px;
+        box-shadow: 0 1px 0 rgba(255,255,255,0.7) inset, 0 18px 40px -28px rgba(28,25,23,0.35);
       }
-      .tag { color: var(--dim); font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
-
-      /* Living button + foliage surround */
-      .btn-wrap { position: relative; width: 200px; height: 64px; display: flex; align-items: center; justify-content: center; }
-      #foliageBack { position: absolute; inset: 6px 8px 2px; border-radius: 18px; background: rgba(194,65,12,0.18); }
-      #foliageFront { position: absolute; right: 16px; bottom: 4px; width: 26px; height: 10px; border-radius: 8px; background: rgba(194,65,12,0.30); }
-      #livingBtn, .static-btn {
-        position: relative; min-width: 170px; min-height: 50px; border-radius: 14px;
-        background: var(--accent); color: #fff; border: none; font-size: 16px; font-weight: 600;
-        display: flex; align-items: center; justify-content: center; cursor: pointer;
-        box-shadow: 0 4px 8px rgba(28,25,23,0.18); will-change: transform;
+      .panel.baseline { background: #f7f4ee; }
+      .tag {
+        color: var(--dim); font-size: 11px; letter-spacing: 1.3px; text-transform: uppercase;
+        font-weight: 600;
       }
-
-      /* Slider */
-      .slider { width: 296px; }
-      .rail-area { position: relative; height: 28px; display: flex; align-items: center; cursor: pointer; }
-      .rail { height: 6px; border-radius: 3px; background: var(--border); width: 100%; }
-      #livingFill, .static-fill { position: absolute; height: 6px; border-radius: 3px; background: var(--accent); left: 0; }
-      #livingThumb, .static-thumb {
-        position: absolute; left: 0; width: 28px; height: 28px; border-radius: 14px;
-        background: var(--surface); border: 2px solid var(--accent); will-change: transform;
-        box-shadow: 0 2px 4px rgba(28,25,23,0.2);
+      .tag.live::before {
+        content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+        background: #16a34a; margin-right: 7px; vertical-align: middle;
+        box-shadow: 0 0 0 0 rgba(22,163,74,0.5); animation: pulse 2.4s ease-in-out infinite;
       }
-      .static-thumb { left: 50%; margin-left: -14px; }
-      .static-fill { width: 50%; }
-      .val { color: var(--dim); font: 600 12px ui-monospace, monospace; }
+      @keyframes pulse { 50% { box-shadow: 0 0 0 5px rgba(22,163,74,0); } }
+      .stage { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+      .cap { color: var(--dim); font-size: 12px; }
+      svg { display: block; overflow: visible; }
+      .hint { color: var(--dim); font-size: 12px; text-align: center; margin-top: 2px; }
     </style>
   </head>
   <body>
     <div id="fps">— fps</div>
-    <h1>Celstate Living Controls — web runtime harness</h1>
-    <p class="meta">Renders the real <code>@celstate/living-ui-runtime</code> pure core (buttonTransform / ambientBreath / thumbXForValue). Living vs static, for visible feel and measured frame rate.</p>
+    <h1>Celstate Living Controls</h1>
+    <p class="meta">
+      Hand-authored vector art (<code>@celstate/living-ui-runtime/art</code>) driven by the shared,
+      tested motion core (<code>buttonTransform · springStep · foliageTransform · ambientDrift · pressReaction</code>).
+      The same leaf paths and the same motion run on React&nbsp;Native via react-native-svg. Press the button; drag the
+      slider to grow the vine.
+    </p>
 
     <div class="grid">
       <div class="panel">
-        <span class="tag">Living button</span>
-        <div class="btn-wrap">
-          <div id="foliageBack"></div>
-          <button id="livingBtn">Generate</button>
-          <div id="foliageFront"></div>
+        <span class="tag live">Living</span>
+        <div class="stage">
+          <svg id="btnSvg" viewBox="0 0 360 200" width="360" height="200" aria-label="living button"></svg>
+          <div class="hint">press &amp; hold</div>
         </div>
-      </div>
-      <div class="panel">
-        <span class="tag">Static button</span>
-        <div class="static-btn">Generate</div>
+        <div class="stage">
+          <svg id="sldSvg" viewBox="0 0 360 132" width="360" height="132" aria-label="living slider"></svg>
+          <div class="cap">value <span id="sliderVal">0.50</span> — the vine grows with the value</div>
+        </div>
       </div>
 
-      <div class="panel">
-        <span class="tag">Living slider · <span id="sliderVal" class="val">0.500</span></span>
-        <div class="slider">
-          <div id="livingRail" class="rail-area">
-            <div class="rail"></div>
-            <div id="livingFill"></div>
-            <div id="livingThumb"></div>
-          </div>
+      <div class="panel baseline">
+        <span class="tag">Static · baseline</span>
+        <div class="stage">
+          <svg id="btnStatic" viewBox="0 0 360 200" width="360" height="200" aria-label="static button"></svg>
+          <div class="hint">no motion</div>
         </div>
-      </div>
-      <div class="panel">
-        <span class="tag">Static slider</span>
-        <div class="slider">
-          <div class="rail-area">
-            <div class="rail"></div>
-            <div class="static-fill"></div>
-            <div class="static-thumb"></div>
-          </div>
+        <div class="stage">
+          <svg id="sldStatic" viewBox="0 0 360 132" width="360" height="132" aria-label="static slider"></svg>
+          <div class="cap">value 0.50</div>
         </div>
       </div>
     </div>

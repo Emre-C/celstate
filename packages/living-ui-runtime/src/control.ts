@@ -430,6 +430,74 @@ export function foliageTransform(
   return { translateY: breath.translateY * layer.swayScale, scale: breath.scale };
 }
 
+/**
+ * A drifting mote of life (firefly / pollen / spark): a closed Lissajous path so
+ * the surround is never "still" even at rest. Integer `freqX`/`freqY` keep the
+ * loop seamless (§3.5). `glow` pulses in [0,1] for an alpha/scale that says the
+ * mote is alive, not a static dot. This is the cheap, deterministic micro-motion
+ * that reads as "alive" before any interaction happens.
+ */
+export interface AmbientDriftConfig {
+  readonly periodMs: number;
+  readonly radiusX: number;
+  readonly radiusY: number;
+  /** Integer x-frequency over one loop (keeps the path closed). */
+  readonly freqX: number;
+  /** Integer y-frequency over one loop. */
+  readonly freqY: number;
+  readonly phase?: number;
+}
+
+export const DEFAULT_FIREFLY_DRIFT: AmbientDriftConfig = {
+  periodMs: 5200,
+  radiusX: 22,
+  radiusY: 13,
+  freqX: 1,
+  freqY: 2,
+};
+
+export interface AmbientDriftOutput {
+  readonly x: number;
+  readonly y: number;
+  readonly glow: number;
+}
+
+export function ambientDrift(timeMs: number, config: AmbientDriftConfig = DEFAULT_FIREFLY_DRIFT): AmbientDriftOutput {
+  const period = assertPositive(config.periodMs, "periodMs");
+  const phase = config.phase ?? 0;
+  const theta = 2 * Math.PI * ((timeMs / period + phase) % 1);
+  return {
+    x: Math.sin(theta * config.freqX) * config.radiusX,
+    y: Math.cos(theta * config.freqY) * config.radiusY,
+    glow: 0.5 + 0.5 * Math.sin(theta * config.freqX * 2),
+  };
+}
+
+/**
+ * Press reaction for the living surround. A press is not just the body squashing
+ * — the life around it reacts: foliage recoils inward, a soft light blooms, the
+ * resting breath is briefly suppressed. All derived from the same `pressProgress`
+ * that drives `buttonTransform`, so the reaction is in lockstep with the squash.
+ */
+export interface PressReaction {
+  /** Inward recoil of the foliage, in dp (peaks at full press). */
+  readonly recoilDp: number;
+  /** Opacity of the light bloom behind the body, in [0,1]. */
+  readonly bloom: number;
+  /** Multiplier on the ambient breath amplitude (life holds its breath on press). */
+  readonly breathDamping: number;
+}
+
+export function pressReaction(pressProgress: number): PressReaction {
+  const p = clamp01(pressProgress);
+  return {
+    recoilDp: lerp(0, 4, p),
+    // Bloom rises fast then is strongest near full press (a soft, brief flash).
+    bloom: Math.sin(p * Math.PI * 0.5) * 0.55,
+    breathDamping: lerp(1, 0.35, p),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Theming — manifest theme tokens applied by the runtime (§9.5)
 // ---------------------------------------------------------------------------

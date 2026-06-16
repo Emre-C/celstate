@@ -1,4 +1,5 @@
 export * from "./control.js";
+export * from "./art.js";
 
 export const LIVING_UI_PIPELINE = "celstate_living_ui_runtime_v1" as const;
 
