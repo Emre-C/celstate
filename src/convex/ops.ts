@@ -1,8 +1,13 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api.js";
-import { internalAction, internalMutation, internalQuery } from "./_generated/server.js";
+import { internalAction, internalMutation, internalQuery, type QueryCtx } from "./_generated/server.js";
 import type { Doc } from "./_generated/dataModel.js";
 import { generationStageValidator } from "./lib/validation/validators.js";
+import {
+  buildGenerationInvestigationVerdict,
+  type CriticalPathVerdict,
+  type OpsTimelineEvent,
+} from "../lib/ops/investigation.js";
 import {
   assertOkWebhookResponse,
   buildGenerationAlertRequest,
@@ -12,6 +17,12 @@ import {
   summarizeGenerationOpsEvents,
 } from "./lib/ops.js";
 import { insertGenerationOpsEventRow } from "./lib/generation/generationOpsEvents.js";
+import {
+  criticalPathHealthReportValidator,
+  generationInvestigationReadModelValidator,
+  recentGenerationIncidentsReportValidator,
+  userInvestigationReportValidator,
+} from "./lib/opsInvestigation.js";
 
 function clampHoursWindow(hoursWindow: number | undefined): number {
   if (hoursWindow === undefined || !Number.isFinite(hoursWindow)) {
@@ -112,6 +123,7 @@ export const sendGenerationAlert = internalAction({
       const request = buildGenerationAlertRequest(config, {
         alertType: args.alertType,
         createdAt: generation.createdAt,
+        creditRefunded: generation.creditRefundedAt !== undefined,
         error: args.error,
         generationDurationMs: args.generationDurationMs,
         generationId: String(args.generationId),
@@ -352,3 +364,446 @@ export const getGenerationOpsSummary = internalQuery({
   },
 });
 
+const INVESTIGATION_GENERATION_LIMIT = 100;
+const INVESTIGATION_TIMELINE_LIMIT = 100;
+
+function clampLimit(value: number | undefined, defaultValue: number, maxValue: number): number {
+  if (value === undefined || !Number.isFinite(value)) {
+    return defaultValue;
+  }
+  return Math.min(Math.max(Math.floor(value), 1), maxValue);
+}
+
+function normalizeInvestigationEmail(email: string | undefined): string | undefined {
+  const normalized = email?.trim().toLowerCase();
+  return normalized && normalized.length > 0 ? normalized : undefined;
+}
+
+function toTimelineEvent(event: Doc<"generationOpsEvents">): OpsTimelineEvent {
+  return {
+    attemptDurationMs: event.attemptDurationMs,
+    createdAt: event.createdAt,
+    error: event.error,
+    eventType: event.eventType,
+    generationDurationMs: event.generationDurationMs,
+    retryCount: event.retryCount,
+    severity: event.severity,
+    stage: event.stage,
+    statusMessage: event.statusMessage,
+    totalRetryCount: event.totalRetryCount,
+  };
+}
+
+function latestInternalError(
+  events: readonly Doc<"generationOpsEvents">[],
+  userFacingError: string | undefined,
+): string | undefined {
+  const failureEvent = [...events]
+    .reverse()
+    .find((event) => event.eventType === "generation_failed" && event.error);
+  if (!failureEvent?.error || failureEvent.error === userFacingError) {
+    return undefined;
+  }
+  return failureEvent.error;
+}
+
+function toGenerationSummary(generation: Doc<"generations">) {
+  return {
+    completedAt: generation.completedAt,
+    createdAt: generation.createdAt,
+    creditRefunded: generation.creditRefundedAt !== undefined,
+    failureKind: generation.failureKind,
+    failureStage: generation.failureStage,
+    id: String(generation._id),
+    optimizedStorageIdPresent: generation.optimizedStorageId !== undefined,
+    resultStorageIdPresent: generation.resultStorageId !== undefined,
+    retryCount: generation.retryCount ?? 0,
+    stage: generation.stage,
+    status: generation.status,
+  };
+}
+
+function criticalPathFromVerificationVerdict(
+  verdict: Doc<"verificationRuns">["authVerdict"] | undefined,
+): CriticalPathVerdict {
+  if (!verdict) {
+    return "unknown";
+  }
+  switch (verdict.verdict) {
+    case "PASSED":
+      return "pass";
+    case "FAILED":
+    case "TIMEOUT":
+      return "fail";
+    case "RUNNING":
+    case "PENDING":
+      return "in_flight";
+    case "SKIPPED":
+      return "not_applicable";
+  }
+}
+
+function readDownloadVerdictFromGenerationEvidence(
+  payloadJson: string | undefined,
+  generationVerdict: CriticalPathVerdict,
+): CriticalPathVerdict {
+  if (!payloadJson) {
+    return generationVerdict === "fail" ? "not_applicable" : "unknown";
+  }
+
+  try {
+    const payload = JSON.parse(payloadJson) as {
+      artifactDownloadReachable?: unknown;
+      terminalVerdict?: unknown;
+    };
+    if (payload.artifactDownloadReachable === true) {
+      return "pass";
+    }
+    if (payload.artifactDownloadReachable === false) {
+      return payload.terminalVerdict === "COMPLETE" ? "fail" : "not_applicable";
+    }
+  } catch {
+    return "unknown";
+  }
+
+  return generationVerdict === "fail" ? "not_applicable" : "unknown";
+}
+
+export const getGenerationInvestigation = internalQuery({
+  args: {
+    generationId: v.id("generations"),
+    now: v.number(),
+  },
+  returns: generationInvestigationReadModelValidator,
+  handler: async (ctx, args) => {
+    const generation = await ctx.db.get(args.generationId);
+    if (!generation) {
+      return null;
+    }
+
+    const [user, opsEvents, userGenerations] = await Promise.all([
+      ctx.db.get(generation.userId),
+      ctx.db
+        .query("generationOpsEvents")
+        .withIndex("by_generation", (q) => q.eq("generationId", generation._id))
+        .order("asc")
+        .take(INVESTIGATION_TIMELINE_LIMIT),
+      ctx.db
+        .query("generations")
+        .withIndex("by_user", (q) => q.eq("userId", generation.userId))
+        .order("desc")
+        .take(INVESTIGATION_GENERATION_LIMIT),
+    ]);
+
+    const boundedGenerations = userGenerations.some((row) => row._id === generation._id)
+      ? userGenerations
+      : [...userGenerations, generation];
+    const laterGenerations = boundedGenerations.filter(
+      (row) => row._id !== generation._id && row.createdAt > generation.createdAt,
+    );
+    const resultUrl = generation.resultStorageId
+      ? await ctx.storage.getUrl(generation.resultStorageId)
+      : null;
+    const optimizedUrl = generation.optimizedStorageId
+      ? await ctx.storage.getUrl(generation.optimizedStorageId)
+      : null;
+    const opsTimeline = opsEvents.map(toTimelineEvent);
+
+    const reportBase = {
+      artifacts: {
+        optimizedStorageIdPresent: generation.optimizedStorageId !== undefined,
+        optimizedUrlIssued: optimizedUrl !== null,
+        resultStorageIdPresent: generation.resultStorageId !== undefined,
+        resultUrlIssued: resultUrl !== null,
+      },
+      generation: {
+        completedAt: generation.completedAt,
+        createdAt: generation.createdAt,
+        creditRefunded: generation.creditRefundedAt !== undefined,
+        failureKind: generation.failureKind,
+        failureStage: generation.failureStage,
+        generationTimeMs: generation.generationTimeMs,
+        id: String(generation._id),
+        internalError: latestInternalError(opsEvents, generation.error),
+        retryCount: generation.retryCount ?? 0,
+        stage: generation.stage,
+        status: generation.status,
+        userFacingError: generation.error,
+        userId: String(generation.userId),
+      },
+      opsTimeline,
+      user: {
+        completedGenerations: boundedGenerations.filter((row) => row.status === "complete").length,
+        credits: user?.credits,
+        email: user?.email,
+        failedGenerations: boundedGenerations.filter((row) => row.status === "failed").length,
+        id: String(generation.userId),
+        laterCompletedGenerations: laterGenerations.filter((row) => row.status === "complete").length,
+        laterGenerations: laterGenerations.length,
+        totalGenerations: boundedGenerations.length,
+      },
+    };
+
+    const report = {
+      ...reportBase,
+      verdict: buildGenerationInvestigationVerdict({
+        artifacts: reportBase.artifacts,
+        creditRefunded: reportBase.generation.creditRefunded,
+        createdAt: generation.createdAt,
+        laterCompletedGenerations: reportBase.user.laterCompletedGenerations,
+        laterGenerations: reportBase.user.laterGenerations,
+        now: args.now,
+        opsTimeline,
+        retryCount: reportBase.generation.retryCount,
+        status: generation.status,
+      }),
+    };
+
+    return {
+      artifactUrls: {
+        optimizedUrl: optimizedUrl ?? undefined,
+        resultUrl: resultUrl ?? undefined,
+      },
+      report,
+    };
+  },
+});
+
+export const getUserInvestigation = internalQuery({
+  args: {
+    email: v.optional(v.string()),
+    limit: v.optional(v.number()),
+    now: v.number(),
+    userId: v.optional(v.id("users")),
+  },
+  returns: userInvestigationReportValidator,
+  handler: async (ctx, args) => {
+    const email = normalizeInvestigationEmail(args.email);
+    const user = args.userId
+      ? await ctx.db.get(args.userId)
+      : email
+        ? await ctx.db
+          .query("users")
+          .withIndex("email", (q) => q.eq("email", email))
+          .first()
+        : null;
+
+    if (!user) {
+      return null;
+    }
+
+    const limit = clampLimit(args.limit, 10, 25);
+    const latestGenerations = await ctx.db
+      .query("generations")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .order("desc")
+      .take(limit);
+    const summaries = latestGenerations.map(toGenerationSummary);
+    const completedCount = summaries.filter((generation) => generation.status === "complete").length;
+    const failedCount = summaries.filter((generation) => generation.status === "failed").length;
+    const inFlightCount = summaries.filter((generation) => generation.status === "generating").length;
+    const latestComplete = summaries.find((generation) => generation.status === "complete");
+    const latestFailed = summaries.find((generation) => generation.status === "failed");
+
+    const auth: CriticalPathVerdict =
+      user.clerkUserId || user.tokenIdentifier ? "pass" : "fail";
+    const generation: CriticalPathVerdict =
+      inFlightCount > 0
+        ? "in_flight"
+        : latestComplete
+          ? "pass"
+          : latestFailed
+            ? "fail"
+            : "unknown";
+    const download: CriticalPathVerdict = latestComplete ? "unknown" : "not_applicable";
+    const recommendedAction =
+      auth === "fail"
+        ? "Inspect account provisioning; no Clerk or Convex token binding is present."
+        : generation === "fail"
+          ? "Inspect the latest failed generation for refund and retry evidence."
+          : generation === "unknown"
+            ? "No generation rows are visible for this user yet."
+            : "Inspect a specific generation if artifact downloadability matters.";
+
+    return {
+      authBinding: {
+        clerkUserIdPresent: user.clerkUserId !== undefined,
+        tokenIdentifierPresent: user.tokenIdentifier !== undefined,
+      },
+      latestGenerations: summaries,
+      user: {
+        credits: user.credits,
+        email: user.email,
+        id: String(user._id),
+      },
+      verdict: {
+        auth,
+        download,
+        generation,
+        recommendedAction,
+      },
+      window: {
+        limit,
+        now: args.now,
+      },
+    };
+  },
+});
+
+export const getRecentGenerationIncidents = internalQuery({
+  args: {
+    hoursWindow: v.optional(v.number()),
+    limit: v.optional(v.number()),
+    now: v.number(),
+  },
+  returns: recentGenerationIncidentsReportValidator,
+  handler: async (ctx, args) => {
+    const hoursWindow = clampHoursWindow(args.hoursWindow);
+    const limit = clampLimit(args.limit, 5, 50);
+    const since = args.now - hoursWindow * 60 * 60 * 1000;
+    const eventTypes = ["generation_failed", "generation_stalled", "alert_failed"] as const;
+
+    const eventGroups = await Promise.all(
+      eventTypes.map((eventType) =>
+        ctx.db
+          .query("generationOpsEvents")
+          .withIndex("by_eventType_createdAt", (q) =>
+            q.eq("eventType", eventType).gte("createdAt", since)
+          )
+          .order("desc")
+          .take(limit),
+      ),
+    );
+
+    const incidents = eventGroups
+      .flat()
+      .sort((left, right) => right.createdAt - left.createdAt)
+      .slice(0, limit)
+      .map((event) => ({
+        attemptDurationMs: event.attemptDurationMs,
+        createdAt: event.createdAt,
+        error: event.error,
+        eventType: event.eventType as "generation_failed" | "generation_stalled" | "alert_failed",
+        generationDurationMs: event.generationDurationMs,
+        generationId: String(event.generationId),
+        retryCount: event.retryCount,
+        severity: event.severity,
+        stage: event.stage,
+        statusMessage: event.statusMessage,
+        totalRetryCount: event.totalRetryCount,
+        userEmail: event.userEmail,
+        userId: String(event.userId),
+      }));
+
+    return {
+      incidents,
+      window: {
+        hoursWindow,
+        limit,
+        now: args.now,
+        since,
+      },
+    };
+  },
+});
+
+async function getEvidencePayload(
+  ctx: QueryCtx,
+  evidenceRef: string | undefined,
+): Promise<{ evidenceRef: string; payloadJson?: string } | null> {
+  if (!evidenceRef) {
+    return null;
+  }
+  const row = await ctx.db
+    .query("verificationEvidence")
+    .withIndex("by_evidence_ref", (q) => q.eq("evidenceRef", evidenceRef))
+    .first();
+  return {
+    evidenceRef,
+    payloadJson: row?.payloadJson,
+  };
+}
+
+export const getLatestCriticalPathHealth = internalQuery({
+  args: {
+    now: v.number(),
+  },
+  returns: criticalPathHealthReportValidator,
+  handler: async (ctx, args) => {
+    const triggers = ["POST_DEPLOY", "SCHEDULED"] as const;
+    const latestByTrigger = await Promise.all(
+      triggers.map((trigger) =>
+        ctx.db
+          .query("verificationRuns")
+          .withIndex("by_trigger_startedAt", (q) => q.eq("trigger", trigger))
+          .order("desc")
+          .first(),
+      ),
+    );
+    const latestRun = latestByTrigger
+      .filter((run): run is NonNullable<typeof run> => run !== null)
+      .sort((left, right) => right.startedAt - left.startedAt)[0] ?? null;
+
+    if (!latestRun) {
+      return {
+        evidence: {
+          auth: null,
+          generation: null,
+        },
+        latestRun: null,
+        verdict: {
+          auth: "unknown" as const,
+          download: "unknown" as const,
+          generation: "unknown" as const,
+          recommendedAction: "No production verification run is recorded yet.",
+        },
+      };
+    }
+
+    const [authEvidence, generationEvidence] = await Promise.all([
+      getEvidencePayload(ctx, latestRun.authVerdict?.evidenceRef),
+      getEvidencePayload(ctx, latestRun.generationVerdict?.evidenceRef),
+    ]);
+    const auth = criticalPathFromVerificationVerdict(latestRun.authVerdict);
+    const generation = criticalPathFromVerificationVerdict(latestRun.generationVerdict);
+    const download = readDownloadVerdictFromGenerationEvidence(
+      generationEvidence?.payloadJson,
+      generation,
+    );
+    const stale = args.now - latestRun.startedAt > 24 * 60 * 60 * 1000;
+    const recommendedAction = stale
+      ? "Run production verification; latest evidence is older than 24 hours."
+      : auth === "pass" && generation === "pass" && download === "pass"
+        ? "No action needed; latest critical-path evidence is passing."
+        : "Inspect the failing domain evidence before declaring production healthy.";
+
+    return {
+      evidence: {
+        auth: authEvidence,
+        generation: generationEvidence,
+      },
+      latestRun: {
+        ageMs: args.now - latestRun.startedAt,
+        authVerdict: latestRun.authVerdict,
+        checkoutSessionVerdict: latestRun.checkoutSessionVerdict,
+        deploymentId: latestRun.deploymentId,
+        finishedAt: latestRun.finishedAt,
+        generationVerdict: latestRun.generationVerdict,
+        gitSha: latestRun.gitSha,
+        liveSettlementVerdict: latestRun.liveSettlementVerdict,
+        releaseDecision: latestRun.releaseDecision,
+        runKey: latestRun.runKey,
+        siteUrl: latestRun.siteUrl,
+        startedAt: latestRun.startedAt,
+        trigger: latestRun.trigger,
+        workflowRunId: latestRun.workflowRunId,
+      },
+      verdict: {
+        auth,
+        download,
+        generation,
+        recommendedAction,
+      },
+    };
+  },
+});

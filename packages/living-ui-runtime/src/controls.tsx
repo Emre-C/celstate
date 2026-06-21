@@ -19,10 +19,12 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Image,
   Pressable,
   StyleSheet,
   Text,
   View,
+  type ImageSourcePropType,
   type LayoutChangeEvent,
   type StyleProp,
   type ViewStyle,
@@ -70,6 +72,16 @@ export interface LivingControlTheme {
   readonly text: string;
 }
 
+export interface CelstateLivingButtonSkin {
+  readonly foliageBack?: ImageSourcePropType;
+  readonly foliageFront?: ImageSourcePropType;
+}
+
+export interface CelstateLivingSliderSkin {
+  readonly moss?: ImageSourcePropType;
+  readonly thumb?: ImageSourcePropType;
+}
+
 const DEFAULT_CONTROL_THEME: LivingControlTheme = {
   accent: "#C2410C",
   onAccent: "#FFFFFF",
@@ -105,11 +117,12 @@ export interface CelstateLivingButtonProps {
   readonly loadingLabel?: string;
   readonly accessibilityLabel?: string;
   readonly testID?: string;
+  readonly skin?: CelstateLivingButtonSkin;
   readonly style?: StyleProp<ViewStyle>;
 }
 
 export function CelstateLivingButton(props: CelstateLivingButtonProps) {
-  const { label, onPress, disabled = false, loading = false, theme, loadingLabel, accessibilityLabel, testID, style } =
+  const { label, onPress, disabled = false, loading = false, theme, loadingLabel, accessibilityLabel, testID, skin, style } =
     props;
   const colors = resolveControlTheme(theme);
 
@@ -194,11 +207,15 @@ export function CelstateLivingButton(props: CelstateLivingButtonProps) {
   return h(
     View,
     { style: [styles.buttonContainer, style], testID },
-    h(Animated.View, {
-      key: "foliage-back",
-      pointerEvents: "none",
-      style: [styles.foliageBack, { backgroundColor: withAlpha(colors.accent, 0.18) }, foliageBackStyle],
-    }),
+    h(
+      Animated.View,
+      {
+        key: "foliage-back",
+        pointerEvents: "none",
+        style: [styles.foliageBack, skin?.foliageBack ? null : { backgroundColor: withAlpha(colors.accent, 0.18) }, foliageBackStyle],
+      },
+      skin?.foliageBack ? h(Image, { resizeMode: "contain", source: skin.foliageBack, style: styles.rasterLayerImage }) : null,
+    ),
     h(
       Pressable,
       {
@@ -228,11 +245,15 @@ export function CelstateLivingButton(props: CelstateLivingButtonProps) {
         h(Text, { style: [styles.buttonLabel, { color: colors.onAccent }] }, labelText),
       ),
     ),
-    h(Animated.View, {
-      key: "foliage-front",
-      pointerEvents: "none",
-      style: [styles.foliageFront, { backgroundColor: withAlpha(colors.accent, 0.28) }, foliageFrontStyle],
-    }),
+    h(
+      Animated.View,
+      {
+        key: "foliage-front",
+        pointerEvents: "none",
+        style: [styles.foliageFront, skin?.foliageFront ? null : { backgroundColor: withAlpha(colors.accent, 0.28) }, foliageFrontStyle],
+      },
+      skin?.foliageFront ? h(Image, { resizeMode: "contain", source: skin.foliageFront, style: styles.rasterLayerImage }) : null,
+    ),
   );
 }
 
@@ -249,11 +270,12 @@ export interface CelstateLivingSliderProps {
   readonly disabled?: boolean;
   readonly theme?: LivingThemeTokens;
   readonly testID?: string;
+  readonly skin?: CelstateLivingSliderSkin;
   readonly style?: StyleProp<ViewStyle>;
 }
 
 export function CelstateLivingSlider(props: CelstateLivingSliderProps) {
-  const { value, onValueChange, min = 0, max = 1, step, disabled = false, theme, testID, style } = props;
+  const { value, onValueChange, min = 0, max = 1, step, disabled = false, theme, testID, skin, style } = props;
   const colors = resolveControlTheme(theme);
 
   const [trackWidth, setTrackWidth] = useState(0);
@@ -385,23 +407,31 @@ export function CelstateLivingSlider(props: CelstateLivingSliderProps) {
         { style: styles.sliderTrackArea },
         h(View, { key: "rail", style: [styles.rail, { backgroundColor: colors.border }] }),
         h(Animated.View, { key: "fill", style: [styles.railFill, { backgroundColor: colors.accent }, fillStyle] }),
-        h(Animated.View, {
-          key: "moss",
-          pointerEvents: "none",
-          style: [styles.moss, { backgroundColor: withAlpha(colors.accent, 0.35) }, mossStyle],
-        }),
-        h(Animated.View, {
-          key: "thumb",
-          style: [
-            styles.thumb,
-            { backgroundColor: colors.surface, borderColor: colors.accent },
-            // Focus ring: a brighter, accent-coloured glow on the thumb.
-            focused ? { shadowColor: colors.accent, shadowOpacity: 0.5 } : null,
-            dragging ? styles.thumbDragging : null,
-            focused ? styles.thumbFocused : null,
-            thumbStyle,
-          ],
-        }),
+        h(
+          Animated.View,
+          {
+            key: "moss",
+            pointerEvents: "none",
+            style: [styles.moss, skin?.moss ? null : { backgroundColor: withAlpha(colors.accent, 0.35) }, mossStyle],
+          },
+          skin?.moss ? h(Image, { resizeMode: "stretch", source: skin.moss, style: styles.rasterLayerImage }) : null,
+        ),
+        h(
+          Animated.View,
+          {
+            key: "thumb",
+            style: [
+              styles.thumb,
+              { backgroundColor: colors.surface, borderColor: colors.accent },
+              // Focus ring: a brighter, accent-coloured glow on the thumb.
+              focused ? { shadowColor: colors.accent, shadowOpacity: 0.5 } : null,
+              dragging ? styles.thumbDragging : null,
+              focused ? styles.thumbFocused : null,
+              thumbStyle,
+            ],
+          },
+          skin?.thumb ? h(Image, { resizeMode: "contain", source: skin.thumb, style: styles.thumbSkinImage }) : null,
+        ),
       ),
     ),
   );
@@ -467,6 +497,10 @@ const styles = StyleSheet.create({
   inert: {
     opacity: 0.55,
   },
+  rasterLayerImage: {
+    height: "100%",
+    width: "100%",
+  },
   sliderContainer: {
     justifyContent: "center",
     minHeight: 44,
@@ -509,6 +543,11 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     top: 0,
     width: SLIDER_THUMB_DIAMETER,
+  },
+  thumbSkinImage: {
+    ...StyleSheet.absoluteFillObject,
+    height: "100%",
+    width: "100%",
   },
   thumbDragging: {
     transform: [{ scale: 1.08 }],

@@ -144,7 +144,9 @@ export {
   CelstateLivingButton,
   CelstateLivingSlider,
   type CelstateLivingButtonProps,
+  type CelstateLivingButtonSkin,
   type CelstateLivingSliderProps,
+  type CelstateLivingSliderSkin,
   type LivingControlTheme,
 } from "./controls.js";
 

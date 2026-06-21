@@ -306,7 +306,7 @@ On terminal failure: credits refunded (unless already refunded), `status → fai
 
 ## Observability (cross-reference)
 
-[`observability.md`](./observability.md) — `generationOpsEvents` schema, event-type → producer matrix, `OPS_ALERT_*` webhooks, `scheduleGenerationAlert` → `sendGenerationAlert` / `recordAlertEvent`, `internal.ops.getGenerationOpsSummary` / `internal.ops.getRecentGenerationOpsFeed`, rollup helpers (`summarizeGenerationOpsEvents`). This file stays limited to **pipeline and lifecycle**; durable ops `error` column semantics and alert preconditions are specified there.
+[`observability.md`](./observability.md) — `generationOpsEvents` schema, event-type → producer matrix, `OPS_ALERT_*` webhooks, `scheduleGenerationAlert` → `sendGenerationAlert` / `recordAlertEvent`, `internal.ops.getGenerationOpsSummary`, bounded investigation read models (`getGenerationInvestigation`, `getRecentGenerationIncidents`), and rollup helpers (`summarizeGenerationOpsEvents`). This file stays limited to **pipeline and lifecycle**; durable ops `error` column semantics and alert preconditions are specified there.
 
 **PostHog** — client `posthog-js` captures `generation_started`, `generation_completed`, and `generation_failed` (subscription-driven on the app page); Convex uses `@posthog/convex` for purchase and sign-up server events, not per-stage generation worker events. Inventory and env vars: observability doc.
 

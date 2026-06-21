@@ -63,5 +63,6 @@ describe('auth alerting', () => {
 		expect(body.content).toContain('Path: /api/auth/session');
 		expect(body.content).toContain('Failure count: 3');
 		expect(body.content).toContain('Status: 503');
+		expect(body.content).toContain('Investigate: pnpm ops:investigate health');
 	});
 });

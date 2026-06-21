@@ -13,5 +13,6 @@
 export {
   CelstateLivingButton,
   type CelstateLivingButtonProps,
+  type CelstateLivingButtonSkin,
   type LivingControlTheme,
 } from "@celstate/living-ui-runtime/react-native";

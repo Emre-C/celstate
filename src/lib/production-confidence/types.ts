@@ -91,6 +91,10 @@ export interface GenerationCanaryEvidence {
 	readonly requestAccepted: boolean;
 	readonly terminalVerdict: "COMPLETE" | "FAILED" | "TIMEOUT";
 	readonly artifactPresent: boolean;
+	readonly artifactUrlIssued: boolean;
+	readonly artifactDownloadReachable: boolean;
+	readonly artifactDigestHeaderPresent: boolean;
+	readonly artifactProbeStatus?: number;
 	readonly refundObserved: boolean;
 }
 

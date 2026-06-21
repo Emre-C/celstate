@@ -11,5 +11,6 @@
 export {
   CelstateLivingSlider,
   type CelstateLivingSliderProps,
+  type CelstateLivingSliderSkin,
   type LivingControlTheme,
 } from "@celstate/living-ui-runtime/react-native";

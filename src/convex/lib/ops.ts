@@ -29,6 +29,7 @@ export interface GenerationAlertContext {
 	userId: string;
 	userEmail?: string;
 	stage?: GenerationStage;
+	creditRefunded?: boolean;
 	retryCount?: number;
 	totalRetryCount?: number;
 	statusMessage?: string;
@@ -259,6 +260,10 @@ function buildAlertFacts(context: GenerationAlertContext): string[] {
 		facts.push(`Total retries: ${context.totalRetryCount}`);
 	}
 
+	if (context.creditRefunded !== undefined) {
+		facts.push(`Credit refunded: ${context.creditRefunded ? 'yes' : 'no'}`);
+	}
+
 	const duration = formatDurationMs(context.generationDurationMs);
 	if (duration) {
 		facts.push(`Elapsed: ${duration}`);
@@ -272,6 +277,8 @@ function buildAlertFacts(context: GenerationAlertContext): string[] {
 	if (error) {
 		facts.push(`Error: ${error}`);
 	}
+
+	facts.push(`Investigate: pnpm ops:investigate generation --id ${context.generationId}`);
 
 	return facts;
 }
@@ -292,6 +299,11 @@ function buildSignupAlertFacts(context: SignupAlertContext): string[] {
 	}
 	facts.push(`Provider: ${context.authProvider}`);
 	facts.push(`Starting credits: ${context.initialCredits}`);
+	facts.push(
+		context.userEmail
+			? `Investigate: pnpm ops:investigate user --email ${context.userEmail}`
+			: `Investigate: pnpm ops:investigate user --id ${context.userId}`
+	);
 	return facts;
 }
 
@@ -375,6 +387,8 @@ function buildAuthAlertFacts(context: AuthAlertContext): string[] {
 		facts.push(`Error: ${error}`);
 	}
 
+	facts.push('Investigate: pnpm ops:investigate health');
+
 	return facts;
 }
 
@@ -454,7 +468,8 @@ export function buildGenerationAlertRequest(config: OpsAlertRuntimeConfig, conte
 			title,
 			severity: context.severity,
 			alertType: context.alertType,
-			context
+			context,
+			investigate_command: `pnpm ops:investigate generation --id ${context.generationId}`
 		}
 	});
 }
@@ -502,6 +517,9 @@ export function buildSignupAlertRequest(config: OpsAlertRuntimeConfig, context: 
 			event: 'signup_new',
 			auth_provider: context.authProvider,
 			initial_credits: context.initialCredits,
+			investigate_command: context.userEmail
+				? `pnpm ops:investigate user --email ${context.userEmail}`
+				: `pnpm ops:investigate user --id ${context.userId}`,
 			name: context.name,
 			title: 'Celstate new user signup',
 			user_email: context.userEmail,
@@ -572,7 +590,8 @@ export function buildAuthAlertRequest(config: OpsAlertRuntimeConfig, context: Au
 			title,
 			severity: context.severity,
 			alert_type: context.alertType,
-			context
+			context,
+			investigate_command: 'pnpm ops:investigate health'
 		}
 	});
 }

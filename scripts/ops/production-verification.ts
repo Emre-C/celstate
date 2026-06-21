@@ -167,6 +167,50 @@ async function convexHttp(env: RunnerEnv, path: string, init: RequestInit): Prom
   return fetch(url, { ...init, headers });
 }
 
+interface ArtifactDownloadProbe {
+  readonly digestHeaderPresent: boolean;
+  readonly error?: string;
+  readonly reachable: boolean;
+  readonly status?: number;
+}
+
+async function probeArtifactDownloadUrl(url: string | undefined): Promise<ArtifactDownloadProbe> {
+  if (!url) {
+    return {
+      digestHeaderPresent: false,
+      error: "artifact URL was not issued",
+      reachable: false,
+    };
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const response = await fetch(url, {
+      headers: {
+        accept: "image/*,*/*;q=0.1",
+        range: "bytes=0-0",
+      },
+      method: "GET",
+      signal: controller.signal,
+    });
+    await response.body?.cancel().catch(() => undefined);
+    return {
+      digestHeaderPresent: response.headers.has("digest"),
+      reachable: response.ok,
+      status: response.status,
+    };
+  } catch (e) {
+    return {
+      digestHeaderPresent: false,
+      error: e instanceof Error ? e.message : String(e),
+      reachable: false,
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function record(
   domain: FeatureDomain,
   trigger: VerificationTrigger,
@@ -635,6 +679,7 @@ async function main(): Promise<void> {
     const deadline = Date.now() + GENERATION_POLL_DEADLINE_MS;
     let terminalStatus: "complete" | "failed" | undefined;
     let probeResultStorageId: string | undefined;
+    let probeResultUrl: string | undefined;
     let probeRefundedAt: number | undefined;
     while (Date.now() < deadline) {
       const stRes = await convexHttp(
@@ -648,7 +693,7 @@ async function main(): Promise<void> {
       const body = (await stRes.json()) as {
         status:
           | { status: "generating" }
-          | { status: "complete"; creditRefundedAt?: number; resultStorageId?: string }
+          | { status: "complete"; creditRefundedAt?: number; resultStorageId?: string; resultUrl: string | null }
           | { status: "failed"; creditRefundedAt?: number }
           | null;
       };
@@ -659,6 +704,7 @@ async function main(): Promise<void> {
       if (st.status === "complete") {
         terminalStatus = "complete";
         probeResultStorageId = st.resultStorageId;
+        probeResultUrl = st.resultUrl ?? undefined;
         probeRefundedAt = st.creditRefundedAt;
         break;
       }
@@ -670,16 +716,30 @@ async function main(): Promise<void> {
       await sleep(GENERATION_POLL_INTERVAL_MS);
     }
 
+    const artifactProbe: ArtifactDownloadProbe = terminalStatus === "complete"
+      ? await probeArtifactDownloadUrl(probeResultUrl)
+      : {
+        digestHeaderPresent: false,
+        reachable: false,
+      };
     const genEvidence: GenerationCanaryEvidence = {
+      artifactDigestHeaderPresent: artifactProbe.digestHeaderPresent,
+      artifactDownloadReachable: artifactProbe.reachable,
       requestAccepted: true,
       terminalVerdict: terminalStatus === "complete" ? "COMPLETE" : terminalStatus === "failed" ? "FAILED" : "TIMEOUT",
       artifactPresent: Boolean(probeResultStorageId),
+      ...(artifactProbe.status !== undefined ? { artifactProbeStatus: artifactProbe.status } : {}),
+      artifactUrlIssued: Boolean(probeResultUrl),
       refundObserved: Boolean(probeRefundedAt),
     };
     // Delegate to library classifier — timeout is a runner concern (polling exhausted),
     // terminal states are classified by the library function.
     const terminal: DomainVerdictRecord["verdict"] = terminalStatus
-      ? classifyGenerationOutcome({ status: terminalStatus, resultStorageId: probeResultStorageId })
+      ? classifyGenerationOutcome({
+        status: terminalStatus,
+        artifactDownloadReachable: artifactProbe.reachable,
+        resultStorageId: probeResultStorageId,
+      })
       : "TIMEOUT";
 
     const evidenceRef = createEvidenceRef({ runKey, domain: "GENERATION", startedAt: genStart });
@@ -690,7 +750,16 @@ async function main(): Promise<void> {
       trigger,
       payloadJson: JSON.stringify(genEvidence),
     });
-    generationVerdict = record("GENERATION", trigger, terminal, evidenceRef, genStart);
+    generationVerdict = record(
+      "GENERATION",
+      trigger,
+      terminal,
+      evidenceRef,
+      genStart,
+      terminalStatus === "complete" && !artifactProbe.reachable
+        ? { note: artifactProbe.error ?? `artifact probe returned ${artifactProbe.status ?? "no status"}` }
+        : {},
+    );
   } catch (e) {
     const evidenceRef = createEvidenceRef({ runKey, domain: "GENERATION", startedAt: genStart });
     const msg = e instanceof Error ? e.message : String(e);

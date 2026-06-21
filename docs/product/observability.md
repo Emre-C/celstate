@@ -630,9 +630,30 @@ CATCH → recordAlertEvent(alert_failed, message)
 args: { hoursWindow?: number } // default 24, clamp [1,720]
 returns: { summary, recentCriticalEvents, window }
 
-// ops.getRecentGenerationOpsFeed
-args: { limit?: number } // default 50, clamp [1,200]
-complexity_note: "full collect on by_createdAt + sort — O(N) all ops rows"
+// ops.getGenerationInvestigation
+args: { generationId: Id<"generations">, now: number }
+returns: { report, artifactUrls } | null // no prompt text; URL strings are for CLI probes only
+
+// ops.getUserInvestigation
+args: { email?: string, userId?: Id<"users">, now: number, limit?: number }
+returns: user auth binding + latest bounded generation summaries
+
+// ops.getRecentGenerationIncidents
+args: { now: number, hoursWindow?: number, limit?: number }
+complexity_note: "bounded indexed reads over by_eventType_createdAt for generation_failed, generation_stalled, alert_failed"
+
+// ops.getLatestCriticalPathHealth
+args: { now: number }
+returns: latest production-scoped AUTH, GENERATION, DOWNLOAD verdicts from verificationRuns/evidence
+```
+
+Agent-operated CLI:
+
+```bash
+pnpm ops:investigate health
+pnpm ops:investigate generation --id <generationId>
+pnpm ops:investigate user --email <email>
+pnpm ops:investigate recent --limit 5
 ```
 
 ```yaml
@@ -689,6 +710,7 @@ convex:
   merge_duplicate_users: "src/convex/ops.ts" # mergeDuplicateUsers
   ops_queries_actions: "src/convex/ops.ts"
   ops_pure: "src/convex/lib/ops.ts"
+  ops_investigation_contract: "src/lib/ops/investigation.ts"
   auth_server_logs: "src/hooks.server.ts (Clerk)"
   stripe_webhook_posthog_discord: "src/convex/http.ts"
   posthog_component_wrapper: "src/convex/posthog.ts"
@@ -744,5 +766,5 @@ NEW auth alert field:
   - AuthAlertContext + buildAuthAlertFacts + auth-alerts.ts thresholding constants
 
 Feed scale:
-  - Replace full scan in getRecentGenerationOpsFeed if row count explodes
+  - Keep incident feeds on bounded indexed queries; do not reintroduce full-table ops scans
 ```

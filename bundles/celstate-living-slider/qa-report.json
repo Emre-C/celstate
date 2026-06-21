@@ -14,6 +14,7 @@
       "step_snapping": { "status": "pass", "detail": "snapSliderValue rounds to the step grid and clamps to [min, max]." },
       "theming_reskin_ge_3_palettes": { "status": "pass", "detail": "Filled rail + moss tint deterministically across >= 3 palettes." },
       "manifest_contract_valid": { "status": "pass", "detail": "celstate.manifest.json passes assertLivingControlManifest; motionPath is procedural." },
+      "generated_skin_seam": { "status": "pass", "detail": "Optional `skin` prop accepts raster layers (moss, thumb) as ImageSourcePropType; value geometry remains runtime-owned. Procedural fallback when no skin is provided." },
       "interaction_latency_le_1_frame": { "status": "pass", "detail": "Thumb tracks the finger via a shared value updated in the pan worklet on the UI thread; value reported via runOnJS (on-device confirmation pending)." },
       "accessibility_adjustable": { "status": "pass", "detail": "accessibilityRole=adjustable with increment/decrement accessibilityActions wired through the tested stepSliderValue; focusable with a visible focus ring (the §3.0 focused state of U_slider, operable not just visible)." }
     }

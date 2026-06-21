@@ -33,11 +33,23 @@ import {
   type GeminiImageResult,
 } from "../../src/convex/lib/gemini.js";
 import { differenceMatte } from "../../src/convex/lib/generation/matte.js";
+import {
+  buildRepairInstruction,
+  validateBlackBackground,
+  validateWhiteBackground,
+  type ValidationResult,
+} from "../../src/convex/lib/validation/validation.js";
 
 const FALLBACK_MODELS = ["gemini-3-pro-image-preview", "gemini-3-pro-image"];
 const ALPHA_FG = 24; // alpha above this counts as foreground
 const SILHOUETTE_T = 40; // luminance distance from pure bg to count as ink
 const SHIFT_RANGE = 3; // px search window for white<->black registration
+
+interface RgbaImage {
+  pixels: Uint8ClampedArray<ArrayBufferLike>;
+  width: number;
+  height: number;
+}
 
 // ---------------------------------------------------------------------------
 // slot prompts — each is one ISOLATED transparent layer (not a scene, not a sheet)
@@ -118,6 +130,7 @@ function parseArgs(argv: string[]) {
   return {
     slots: (get("--slots") ?? "foliage").split(",").map((s) => s.trim()).filter(Boolean),
     repeats: Number(get("--repeats") ?? 1),
+    attempts: Number(get("--attempts") ?? 2),
     size: get("--size") ?? "1K",
     aspect: get("--aspect") ?? "1:1",
     model: get("--model"),
@@ -149,13 +162,13 @@ function ensureProject() {
   }
 }
 
-async function decodeRGBA(image: GeminiImageResult) {
+async function decodeRGBA(image: GeminiImageResult): Promise<RgbaImage> {
   const buf = Buffer.from(image.imageBase64, "base64");
   const { data, info } = await sharp(buf).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   return { pixels: new Uint8ClampedArray(data), width: info.width, height: info.height };
 }
 
-async function resizeRGBA(img: { pixels: Uint8ClampedArray; width: number; height: number }, w: number, h: number) {
+async function resizeRGBA(img: RgbaImage, w: number, h: number): Promise<RgbaImage> {
   if (img.width === w && img.height === h) {
     return img;
   }
@@ -280,41 +293,74 @@ async function main() {
     for (let rep = 0; rep < args.repeats; rep++) {
       const tag = `${slotId}-${rep + 1}`;
       try {
-        // Each pass is a FRESH chat so the white pass isn't biased; the black pass
-        // is img2img anchored on the white image (the §3.1 registration path).
-        const wSession = client.chats.create({
-          model: models[0],
-          config: { responseModalities: ["IMAGE"], imageConfig: { aspectRatio: args.aspect, imageSize: args.size } },
-        });
-        const wResp = await wSession.sendMessage({ message: spec.white });
-        calls++;
-        const white = extractImage(wResp, tag, "white");
+        const maxAttempts = Math.max(1, Number.isFinite(args.attempts) ? Math.floor(args.attempts) : 1);
+        let session: ReturnType<typeof client.chats.create> | undefined;
+        let white: GeminiImageResult | undefined;
+        let black: GeminiImageResult | undefined;
+        let wImg: RgbaImage | undefined;
+        let bImg: RgbaImage | undefined;
+        let whiteValidation: ValidationResult | undefined;
+        let blackValidation: ValidationResult | undefined;
+        let whiteAttempts = 0;
+        let blackAttempts = 0;
+        let whiteRepair: string | undefined;
 
-        const bResp = await wSession.sendMessage({
-          message: [
-            { inlineData: { data: white.imageBase64, mimeType: white.mimeType } },
-            { text: spec.black },
-          ],
-        });
-        calls++;
-        const black = extractImage(bResp, tag, "black");
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+          whiteAttempts = attempt;
+          session = client.chats.create({
+            model: models[0],
+            config: { responseModalities: ["IMAGE"], imageConfig: { aspectRatio: args.aspect, imageSize: args.size } },
+          });
+          const wResp = await session.sendMessage({ message: whiteRepair ? `${spec.white}\n\n${whiteRepair}` : spec.white });
+          calls++;
+          white = extractImage(wResp, tag, "white");
+          wImg = await decodeRGBA(white);
+          whiteValidation = validateWhiteBackground(wImg.pixels, wImg.width, wImg.height);
+          if (whiteValidation.valid) {
+            break;
+          }
+          whiteRepair = buildRepairInstruction("white_background", whiteValidation);
+        }
 
-        const wImg = await decodeRGBA(white);
-        let bImg = await decodeRGBA(black);
-        bImg = await resizeRGBA(bImg, wImg.width, wImg.height);
+        if (!session || !white || !wImg || !whiteValidation?.valid) {
+          throw new Error(`white validation failed: ${whiteValidation?.reason ?? "unknown"}`);
+        }
+
+        let blackRepair: string | undefined;
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+          blackAttempts = attempt;
+          const bResp = await session.sendMessage({
+            message: [
+              { inlineData: { data: white.imageBase64, mimeType: white.mimeType } },
+              { text: blackRepair ? `${spec.black}\n\n${blackRepair}` : spec.black },
+            ],
+          });
+          calls++;
+          black = extractImage(bResp, tag, "black");
+          bImg = await resizeRGBA(await decodeRGBA(black), wImg.width, wImg.height);
+          blackValidation = validateBlackBackground(bImg.pixels, bImg.width, bImg.height);
+          if (blackValidation.valid) {
+            break;
+          }
+          blackRepair = buildRepairInstruction("black_background", blackValidation);
+        }
+
+        if (!black || !bImg || !blackValidation?.valid) {
+          throw new Error(`black validation failed: ${blackValidation?.reason ?? "unknown"}`);
+        }
 
         const reg = registrationDrift(wImg.pixels, bImg.pixels, wImg.width, wImg.height);
         const matte = differenceMatte({ whiteBg: wImg.pixels, blackBg: bImg.pixels, width: wImg.width, height: wImg.height });
         const stats = analyzeMatte(matte.pixels, matte.width, matte.height);
-
-        // visible artifacts
+        const transparentPng = await pngFromRGBA(matte.pixels, matte.width, matte.height);
         const ck = await checker(matte.width, matte.height);
         const matteOverChecker = await sharp(ck)
-          .composite([{ input: await pngFromRGBA(matte.pixels, matte.width, matte.height), blend: "over" }])
+          .composite([{ input: transparentPng, blend: "over" }])
           .png()
           .toBuffer();
         await writeFile(path.join(outDir, `${tag}-white.png`), Buffer.from(white.imageBase64, "base64"));
         await writeFile(path.join(outDir, `${tag}-black.png`), Buffer.from(black.imageBase64, "base64"));
+        await writeFile(path.join(outDir, `${tag}-transparent.png`), transparentPng);
         await writeFile(path.join(outDir, `${tag}-matte.png`), matteOverChecker);
 
         const row = {
@@ -322,12 +368,19 @@ async function main() {
           rep: rep + 1,
           size: `${wImg.width}x${wImg.height}`,
           sizeHonored: wImg.width >= 960,
+          whitePassAttempts: whiteAttempts,
+          blackPassAttempts: blackAttempts,
+          whiteBackgroundValid: whiteValidation.valid,
+          blackBackgroundValid: blackValidation.valid,
+          whiteBackground: whiteValidation,
+          blackBackground: blackValidation,
+          transparentPng: `${tag}-transparent.png`,
           registrationDriftPx: reg.driftPx,
           registrationMismatchRate: reg.mismatchRate,
           ...stats,
         };
         results.push(row);
-        console.log(`  ✓ ${tag}: ${row.size} drift=${reg.driftPx}px isolation=${stats.borderTransparencyPct}% coverage=${stats.alphaCoveragePct}%`);
+        console.log(`  ✓ ${tag}: ${row.size} drift=${reg.driftPx}px isolation=${stats.borderTransparencyPct}% coverage=${stats.alphaCoveragePct}% attempts=${whiteAttempts}+${blackAttempts}`);
       } catch (err) {
         console.error(`  ✗ ${tag}: ${String(err).slice(0, 160)}`);
         results.push({ slot: slotId, rep: rep + 1, error: String(err).slice(0, 200) });

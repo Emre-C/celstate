@@ -108,8 +108,8 @@ CF21  cleanupStaleGenerations emits a warning path before timeout and a failure-
 ### 3.5 Production verification runner and persistence
 
 ```text
-CF25  scripts/production-verification.ts exercises AUTH, GENERATION, CHECKOUT_SESSION, and LIVE_SETTLEMENT (scheduled only)
-      canaries against a live production deployment, collecting typed evidence and ingesting results to Convex.
+CF25  scripts/production-verification.ts exercises AUTH, GENERATION, DOWNLOAD, CHECKOUT_SESSION, and LIVE_SETTLEMENT
+      (scheduled only) canaries against a live production deployment, collecting typed evidence and ingesting results to Convex.
 CF26  .github/workflows/production-verification.yml triggers on deployment_status (production success), workflow_call,
       workflow_dispatch, and weekly schedule; the runner exits non-zero on DENY.
 CF27  src/convex/verification.ts implements ingestVerificationRun (writing to verificationRuns and verificationEvidence)
@@ -123,14 +123,16 @@ CF30  Protected-route auth proof (AuthCanaryEvidence.protectedRouteReachable) is
       and SCHEDULED triggers; opt-out requires explicit AUTH_CANARY_REQUIRE_PROTECTED_ROUTE=false.
 CF31  src/convex/creditPackPurchaseActions.ts provides automated Stripe refund for destructive settlement canaries,
       invoked by the runner via /verification/canary/refund-settlement.
+CF32  internal.ops.getLatestCriticalPathHealth surfaces the latest persisted AUTH, GENERATION, and DOWNLOAD evidence
+      for agent-operated ops investigations.
 ```
 
 ### 3.6 Evidence-class partition
 
 ```text
-CF32  docs/product/observability.md defines credits_purchase_completed as a server-side authoritative revenue signal.
-CF33  docs/product/observability.md defines generation_completed and generation_failed as client-captured analytics signals.
-CF34  Browser-captured analytics are explicitly non-authoritative for revenue correctness.
+CF33  docs/product/observability.md defines credits_purchase_completed as a server-side authoritative revenue signal.
+CF34  docs/product/observability.md defines generation_completed and generation_failed as client-captured analytics signals.
+CF35  Browser-captured analytics are explicitly non-authoritative for revenue correctness.
 ```
 
 ---
@@ -248,6 +250,10 @@ export interface GenerationCanaryEvidence {
   readonly requestAccepted: boolean;
   readonly terminalVerdict: 'COMPLETE' | 'FAILED' | 'TIMEOUT';
   readonly artifactPresent: boolean;
+  readonly artifactUrlIssued: boolean;
+  readonly artifactDownloadReachable: boolean;
+  readonly artifactDigestHeaderPresent: boolean;
+  readonly artifactProbeStatus?: number;
   readonly refundObserved: boolean;
 }
 
@@ -293,6 +299,7 @@ export interface ExistingGenerationModel {
   readonly stage?: ExistingGenerationStage;
   readonly creditRefundedAt?: number;
   readonly resultStorageId?: string;
+  readonly resultUrl?: string | null;
 }
 ```
 
@@ -832,7 +839,7 @@ I10  COMPLETE — Canary principal provisioning: runner auto-provisions required
 G1   CLOSED — production-verification.yml fires on deployment_status for production deployments; runner computes
      and persists a full verdict vector over {AUTH, GENERATION, CHECKOUT_SESSION, LIVE_SETTLEMENT}.
 G2   CLOSED — Auth canary proves protectedRouteReachable; required by default for POST_DEPLOY/SCHEDULED (CF30).
-G3   CLOSED — Production generation canary exercises start-generation → poll → terminal status (CF25).
+G3   CLOSED — Production generation canary exercises start-generation → poll → terminal status → storage URL issuance → ranged download probe (CF25).
 G4   CLOSED — Production checkout-session canary exercises start-checkout → poll → ready with hosted URL (CF25).
 G5   CLOSED — Scheduled live-settlement canary exercises full pay → settle → refund lifecycle (CF25).
 G6   CLOSED — ingestVerificationRun persists verificationRuns and verificationEvidence on every runner invocation (CF27).
@@ -862,7 +869,7 @@ BO2  DONE — Canary principals: CANARY_PRINCIPAL_CONFIG + canaryPrincipals tabl
      runner auto-provisions required principals before probes via /verification/canary/upsert-principal.
 BO3  DONE — Authenticated auth canary: Playwright probes protectedRouteReachable with pre-loaded storage state;
      required by default for POST_DEPLOY/SCHEDULED triggers.
-BO4  DONE — Production generation canary: runner exercises start-generation → poll → terminal status with pre-funded principal.
+BO4  DONE — Production generation canary: runner exercises start-generation → poll → terminal status → storage URL issuance → ranged download probe with pre-funded principal.
 BO5  DONE — Production checkout-session canary: runner exercises start-checkout → poll → ready with hosted URL.
 BO6  DONE — Scheduled live-settlement canary: runner exercises full pay → settle → grant observation → refund lifecycle.
 BO7  DONE — Deploy gate: evaluateReleaseDecision invoked by runner; runner exits non-zero on DENY;

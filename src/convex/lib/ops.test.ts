@@ -32,6 +32,7 @@ describe('ops helpers', () => {
 			{
 				alertType: 'generation_failed',
 				createdAt: 1,
+				creditRefunded: true,
 				error: 'Vertex quota exhausted',
 				generationDurationMs: 83_000,
 				generationId: 'gen_123',
@@ -53,6 +54,8 @@ describe('ops helpers', () => {
 		expect(request.headers['content-type']).toBe('application/json');
 		expect(body.text).toContain('CRITICAL: Celstate generation failed');
 		expect(body.text).toContain('founder@celstate.com');
+		expect(body.text).toContain('Credit refunded: yes');
+		expect(body.text).toContain('Investigate: pnpm ops:investigate generation --id gen_123');
 		expect(body.text).toContain('Vertex quota exhausted');
 		expect(body.blocks[0]?.type).toBe('header');
 	});
@@ -106,6 +109,7 @@ describe('ops helpers', () => {
 			event: 'signup_new',
 			auth_provider: 'google',
 			initial_credits: 3,
+			investigate_command: 'pnpm ops:investigate user --email ada@example.com',
 			name: 'Ada',
 			title: 'Celstate new user signup',
 			user_email: 'ada@example.com',
@@ -138,6 +142,7 @@ describe('ops helpers', () => {
 			title: 'Celstate auth endpoint returned repeated 5xx responses',
 			severity: 'critical',
 			alert_type: 'auth_endpoint_5xx',
+			investigate_command: 'pnpm ops:investigate health',
 			context: {
 				alertType: 'auth_endpoint_5xx',
 				severity: 'critical',

@@ -33,6 +33,7 @@ import type * as lib_generation_matte from "../lib/generation/matte.js";
 import type * as lib_generation_optimize from "../lib/generation/optimize.js";
 import type * as lib_generation_prompts from "../lib/generation/prompts.js";
 import type * as lib_ops from "../lib/ops.js";
+import type * as lib_opsInvestigation from "../lib/opsInvestigation.js";
 import type * as lib_qa_qaUserResetSecret from "../lib/qa/qaUserResetSecret.js";
 import type * as lib_qa_transparentQa from "../lib/qa/transparentQa.js";
 import type * as lib_referenceStorageIds from "../lib/referenceStorageIds.js";
@@ -88,6 +89,7 @@ declare const fullApi: ApiFromModules<{
   "lib/generation/optimize": typeof lib_generation_optimize;
   "lib/generation/prompts": typeof lib_generation_prompts;
   "lib/ops": typeof lib_ops;
+  "lib/opsInvestigation": typeof lib_opsInvestigation;
   "lib/qa/qaUserResetSecret": typeof lib_qa_qaUserResetSecret;
   "lib/qa/transparentQa": typeof lib_qa_transparentQa;
   "lib/referenceStorageIds": typeof lib_referenceStorageIds;

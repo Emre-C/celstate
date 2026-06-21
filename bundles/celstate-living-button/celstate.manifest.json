@@ -23,7 +23,8 @@
     { "name": "theme", "type": "Record<string, string>", "required": false, "description": "Host palette tokens; tintable foliage layers multiply the accent token." },
     { "name": "loadingLabel", "type": "string", "required": false, "description": "Label shown while loading (defaults to \"Working…\")." },
     { "name": "accessibilityLabel", "type": "string", "required": false, "description": "Overrides the spoken label (defaults to `label`)." },
-    { "name": "testID", "type": "string", "required": false, "description": "Test hook; the inner Pressable is `${testID}-pressable`." }
+    { "name": "testID", "type": "string", "required": false, "description": "Test hook; the inner Pressable is `${testID}-pressable`." },
+    { "name": "skin", "type": "{ foliageBack?: ImageSourcePropType; foliageFront?: ImageSourcePropType }", "required": false, "description": "Optional generated transparent raster layers; behavior remains runtime-owned." }
   ],
   "layers": [
     { "id": "body", "role": "structural", "source": "procedural" },

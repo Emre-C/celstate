@@ -63,6 +63,33 @@ tintable layers (foliage) multiply the `accent` token. No model call at install.
   theme={{ accent: '#166534', onAccent: '#FFFFFF', surface: '#F0FDF4', border: '#DCFCE7', text: '#14532D' }} />
 ```
 
+### Generated skin layers (Phase G seam)
+
+The `skin` prop accepts optional transparent raster images for `foliageBack` and
+`foliageFront`. When provided, these replace the procedural foliage placeholders;
+the runtime's ambient breathing motion and press behavior remain unchanged.
+
+```tsx
+import { CelstateLivingButton, type CelstateLivingButtonSkin } from './components/celstate-living-button/CelstateLivingButton';
+
+const skin: CelstateLivingButtonSkin = {
+  foliageBack: require('./assets/foliage-back.png'),
+  foliageFront: require('./assets/foliage-front.png'),
+};
+
+<CelstateLivingButton label="Generate" onPress={handleGenerate} skin={skin} />
+```
+
+Generate transparent layers with the G-gate skin probe:
+
+```sh
+pnpm exec tsx scripts/living-ui/g-gate-skin-probe.ts --slots foliage --repeats 1 --attempts 2 --size 1K
+```
+
+The probe validates white/black background purity (prod validators), retries with
+repair instructions, applies the difference matte, and writes reusable
+`*-transparent.png` files plus a `report.json` with G-gate measures.
+
 ### Accessibility
 
 `accessibilityRole="button"`, `accessibilityState={{ disabled, busy: loading }}`,

@@ -39,6 +39,11 @@ describe("agent-installable bundle contract (§5.1)", () => {
         expect(["procedural_still", "rigged_deformation"]).toContain(manifest.motionPath);
       });
 
+      it("exposes the generated-skin seam without making generation own behavior", () => {
+        expect(manifest.props.some((prop) => prop.name === "skin")).toBe(true);
+        expect(manifest.layers.every((layer) => layer.source === "procedural" || layer.source === "raster")).toBe(true);
+      });
+
       it("reports every machine-verified gate as passing", () => {
         const gates = Object.entries(qa.machineVerified.gates);
         expect(gates.length).toBeGreaterThan(0);

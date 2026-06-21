@@ -357,6 +357,7 @@ export const getGenerationStatusForCanaryRunner = internalQuery({
       status: v.literal("complete"),
       creditRefundedAt: v.optional(v.number()),
       resultStorageId: v.optional(v.id("_storage")),
+      resultUrl: v.union(v.string(), v.null()),
     }),
     v.object({
       status: v.literal("failed"),
@@ -381,10 +382,14 @@ export const getGenerationStatusForCanaryRunner = internalQuery({
       return { status: "generating" as const, stage: gen.stage };
     }
     if (gen.status === "complete") {
+      const resultUrl = gen.resultStorageId
+        ? await ctx.storage.getUrl(gen.resultStorageId)
+        : null;
       return {
         status: "complete" as const,
         creditRefundedAt: gen.creditRefundedAt,
         resultStorageId: gen.resultStorageId,
+        resultUrl,
       };
     }
     return {

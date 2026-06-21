@@ -187,8 +187,17 @@ describe("production confidence settlement classification", () => {
 });
 
 describe("production confidence generation classification", () => {
-	it("requires successful generations to produce an artifact", () => {
+	it("requires successful generations to produce a downloadable artifact", () => {
 		expect(classifyGenerationOutcome({ status: "complete", resultStorageId: "storage_123" })).toBe(
+			"FAILED",
+		);
+		expect(
+			classifyGenerationOutcome({
+				status: "complete",
+				resultStorageId: "storage_123",
+				artifactDownloadReachable: true,
+			}),
+		).toBe(
 			"PASSED",
 		);
 		expect(classifyGenerationOutcome({ status: "complete" })).toBe("FAILED");
@@ -407,9 +416,33 @@ describe("classifyGenerationOutcome — negative paths", () => {
 		expect(classifyGenerationOutcome({ status: "failed", resultStorageId: "storage_123" })).toBe("FAILED");
 	});
 
-	it("passes only when complete with artifact evidence", () => {
-		expect(classifyGenerationOutcome({ status: "complete", resultStorageId: "storage_123" })).toBe("PASSED");
-		expect(classifyGenerationOutcome({ status: "complete", artifactPresent: true })).toBe("PASSED");
+	it("passes only when complete with artifact and download proof", () => {
+		expect(classifyGenerationOutcome({ status: "complete", resultStorageId: "storage_123" })).toBe("FAILED");
+		expect(classifyGenerationOutcome({ status: "complete", artifactPresent: true })).toBe("FAILED");
+		expect(
+			classifyGenerationOutcome({
+				status: "complete",
+				resultStorageId: "storage_123",
+				artifactDownloadReachable: true,
+			}),
+		).toBe("PASSED");
+		expect(
+			classifyGenerationOutcome({
+				status: "complete",
+				artifactPresent: true,
+				artifactDownloadReachable: true,
+			}),
+		).toBe("PASSED");
+	});
+
+	it("fails a completed generation when artifact download proof fails", () => {
+		expect(
+			classifyGenerationOutcome({
+				status: "complete",
+				artifactPresent: true,
+				artifactDownloadReachable: false,
+			}),
+		).toBe("FAILED");
 	});
 
 	it("returns RUNNING for in-flight generations", () => {
@@ -530,17 +563,34 @@ describe("evidence contract conformance (§5.3)", () => {
 
 	it("GenerationCanaryEvidence has exactly the required fields", () => {
 		const evidence: GenerationCanaryEvidence = {
+			artifactDigestHeaderPresent: true,
+			artifactDownloadReachable: true,
 			requestAccepted: true,
 			terminalVerdict: "COMPLETE",
+			artifactProbeStatus: 206,
+			artifactUrlIssued: true,
 			artifactPresent: true,
 			refundObserved: false,
 		};
 		expect(Object.keys(evidence).sort()).toEqual(
-			["artifactPresent", "refundObserved", "requestAccepted", "terminalVerdict"],
+			[
+				"artifactDigestHeaderPresent",
+				"artifactDownloadReachable",
+				"artifactPresent",
+				"artifactProbeStatus",
+				"artifactUrlIssued",
+				"refundObserved",
+				"requestAccepted",
+				"terminalVerdict",
+			],
 		);
 		expect(typeof evidence.requestAccepted).toBe("boolean");
 		expect(["COMPLETE", "FAILED", "TIMEOUT"]).toContain(evidence.terminalVerdict);
 		expect(typeof evidence.artifactPresent).toBe("boolean");
+		expect(typeof evidence.artifactUrlIssued).toBe("boolean");
+		expect(typeof evidence.artifactDownloadReachable).toBe("boolean");
+		expect(typeof evidence.artifactDigestHeaderPresent).toBe("boolean");
+		expect(typeof evidence.artifactProbeStatus).toBe("number");
 		expect(typeof evidence.refundObserved).toBe("boolean");
 	});
 

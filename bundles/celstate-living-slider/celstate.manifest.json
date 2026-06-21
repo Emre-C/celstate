@@ -13,7 +13,8 @@
     { "name": "step", "type": "number", "required": false, "description": "Optional snap increment in value units." },
     { "name": "disabled", "type": "boolean", "required": false, "description": "Disables the pan gesture and dims the control." },
     { "name": "theme", "type": "Record<string, string>", "required": false, "description": "Host palette tokens; the filled rail and moss use the accent token." },
-    { "name": "testID", "type": "string", "required": false, "description": "Test hook on the container." }
+    { "name": "testID", "type": "string", "required": false, "description": "Test hook on the container." },
+    { "name": "skin", "type": "{ moss?: ImageSourcePropType; thumb?: ImageSourcePropType }", "required": false, "description": "Optional generated transparent raster layers; value geometry remains runtime-owned." }
   ],
   "layers": [
     { "id": "rail", "role": "structural", "source": "procedural" },

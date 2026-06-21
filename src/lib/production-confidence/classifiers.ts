@@ -39,15 +39,18 @@ export const classifySettlementOutcome = ({
 
 export const classifyGenerationOutcome = ({
 	status,
+	artifactDownloadReachable,
 	artifactPresent,
 	resultStorageId,
 }: {
 	status: "generating" | "complete" | "failed";
+	artifactDownloadReachable?: boolean;
 	artifactPresent?: boolean;
 	resultStorageId?: string;
 }): Verdict => {
 	if (status === "complete") {
-		return artifactPresent || Boolean(resultStorageId) ? "PASSED" : "FAILED";
+		const artifactExists = artifactPresent || Boolean(resultStorageId);
+		return artifactExists && artifactDownloadReachable === true ? "PASSED" : "FAILED";
 	}
 	if (status === "failed") {
 		return "FAILED";

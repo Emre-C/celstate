@@ -1,9 +1,9 @@
-// Web runtime harness — renders the SHARED hand-authored vector art
-// (@celstate/living-ui-runtime/art) driven by the SHARED, tested motion core.
-// The leaf paths, palette ramp, and every transform here are the exact data and
-// functions the React Native control draws via react-native-svg; only the host
-// (DOM <svg> vs react-native-svg) differs. So this is a faithful preview of the
-// product's craft, not a separate mockup — and an honest fps/feel proxy.
+// Web runtime harness — renders generated transparent skin layers (G-gate
+// output) driven by the SHARED, tested motion core. The foliage and seed-pod
+// PNGs are produced by scripts/living-ui/g-gate-skin-probe.ts (difference matte
+// over white/black), and every transform here is the exact motion the React
+// Native control applies via Reanimated. So this is a faithful preview of the
+// product's craft with real generated art — and an honest fps/feel proxy.
 import {
   buttonTransform,
   springStep,
@@ -75,13 +75,13 @@ function buildButton(svg, pal) {
   const shadow = S("ellipse", { cx: CX, cy: 150, rx: 92, ry: 11, fill: "#1c1917", opacity: 0.22, filter: "url(#btn-shadow)" });
   const bloom = S("circle", { cx: CX, cy: CY, r: 74, fill: "url(#btn-bloom)", opacity: 0 });
 
-  // Foliage cluster (a bush the body sits within), anchored just below centre.
-  const leaves = BUTTON_LEAF_CLUSTER.map((p) => {
-    const g = leafNode(pal, p.depth);
-    g.dataset.base = `translate(${p.ox},${p.oy}) rotate(${p.rotateDeg}) scale(${p.scale})`;
-    return g;
+  // Generated foliage layer (G-gate transparent PNG), anchored just below centre.
+  const foliageImg = S("image", {
+    href: "./assets/foliage.png",
+    x: -80, y: -80, width: 160, height: 160,
+    opacity: 0.85,
   });
-  const cluster = S("g", {}, leaves);
+  const cluster = S("g", {}, [foliageImg]);
   const clusterAnchor = S("g", {}, [cluster]);
 
   const bodyRect = S("rect", { x: 86, y: 80, width: 188, height: 60, rx: 17, fill: "url(#btn-body)", stroke: withAlpha(pal.accentDeep, 0.6), "stroke-width": 1 });
@@ -97,7 +97,7 @@ function buildButton(svg, pal) {
 
   for (const n of [shadow, bloom, clusterAnchor, body, firefly]) svg.appendChild(n);
 
-  return { CX, CY, shadow, bloom, leaves, cluster, clusterAnchor, body, firefly };
+  return { CX, CY, shadow, bloom, cluster, clusterAnchor, body, firefly };
 }
 
 function animateButton(refs, now, pressValue) {
@@ -110,7 +110,6 @@ function animateButton(refs, now, pressValue) {
   const scale = 1 + (breath.scale - 1) * react.breathDamping;
   refs.clusterAnchor.setAttribute("transform", `translate(${CX},${CY + 8})`);
   refs.cluster.setAttribute("transform", `translate(0,${sway + react.recoilDp}) scale(${scale})`);
-  for (const g of refs.leaves) g.setAttribute("transform", g.dataset.base);
 
   // Body: the real squash field.
   const t = buttonTransform(pressValue);
@@ -152,11 +151,12 @@ function buildSlider(svg, pal) {
   });
   const sproutLayer = S("g", {}, sprouts);
 
-  const thumb = S("g", {}, [
-    S("circle", { cx: 0, cy: 0, r: 19, fill: "url(#sld-glow)" }),
-    S("circle", { cx: 0, cy: 0, r: 12, fill: pal.glow ? "#fbf9f4" : "#fff", stroke: pal.accent, "stroke-width": 3 }),
-    S("circle", { cx: 0, cy: 0, r: 4, fill: pal.accent }),
-  ]);
+  const thumbGlow = S("circle", { cx: 0, cy: 0, r: 19, fill: "url(#sld-glow)" });
+  const thumbImg = S("image", {
+    href: "./assets/seed.png",
+    x: -16, y: -16, width: 32, height: 32,
+  });
+  const thumb = S("g", {}, [thumbGlow, thumbImg]);
 
   for (const n of [twig, vine, sproutLayer, thumb, valText]) svg.appendChild(n);
   return { twig, vine, sprouts, thumb, valText };

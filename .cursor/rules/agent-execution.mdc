@@ -3,6 +3,7 @@ alwaysApply: true
 ---
 
 - If the task can be done with repo scripts, `pnpm`, Convex/Doppler/Vercel CLIs, MCP tools, or a short terminal command on this machine, **do it** before writing long handoffs. Assume CLIs are installed unless the user says otherwise.
+- For ops/incident questions about login health, generation failures, new users, retries, refunds, or downloadability, run the matching `pnpm ops:investigate ...` command first and answer from its JSON evidence. Use `docs/runbooks/OPS-INVESTIGATION.md` for routing; do not hand the command to the owner unless they ask.
 - For secrets sync (`pnpm secrets:sync:*`), Convex push (`pnpm exec convex dev --once` / `deploy`), worker runs (`pnpm animation-worker*`), and Vercel sync — **execute** and report exit codes; only fall back to manual steps when the command fails or needs credentials the sandbox cannot access.
 - Do not send the owner to a vendor UI when the repo already documents or implements a CLI/script path (fix the script if Windows/Preview/etc. breaks).
 - Prefer a short outcome summary over tutorial prose when the run succeeded.

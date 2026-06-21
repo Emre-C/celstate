@@ -51,6 +51,26 @@ const [strength, setStrength] = useState(0.5);
 Snap to a grid with `step`, theme with palette tokens (the filled rail and moss
 use the `accent` token), and disable with `disabled`.
 
+### Generated skin layers (Phase G seam)
+
+The `skin` prop accepts optional transparent raster images for `moss` and `thumb`.
+When provided, these replace the procedural placeholders; the runtime's value
+geometry, drag tracking, and ambient motion remain unchanged.
+
+```tsx
+import { CelstateLivingSlider, type CelstateLivingSliderSkin } from './components/celstate-living-slider/CelstateLivingSlider';
+
+const skin: CelstateLivingSliderSkin = {
+  moss: require('./assets/moss.png'),
+  thumb: require('./assets/seed-pod.png'),
+};
+
+<CelstateLivingSlider value={strength} onValueChange={setStrength} skin={skin} />
+```
+
+Generate transparent layers with the G-gate skin probe (`--slots seed` for the
+thumb, `--slots background` for moss-like accents).
+
 ### Accessibility
 
 `accessibilityRole="adjustable"` with `accessibilityValue={{ min, max, now: value }}`.
