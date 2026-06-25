@@ -10,9 +10,9 @@ import { registerRoutes } from "@convex-dev/stripe";
 import type Stripe from "stripe";
 import { posthog } from "./posthog.js";
 import {
-  assertOkWebhookResponse,
   buildPurchaseAlertRequest,
   readOpsAlertRuntimeConfig,
+  sendOpsWebhook,
 } from "./lib/ops.js";
 import { handleMcpRequest } from "./mcp/handler.js";
 import type { Infer } from "convex/values";
@@ -336,25 +336,27 @@ const handleCreditPackCheckout = async (
       userId: settlementData.userId,
     });
 
+    const request = buildPurchaseAlertRequest(opsConfig, {
+      amountUsd: settlementData.amountUsd,
+      creditsAdded: settlementData.creditsGranted,
+      currency: settlementData.currency,
+      stripePaymentIntentId: settlementData.stripePaymentIntentId,
+      userEmail: user?.email ?? undefined,
+      userId: settlementData.userId,
+    });
+
+    const result = await sendOpsWebhook(request, {
+      onError: (error) => console.error("Failed to send purchase Discord notification", error),
+    });
+
     try {
-      const request = buildPurchaseAlertRequest(opsConfig, {
-        amountUsd: settlementData.amountUsd,
-        creditsAdded: settlementData.creditsGranted,
-        currency: settlementData.currency,
-        stripePaymentIntentId: settlementData.stripePaymentIntentId,
-        userEmail: user?.email ?? undefined,
-        userId: settlementData.userId,
+      await ctx.runMutation(internal.ops.recordOpsAlertEvent, {
+        alertType: "purchase_alert",
+        outcome: result.ok ? "sent" : "failed",
+        error: result.ok ? undefined : (result.error instanceof Error ? result.error.message : String(result.error)),
       });
-
-      const response = await fetch(request.url, {
-        method: "POST",
-        headers: request.headers,
-        body: request.body,
-      });
-
-      assertOkWebhookResponse(response);
-    } catch (error) {
-      console.error("Failed to send purchase Discord notification", error);
+    } catch (recordError) {
+      console.error("Failed to record ops alert event", recordError);
     }
   }
 };

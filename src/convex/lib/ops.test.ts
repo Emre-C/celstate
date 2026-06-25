@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
 	assertOkWebhookResponse,
 	buildAuthAlertRequest,
@@ -8,6 +8,7 @@ import {
 	buildSignupAlertRequest,
 	formatDurationMs,
 	readOpsAlertRuntimeConfig,
+	sendOpsWebhook,
 	summarizeGenerationOpsEvents
 } from './ops.js';
 
@@ -237,5 +238,54 @@ describe('ops helpers', () => {
 		expect(() => assertOkWebhookResponse(response)).toThrow(
 			'Webhook responded with 502 Bad Gateway'
 		);
+	});
+
+	it('sendOpsWebhook returns { ok: true } on successful delivery', async () => {
+		const mockResponse = new Response(null, { status: 200, statusText: 'OK' });
+		const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(mockResponse);
+
+		const result = await sendOpsWebhook({
+			url: 'https://example.com/webhook',
+			headers: { 'content-type': 'application/json' },
+			body: '{"test":true}',
+		});
+
+		expect(result).toEqual({ ok: true });
+		fetchSpy.mockRestore();
+	});
+
+	it('sendOpsWebhook returns { ok: false } on failure when onError is provided', async () => {
+		const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('Network error'));
+		const onError = vi.fn();
+
+		const result = await sendOpsWebhook(
+			{
+				url: 'https://example.com/webhook',
+				headers: { 'content-type': 'application/json' },
+				body: '{"test":true}',
+			},
+			{ onError },
+		);
+
+		expect(result.ok).toBe(false);
+		if (!result.ok) {
+			expect(result.error).toBeInstanceOf(Error);
+		}
+		expect(onError).toHaveBeenCalledOnce();
+		fetchSpy.mockRestore();
+	});
+
+	it('sendOpsWebhook throws on failure when no onError is provided', async () => {
+		const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('Network error'));
+
+		await expect(
+			sendOpsWebhook({
+				url: 'https://example.com/webhook',
+				headers: { 'content-type': 'application/json' },
+				body: '{"test":true}',
+			}),
+		).rejects.toThrow('Network error');
+
+		fetchSpy.mockRestore();
 	});
 });

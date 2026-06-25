@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Illustrated UI Ornament Proof</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #F5F3ED;
+      --surface: #FBF7EE;
+      --text: #1C1917;
+      --dim: #78716C;
+      --accent: #C2410C;
+      --border: #A06D42;
+      --soft-border: #E2DED6;
+      --leaf: #6E884A;
+      --leaf-dark: #506B3D;
+      --button: #7A8F4F;
+      --button-active: #A97042;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      background: var(--bg);
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+      letter-spacing: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .stage {
+      position: relative;
+      width: min(100%, 430px);
+      min-height: 1200px;
+      margin: 0 auto;
+      overflow: hidden;
+      background: var(--bg);
+    }
+
+    .header-vignette-slot {
+      position: absolute;
+      top: 0;
+      right: -22px;
+      z-index: 0;
+      width: min(92vw, 390px);
+      pointer-events: none;
+      opacity: .72;
+    }
+
+    .content {
+      position: relative;
+      z-index: 1;
+      padding: 52px 22px 0;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 58px;
+      margin-bottom: 18px;
+    }
+
+    .back {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: #8B6039;
+      font-size: 20px;
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .select-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 48px;
+      padding: 0 18px;
+      border: 2px solid var(--border);
+      border-radius: 999px;
+      background: rgba(251, 247, 238, .86);
+      color: #3B2A20;
+      font-size: 17px;
+      font-weight: 600;
+      box-shadow: 0 8px 22px rgba(96, 66, 38, .08);
+    }
+
+    .chevron {
+      width: 0;
+      height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 7px solid #9A6B42;
+    }
+
+    .segments {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2px;
+      margin: 22px 0;
+      padding: 4px;
+      border: 2px solid var(--leaf-dark);
+      border-radius: 999px;
+      background: var(--button);
+      box-shadow: 0 12px 28px rgba(61, 82, 46, .12);
+    }
+
+    .segment {
+      min-height: 50px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: rgba(255, 255, 255, .84);
+      font: inherit;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .segment.active {
+      background: var(--button-active);
+      color: white;
+      box-shadow: inset 0 0 0 2px rgba(96, 60, 31, .22);
+    }
+
+    .action-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 28px;
+    }
+
+    .action-card {
+      min-height: 132px;
+      padding: 14px 12px;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      background: rgba(251, 247, 238, .72);
+      box-shadow: 0 12px 30px rgba(113, 78, 47, .06);
+    }
+
+    .action-icon {
+      width: 50px;
+      height: 50px;
+      margin-bottom: 10px;
+    }
+
+    .line-icon {
+      width: 48px;
+      height: 48px;
+      margin-bottom: 11px;
+      color: #A06D42;
+    }
+
+    .action-title {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .action-subtitle {
+      margin: 4px 0 0;
+      color: #8B6039;
+      font-size: 13px;
+      line-height: 1.15;
+    }
+
+    h2 {
+      margin: 0;
+      font-family: "Instrument Serif", Georgia, serif;
+      font-weight: 400;
+      font-style: italic;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin-bottom: 14px;
+      font-size: 33px;
+      line-height: 1;
+    }
+
+    .member-list {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+
+    .member-row {
+      display: grid;
+      grid-template-columns: 64px 1fr auto;
+      align-items: center;
+      gap: 14px;
+      min-height: 84px;
+      padding: 12px;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      background: rgba(251, 247, 238, .78);
+      box-shadow: 0 10px 28px rgba(113, 78, 47, .05);
+    }
+
+    .avatar,
+    .avatar-letter {
+      width: 56px;
+      height: 56px;
+      border-radius: 999px;
+    }
+
+    .avatar {
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      background: #B6604C;
+      color: #F7E6C7;
+      font-size: 13px;
+      font-weight: 700;
+      box-shadow: inset 0 0 0 2px rgba(80, 49, 33, .16);
+    }
+
+    .avatar-letter {
+      display: grid;
+      place-items: center;
+      background: #E8DFC9;
+      color: var(--leaf-dark);
+      font-size: 27px;
+      font-weight: 500;
+    }
+
+    .member-name {
+      margin: 0 0 4px;
+      font-size: 21px;
+      font-weight: 700;
+      line-height: 1.05;
+    }
+
+    .member-email {
+      margin: 0;
+      color: #8B6039;
+      font-size: 14px;
+      font-style: italic;
+      word-break: break-word;
+    }
+
+    .badge {
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: #EDE2CA;
+      color: #3A2A20;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .dots {
+      margin-left: 8px;
+      color: #A06D42;
+      font-size: 24px;
+      line-height: 1;
+    }
+
+    .event-card {
+      overflow: hidden;
+      margin-bottom: 30px;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      background: rgba(251, 247, 238, .9);
+      box-shadow: 0 12px 30px rgba(113, 78, 47, .07);
+    }
+
+    .event-art {
+      position: relative;
+      min-height: 170px;
+      background: #E7C28F;
+      overflow: hidden;
+    }
+
+    .table-line {
+      position: absolute;
+      left: -16px;
+      right: -16px;
+      height: 18px;
+      border-top: 2px solid rgba(91, 58, 35, .36);
+      transform: rotate(-3deg);
+    }
+
+    .dish {
+      position: absolute;
+      border: 2px solid rgba(91, 58, 35, .34);
+      border-radius: 999px;
+      background: rgba(255, 241, 204, .82);
+      box-shadow: inset 0 0 0 6px rgba(197, 129, 69, .16);
+    }
+
+    .dish.one { width: 104px; height: 58px; left: 16px; top: 34px; }
+    .dish.two { width: 120px; height: 64px; right: 18px; top: 28px; }
+    .dish.three { width: 138px; height: 72px; left: 124px; top: 86px; }
+    .dish.four { width: 90px; height: 48px; right: 84px; top: 111px; }
+
+    .steam {
+      position: absolute;
+      width: 18px;
+      height: 42px;
+      border-left: 2px solid rgba(255, 247, 225, .68);
+      border-radius: 50%;
+    }
+
+    .steam.a { left: 84px; top: 8px; transform: rotate(16deg); }
+    .steam.b { right: 80px; top: 6px; transform: rotate(-12deg); }
+    .steam.c { left: 238px; top: 58px; transform: rotate(8deg); }
+
+    .event-body {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 18px 16px 20px;
+    }
+
+    .event-title {
+      margin: 0 0 10px;
+      font-size: 23px;
+      font-weight: 800;
+      line-height: 1.05;
+    }
+
+    .event-date {
+      margin: 0;
+      color: #8B6039;
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .going {
+      min-width: 86px;
+      min-height: 58px;
+      border: 0;
+      border-radius: 999px;
+      background: var(--button);
+      color: white;
+      font: inherit;
+      font-size: 15px;
+      font-weight: 800;
+    }
+
+    .quiet-card {
+      margin-bottom: 16px;
+      padding: 18px 16px;
+      border: 1px solid rgba(160, 109, 66, .34);
+      border-radius: 8px;
+      background: rgba(251, 247, 238, .55);
+    }
+
+    .quiet-card p {
+      margin: 0;
+      color: var(--dim);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .bottom-ornament-slot {
+      position: relative;
+      height: 290px;
+      margin: 18px -22px 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .bottom-ornament-slot img {
+      position: absolute;
+      left: 50%;
+      bottom: -8px;
+      width: min(112%, 430px);
+      transform: translateX(-50%);
+      opacity: .84;
+    }
+
+    @media (max-width: 360px) {
+      .content {
+        padding-inline: 16px;
+      }
+
+      .action-grid {
+        gap: 10px;
+      }
+
+      .action-card {
+        padding-inline: 10px;
+      }
+
+      .member-row {
+        grid-template-columns: 54px 1fr;
+      }
+
+      .member-row .badge,
+      .member-row .dots {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="stage">
+    <img class="header-vignette-slot" src="./assets/header-village-vignette.svg" alt="" aria-hidden="true" />
+
+    <div class="content">
+      <header class="topbar">
+        <a class="back" href="#" aria-label="Home">
+          <span aria-hidden="true">←</span>
+          <span>Home</span>
+        </a>
+        <div class="select-pill">
+          <span>Hapning...</span>
+          <span class="chevron" aria-hidden="true"></span>
+        </div>
+      </header>
+
+      <section class="segments" aria-label="Profile sections">
+        <button class="segment" type="button">Profile</button>
+        <button class="segment" type="button">Past Events</button>
+        <button class="segment active" type="button">Owner</button>
+      </section>
+
+      <section class="action-grid" aria-label="Owner actions">
+        <article class="action-card">
+          <img class="action-icon" src="./assets/action-icon-calendar.svg" alt="" aria-hidden="true" />
+          <h1 class="action-title">Create Event</h1>
+          <p class="action-subtitle">Schedule gathering</p>
+        </article>
+        <article class="action-card">
+          <svg class="line-icon" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+            <path d="M13 22c12 6 25 6 38 0v25c-10 5-25 5-38 0V22Z" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>
+            <path d="M13 22 32 38 51 22M21 17h22" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <h1 class="action-title">Invite Member</h1>
+          <p class="action-subtitle">Share links</p>
+        </article>
+        <article class="action-card">
+          <svg class="line-icon" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+            <path d="M22 29c5 0 9-4 9-9s-4-9-9-9-9 4-9 9 4 9 9 9ZM45 29c5 0 9-4 9-9s-4-9-9-9-9 4-9 9 4 9 9 9ZM7 51c3-10 10-15 20-15s17 5 20 15M31 51c3-7 8-11 16-11 6 0 11 3 15 9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+          <h1 class="action-title">Requests</h1>
+          <p class="action-subtitle">Manage guests</p>
+        </article>
+      </section>
+
+      <section>
+        <h2>Members (2)</h2>
+        <div class="member-list">
+          <article class="member-row">
+            <div class="avatar">EM</div>
+            <div>
+              <p class="member-name">Emre</p>
+              <p class="member-email">emre.coklar@gmail.com</p>
+            </div>
+            <div>
+              <span class="badge">OWNER</span>
+              <span class="dots" aria-hidden="true">...</span>
+            </div>
+          </article>
+          <article class="member-row">
+            <div class="avatar-letter">T</div>
+            <div>
+              <p class="member-name">Tester</p>
+              <p class="member-email">coklarye@yahoo.com</p>
+            </div>
+            <div>
+              <span class="badge">MEMBER</span>
+              <span class="dots" aria-hidden="true">...</span>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <h2>Upcoming Events (1)</h2>
+        <article class="event-card">
+          <div class="event-art" aria-hidden="true">
+            <div class="table-line" style="top: 34px"></div>
+            <div class="table-line" style="top: 76px"></div>
+            <div class="table-line" style="top: 118px"></div>
+            <div class="dish one"></div>
+            <div class="dish two"></div>
+            <div class="dish three"></div>
+            <div class="dish four"></div>
+            <div class="steam a"></div>
+            <div class="steam b"></div>
+            <div class="steam c"></div>
+          </div>
+          <div class="event-body">
+            <div>
+              <p class="event-title">White Elephant Potluck</p>
+              <p class="event-date">Saturday, December 27 at 7:00 PM</p>
+            </div>
+            <button class="going" type="button">Going</button>
+          </div>
+        </article>
+      </section>
+
+      <section class="quiet-card">
+        <p>Gathering notes will appear here after members respond.</p>
+      </section>
+
+      <section class="bottom-ornament-slot" aria-hidden="true">
+        <img src="./assets/bottom-scroll-foliage.svg" alt="" />
+      </section>
+    </div>
+  </main>
+</body>
+</html>

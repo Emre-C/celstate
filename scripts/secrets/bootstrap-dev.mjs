@@ -18,7 +18,7 @@
 //   - Temp file is mode 0o600, deleted in a `finally` block.
 //
 // What ends up in Doppler dev:
-//   * Auto-rotated names (JWT, Verification Runner, QA Reset) are SKIPPED here.
+//   * Auto-rotated names (Verification Runner, QA Reset) are SKIPPED here.
 //     Run `pnpm secrets:rotate:dev` afterwards.
 //   * Apple OAuth credentials are NOT required for SITE_URL=http://localhost,
 //     so they are SKIPPED.
@@ -38,8 +38,6 @@ const dryRun = process.argv.includes("--dry-run");
 // Names auto-rotatable via `pnpm secrets:rotate:dev`. Skipped during bootstrap
 // so the rotate step generates fresh dev values without races.
 const AUTO_ROTATED = new Set([
-  "JWT_PRIVATE_KEY",
-  "JWKS",
   "VERIFICATION_RUNNER_SECRET",
   "QA_USER_RESET_SECRET",
 ]);

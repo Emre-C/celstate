@@ -234,6 +234,7 @@
 			>
 				{#each generations.data! as gen (gen._id)}
 					<GenerationCard
+						generationId={gen._id}
 						prompt={gen.prompt}
 						status={gen.status}
 						statusMessage={gen.statusMessage}

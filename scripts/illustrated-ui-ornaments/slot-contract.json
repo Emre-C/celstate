@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "purpose": "Proof that transparent illustrated ornament assets can close the visual gap in a real app layout without generated UI, fixed frames, or complex masking.",
+  "globalRules": {
+    "layoutOwner": "app_code",
+    "artOwner": "celstate_alpha_assets",
+    "allowedCodeOperations": ["position", "scale", "opacity", "simple_clip"],
+    "forbiddenCodeOperations": [
+      "background_extraction",
+      "complex_masking",
+      "layout_inference",
+      "safe_zone_detection",
+      "generated_text_cleanup"
+    ],
+    "maxGenerationPassesPerSlot": 2
+  },
+  "slots": [
+    {
+      "name": "header_village_vignette",
+      "assetType": "transparent_png_preferred_svg_allowed_for_proof",
+      "dimensionsPx": { "width": 480, "height": 190 },
+      "anchor": "top_right_header",
+      "responsiveRule": "scale to 70-92 percent of viewport width, keep right edge within 24px bleed",
+      "safeContentRegion": {
+        "description": "left 40 percent and foreground controls must remain readable",
+        "rectPx": { "x": 0, "y": 0, "width": 190, "height": 120 }
+      },
+      "allowedOpacityRange": [0.24, 0.62],
+      "requiredAlphaBehavior": "scenery must fade through transparent pixels at left, bottom, and outer foliage edges",
+      "failureModes": [
+        "opaque rectangular background",
+        "hard crop edge",
+        "text or UI chrome baked into the asset",
+        "foreground controls lose contrast"
+      ]
+    },
+    {
+      "name": "bottom_scroll_foliage",
+      "assetType": "transparent_png_preferred_svg_allowed_for_proof",
+      "dimensionsPx": { "width": 430, "height": 300 },
+      "anchor": "section_bottom_scroll_content",
+      "responsiveRule": "full content width with decorative bleed; never position fixed",
+      "safeContentRegion": {
+        "description": "center column from x=92 to x=338 remains low-alpha so text/cards can pass above it",
+        "rectPx": { "x": 92, "y": 0, "width": 246, "height": 210 }
+      },
+      "allowedOpacityRange": [0.35, 0.82],
+      "requiredAlphaBehavior": "asset is transparent around all edges and can scroll into and out of view as normal content",
+      "failureModes": [
+        "fixed viewport frame",
+        "foliage covers primary card text",
+        "asset requires generated screen-edge composition",
+        "opaque wash around vines"
+      ]
+    },
+    {
+      "name": "action_icon_calendar",
+      "assetType": "svg_allowed_png_allowed",
+      "dimensionsPx": { "width": 128, "height": 128 },
+      "anchor": "card_leading_icon",
+      "responsiveRule": "render at 44-64px inside action cards",
+      "safeContentRegion": {
+        "description": "entire icon must remain legible at 44px with no external label dependency",
+        "rectPx": { "x": 16, "y": 16, "width": 96, "height": 96 }
+      },
+      "allowedOpacityRange": [0.85, 1],
+      "requiredAlphaBehavior": "transparent background, no accidental filter rectangle",
+      "failureModes": [
+        "generic lucide-style icon with no hand-drawn craft",
+        "painterly detail that turns muddy at UI size",
+        "opaque background",
+        "unclear semantic meaning"
+      ]
+    }
+  ]
+}

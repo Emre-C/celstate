@@ -5,8 +5,10 @@
 export const growthEvents = {
 	authSignInStarted: 'auth_sign_in_started',
 	creditsPurchaseCtaClicked: 'credits_purchase_cta_clicked',
+	imageDownloaded: 'image_downloaded',
 	landingCtaClicked: 'landing_cta_clicked',
 	landingViewed: 'landing_viewed',
+	lottieDownloaded: 'lottie_downloaded',
 	zeroCreditsPromptShown: 'zero_credits_prompt_shown'
 } as const;
 
@@ -15,3 +17,5 @@ export type CreditsPurchaseCtaSurface =
 	| 'navbar'
 	| 'post_generation_banner'
 	| 'prompt_input';
+
+export type ImageDownloadVariant = 'standard' | 'hires';

@@ -8,7 +8,6 @@
  * @module
  */
 
-import type * as animationGenerations from "../animationGenerations.js";
 import type * as creditPackPurchase from "../creditPackPurchase.js";
 import type * as creditPackPurchaseActions from "../creditPackPurchaseActions.js";
 import type * as crons from "../crons.js";
@@ -17,8 +16,6 @@ import type * as generationArtifactRetention from "../generationArtifactRetentio
 import type * as generationReports from "../generationReports.js";
 import type * as generations from "../generations.js";
 import type * as http from "../http.js";
-import type * as lib_animation_animationGenerationRun from "../lib/animation/animationGenerationRun.js";
-import type * as lib_animation_animationPrompts from "../lib/animation/animationPrompts.js";
 import type * as lib_config from "../lib/config.js";
 import type * as lib_creditPackPurchase_catalog from "../lib/creditPackPurchase/catalog.js";
 import type * as lib_creditPackPurchase_inMemoryStripeAdapter from "../lib/creditPackPurchase/inMemoryStripeAdapter.js";
@@ -32,6 +29,9 @@ import type * as lib_generation_generationRun from "../lib/generation/generation
 import type * as lib_generation_matte from "../lib/generation/matte.js";
 import type * as lib_generation_optimize from "../lib/generation/optimize.js";
 import type * as lib_generation_prompts from "../lib/generation/prompts.js";
+import type * as lib_lottie_lottieGenerationRun from "../lib/lottie/lottieGenerationRun.js";
+import type * as lib_lottie_lottiePrompt from "../lib/lottie/lottiePrompt.js";
+import type * as lib_lottie_lottieValidation from "../lib/lottie/lottieValidation.js";
 import type * as lib_ops from "../lib/ops.js";
 import type * as lib_opsInvestigation from "../lib/opsInvestigation.js";
 import type * as lib_qa_qaUserResetSecret from "../lib/qa/qaUserResetSecret.js";
@@ -41,6 +41,8 @@ import type * as lib_stripeEnv from "../lib/stripeEnv.js";
 import type * as lib_validation_validation from "../lib/validation/validation.js";
 import type * as lib_validation_validators from "../lib/validation/validators.js";
 import type * as lib_verification_verificationRunnerSecret from "../lib/verification/verificationRunnerSecret.js";
+import type * as lottieGeneration from "../lottieGeneration.js";
+import type * as lottieGenerations from "../lottieGenerations.js";
 import type * as mcp_constants from "../mcp/constants.js";
 import type * as mcp_context from "../mcp/context.js";
 import type * as mcp_handler from "../mcp/handler.js";
@@ -64,7 +66,6 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  animationGenerations: typeof animationGenerations;
   creditPackPurchase: typeof creditPackPurchase;
   creditPackPurchaseActions: typeof creditPackPurchaseActions;
   crons: typeof crons;
@@ -73,8 +74,6 @@ declare const fullApi: ApiFromModules<{
   generationReports: typeof generationReports;
   generations: typeof generations;
   http: typeof http;
-  "lib/animation/animationGenerationRun": typeof lib_animation_animationGenerationRun;
-  "lib/animation/animationPrompts": typeof lib_animation_animationPrompts;
   "lib/config": typeof lib_config;
   "lib/creditPackPurchase/catalog": typeof lib_creditPackPurchase_catalog;
   "lib/creditPackPurchase/inMemoryStripeAdapter": typeof lib_creditPackPurchase_inMemoryStripeAdapter;
@@ -88,6 +87,9 @@ declare const fullApi: ApiFromModules<{
   "lib/generation/matte": typeof lib_generation_matte;
   "lib/generation/optimize": typeof lib_generation_optimize;
   "lib/generation/prompts": typeof lib_generation_prompts;
+  "lib/lottie/lottieGenerationRun": typeof lib_lottie_lottieGenerationRun;
+  "lib/lottie/lottiePrompt": typeof lib_lottie_lottiePrompt;
+  "lib/lottie/lottieValidation": typeof lib_lottie_lottieValidation;
   "lib/ops": typeof lib_ops;
   "lib/opsInvestigation": typeof lib_opsInvestigation;
   "lib/qa/qaUserResetSecret": typeof lib_qa_qaUserResetSecret;
@@ -97,6 +99,8 @@ declare const fullApi: ApiFromModules<{
   "lib/validation/validation": typeof lib_validation_validation;
   "lib/validation/validators": typeof lib_validation_validators;
   "lib/verification/verificationRunnerSecret": typeof lib_verification_verificationRunnerSecret;
+  lottieGeneration: typeof lottieGeneration;
+  lottieGenerations: typeof lottieGenerations;
   "mcp/constants": typeof mcp_constants;
   "mcp/context": typeof mcp_context;
   "mcp/handler": typeof mcp_handler;

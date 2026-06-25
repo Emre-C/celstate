@@ -52,7 +52,21 @@ Celstate feels like a well-designed studio tool, not a tech demo. It has the qui
 
  **Design System**: All UI must conform to `docs/product/design-system.md` — color tokens, typography rules, button hierarchy, component inventory, and prohibited patterns. Read it before creating or modifying any frontend component.
 
+### Illustrated UI Ornament Guardrail
+
+For illustrated UI work, read `docs/product/illustrated-ui-ornament-vision.md`
+before proposing or editing anything. The current direction is transparent
+ornament assets for declared slots in a real app: code owns layout, scrolling,
+safe zones, text, controls, accessibility, and interaction; Celstate owns
+alpha-native visual craft.
+
+Use the terms "transparent ornament asset", "slot", "scroll content layer", and
+"alpha-native vignette". Do not propose Living UI, animation workers, runtime
+controls, generated full-screen UI, safe-zone inference, or 2AFC/F-gate studies
+unless the founder explicitly resurrects those retired paths.
+
 ### Documentation Hierarchy
 1. **`docs/product/design-system.md`** — Canonical token/component reference. The single source of truth for color tokens, typography, button hierarchy, anti-patterns, and lessons learned. All UI must conform to this.
-2. **`AGENTS.md` (this file)** — Brand personality, aesthetic direction, design principles. Guides *intent* and *tone*; does not override specific tokens or component specs.
-3. **Feature design specs** (e.g., `docs/implementation/ASSISTED-MODE-FRONTEND-DESIGN.md`) — Feature-specific UI specs. May define purposeful overrides to the design system (e.g., `rounded-none` option buttons for editorial feel) but must explicitly note any deviation.
+2. **`docs/product/illustrated-ui-ornament-vision.md`** — Canonical reference for illustrated ornament slots and retired paths.
+3. **`AGENTS.md` (this file)** — Brand personality, aesthetic direction, design principles. Guides *intent* and *tone*; does not override specific tokens or component specs.
+4. **Feature design specs** (e.g., `docs/implementation/ASSISTED-MODE-FRONTEND-DESIGN.md`) — Feature-specific UI specs. May define purposeful overrides to the design system (e.g., `rounded-none` option buttons for editorial feel) but must explicitly note any deviation.

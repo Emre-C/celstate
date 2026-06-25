@@ -1,0 +1,41 @@
+<svg width="480" height="190" viewBox="0 0 480 190" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Faded village header vignette">
+  <defs>
+    <filter id="rough" x="-10%" y="-20%" width="120%" height="140%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="2" seed="8" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="0.8" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <linearGradient id="fade" x1="0" y1="95" x2="480" y2="95" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F5F3ED" stop-opacity="0"/>
+      <stop offset="0.22" stop-color="#F5F3ED" stop-opacity=".18"/>
+      <stop offset="0.55" stop-color="#F4E5BF" stop-opacity=".62"/>
+      <stop offset="1" stop-color="#F2D89D" stop-opacity=".34"/>
+    </linearGradient>
+    <linearGradient id="roof" x1="250" y1="35" x2="422" y2="93" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9EB2A0"/>
+      <stop offset="1" stop-color="#5F8A76"/>
+    </linearGradient>
+    <linearGradient id="warmWall" x1="190" y1="70" x2="388" y2="151" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF3D2"/>
+      <stop offset="1" stop-color="#E3BD86"/>
+    </linearGradient>
+  </defs>
+  <g opacity=".68" filter="url(#rough)">
+    <path d="M33 136c42-20 80-28 114-24 22 3 44-5 65-23 26-23 55-33 87-29 39 5 59 32 94 38 23 4 44-2 64-11 9 23 8 46-3 71H58c-21-2-29-9-25-22Z" fill="url(#fade)"/>
+    <path d="M256 88c17-13 35-16 55-9 18 6 31 18 40 36 10 20 7 35-8 45H228c-17-19-15-40 5-61 7-5 14-9 23-11Z" fill="#B9C591" opacity=".34"/>
+    <path d="M314 61c7-22 24-35 51-39 27 6 47 22 61 48-33-9-70-12-112-9Z" fill="#8EAD91" opacity=".42"/>
+    <path d="M295 70 363 25l77 54c-44-12-91-15-145-9Z" fill="url(#roof)" opacity=".68"/>
+    <path d="M310 73c41-3 78-1 112 8l-2 55c-24 7-58 7-101 2l-9-65Z" fill="url(#warmWall)" opacity=".46"/>
+    <path d="M347 91c8-5 18-5 30-1l-1 26c-10 2-19 1-28-1l-1-24Z" fill="#DBB878" opacity=".45"/>
+    <path d="M394 88c8-2 15-1 22 3l-1 20c-7 2-14 2-21 0V88Z" fill="#CFA56F" opacity=".38"/>
+    <path d="M244 92c16-15 34-19 55-11l6 55c-29 6-55 4-78-6-2-14 4-27 17-38Z" fill="#F4D8A4" opacity=".48"/>
+    <path d="M240 91 286 60l41 33c-28-5-57-6-87-2Z" fill="#C98358" opacity=".5"/>
+    <path d="M276 103c8-4 17-4 27 0v25c-10 2-19 1-27-1v-24Z" fill="#B98B58" opacity=".42"/>
+    <path d="M171 110c30-19 57-23 82-12l-12 45c-30 3-57-1-82-13 1-7 5-14 12-20Z" fill="#BCD09A" opacity=".28"/>
+    <path d="M189 105c11-12 27-17 47-13 15 10 21 23 18 39-21-6-43-9-68-8-3-7-2-13 3-18Z" fill="#F6DCA9" opacity=".36"/>
+    <path d="M187 104 229 78l36 31c-24-6-50-8-78-5Z" fill="#B66E55" opacity=".38"/>
+    <path d="M76 139c71 16 141 21 210 15 63-6 111-1 144 14" stroke="#9F7A50" stroke-width="3" stroke-linecap="round" opacity=".25"/>
+    <path d="M326 63c29 0 58 3 88 10M247 92c23-2 47 0 72 4M197 104c19-1 39 1 59 5" stroke="#6A5039" stroke-width="2" stroke-linecap="round" opacity=".42"/>
+    <path d="M424 35c11-9 25-14 41-15-12 11-25 16-41 15ZM399 42c9-14 22-23 39-27-8 16-21 25-39 27ZM438 58c14-5 27-5 41 1-14 7-28 7-41-1Z" fill="#799565" opacity=".34"/>
+    <path d="M119 121c13-12 29-18 48-19-12 14-28 21-48 19ZM94 132c15-8 31-11 49-8-15 10-31 13-49 8Z" fill="#8EA46F" opacity=".25"/>
+  </g>
+</svg>

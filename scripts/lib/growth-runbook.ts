@@ -74,6 +74,8 @@ export const CORE_GROWTH_EVENTS = [
 	'generation_started',
 	'generation_completed',
 	'generation_failed',
+	'image_downloaded',
+	'lottie_downloaded',
 	'zero_credits_prompt_shown',
 	'credits_purchase_cta_clicked',
 	'credits_purchase_initiated',

@@ -5,16 +5,15 @@
 //
 // Usage:
 //   node scripts/secrets/rotate.mjs                 # rotate all auto-rotatable
-//   node scripts/secrets/rotate.mjs JWT             # rotate only listed groups
+//   node scripts/secrets/rotate.mjs verification-runner-secret  # rotate only listed groups
 //
 // Available rotation groups:
-//   - jwt                         : JWT_PRIVATE_KEY + JWKS (RSA-2048, kid=uuid)
 //   - verification-runner-secret  : VERIFICATION_RUNNER_SECRET (32 random bytes)
 //   - qa-user-reset-secret        : QA_USER_RESET_SECRET (32 random bytes)
 //
 // Reads --project / --config from Doppler local config (`doppler setup`).
 
-import { generateKeyPairSync, randomBytes, randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { writeFileSync, unlinkSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -22,19 +21,6 @@ import { join } from "node:path";
 import { findDopplerBinary, runDoppler } from "./lib/doppler.mjs";
 
 const GROUPS = {
-  jwt: () => {
-    const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
-    const pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
-    /** @type {Record<string, unknown>} */
-    const jwk = /** @type {Record<string, unknown>} */ (publicKey.export({ format: "jwk" }));
-    jwk.use = "sig";
-    jwk.alg = "RS256";
-    jwk.kid = randomUUID();
-    return {
-      JWT_PRIVATE_KEY: pem,
-      JWKS: JSON.stringify({ keys: [jwk] }),
-    };
-  },
   "verification-runner-secret": () => ({
     VERIFICATION_RUNNER_SECRET: randomBytes(32).toString("base64"),
   }),

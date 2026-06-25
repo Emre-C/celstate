@@ -11,6 +11,7 @@
 		buildPublicMcpUrl,
 		buildMcpJsonConfig
 	} from '$lib/mcp/clientConfig.js';
+	import { formatTimeAgo } from '$lib/utils/format.js';
 	import { api } from '../../convex/_generated/api.js';
 
 	type McpApiKeyId = FunctionArgs<typeof api.mcp.keys.revokeKey>['keyId'];
@@ -152,19 +153,11 @@
 			copied = which;
 			clearTimeout(copiedTimer);
 			copiedTimer = setTimeout(() => (copied = null), 2000);
-		} catch {}
+		} catch {
+			error = 'Clipboard unavailable — copy failed. Check browser permissions or try a secure (https) context.';
+		}
 	}
 
-	function formatRelativeTime(ms: number): string {
-		const seconds = Math.floor((Date.now() - ms) / 1000);
-		if (seconds < 60) return 'just now';
-		const minutes = Math.floor(seconds / 60);
-		if (minutes < 60) return `${minutes}m ago`;
-		const hours = Math.floor(minutes / 60);
-		if (hours < 24) return `${hours}h ago`;
-		const days = Math.floor(hours / 24);
-		return `${days}d ago`;
-	}
 
 	function formatCalendarTime(ms: number): string {
 		return new Intl.DateTimeFormat(undefined, {
@@ -353,7 +346,7 @@
 																<span>Created {formatCalendarTime(key.createdAt)}</span>
 																<span>
 																	{#if key.lastUsedAt}
-																		Used {formatRelativeTime(key.lastUsedAt)}
+																		Used {formatTimeAgo(key.lastUsedAt)}
 																	{:else}
 																		Never used
 																	{/if}

@@ -1,118 +1,48 @@
 import { v } from "convex/values";
+import {
+  GENERATION_FAILURE_KINDS,
+  GENERATION_OPS_EVENT_TYPES,
+  GENERATION_STAGES,
+  GENERATION_STATUSES,
+} from "../../../lib/generation-types.js";
 
 /**
  * Single source of truth for pipeline stage literals (schema + public/internal args).
+ * Derived from the shared const array in `src/lib/generation-types.ts`.
  */
 export const generationStageValidator = v.union(
-  v.literal("white_background"),
-  v.literal("black_background"),
-  v.literal("finalizing"),
+  ...GENERATION_STAGES.map((s) => v.literal(s)),
 );
 
-export const animationUseCaseValidator = v.union(
-  v.literal("small_accent"),
-  v.literal("interactive_control"),
-  v.literal("button_overlay"),
-  v.literal("ambient_background"),
-  v.literal("loader_feedback"),
+export const generationStatusValidator = v.union(
+  ...GENERATION_STATUSES.map((s) => v.literal(s)),
 );
 
-export const animationDestinationValidator = v.union(
-  v.literal("react_native_runtime"),
-  v.literal("web_runtime"),
-  v.literal("runtime_bundle"),
+export const generationFailureKindValidator = v.union(
+  ...GENERATION_FAILURE_KINDS.map((k) => v.literal(k)),
 );
 
-export const animationGenerationStatusValidator = v.union(
-  v.literal("intake"),
+export const generationOpsEventTypeValidator = v.union(
+  ...GENERATION_OPS_EVENT_TYPES.map((t) => v.literal(t)),
+);
+
+export const lottieGenerationStatusValidator = v.union(
   v.literal("queued"),
-  v.literal("generating_reference"),
-  v.literal("reconstructing_alpha"),
-  v.literal("qa"),
-  v.literal("exporting"),
+  v.literal("generating"),
+  v.literal("repairing"),
   v.literal("complete"),
   v.literal("failed"),
 );
 
-const animationTextBrandInputFields = {
-  channelName: v.optional(v.string()),
-  colors: v.optional(v.array(v.string())),
-  creatorHandle: v.optional(v.string()),
-} as const;
-
-export const animationPublicBrandInputsValidator = v.object(animationTextBrandInputFields);
-
-export const animationBrandInputsValidator = v.object({
-  ...animationTextBrandInputFields,
-  logoStorageId: v.optional(v.id("_storage")),
-});
-
-export const animationAttributionSourceValidator = v.union(
-  v.literal("organic"),
-  v.literal("tiktok_creator"),
-  v.literal("spark_ad"),
-  v.literal("direct_outreach"),
-  v.literal("other"),
-);
-
-export const animationAttributionValidator = v.object({
-  campaignId: v.optional(v.string()),
-  creatorCode: v.optional(v.string()),
-  landingPageVariant: v.optional(v.string()),
-  source: v.optional(animationAttributionSourceValidator),
-});
-
-export const animationExportsValidator = v.object({
-  apngStorageId: v.optional(v.id("_storage")),
-  pngSequenceStorageId: v.optional(v.id("_storage")),
-  runtimeManifestStorageId: v.optional(v.id("_storage")),
-  spriteSheetStorageId: v.optional(v.id("_storage")),
-  webpSpriteSheetStorageId: v.optional(v.id("_storage")),
-});
-
-export const animationQaDecisionValidator = v.union(
+export const lottieValidationDecisionValidator = v.union(
   v.literal("pass"),
-  v.literal("rerun_reference"),
-  v.literal("repair_alpha"),
-  v.literal("fail_refund"),
-  v.literal("review"),
+  v.literal("fail"),
 );
 
-export const animationQaReasonCodeValidator = v.union(
-  v.literal("alpha_missing_frame"),
-  v.literal("border_contact"),
-  v.literal("boundary_flicker_high"),
-  v.literal("component_instability_high"),
-  v.literal("edge_spill_high"),
-  v.literal("export_alpha_lost"),
-  v.literal("loop_seam_high"),
-  v.literal("reference_identity_drift"),
-  v.literal("subject_cropped"),
-  v.literal("transparent_region_contaminated"),
-);
-
-export const animationQaMetricsValidator = v.object({
-  alphaFrameCoverage: v.number(),
-  borderTransparencyMin: v.number(),
-  boundaryFlicker: v.number(),
-  componentStability: v.number(),
-  decodedExportAlphaCoverage: v.number(),
-  durationSeconds: v.number(),
-  edgeSpill: v.number(),
-  frameCount: v.number(),
-  loopSeamScore: v.number(),
-  rightSizeMaxScale: v.optional(v.number()),
-  runtimeDensityMax: v.optional(v.number()),
-  runtimeDisplayDpMax: v.optional(v.number()),
-  spriteCellCount: v.optional(v.number()),
-  spriteCellHeight: v.optional(v.number()),
-  spriteCellWidth: v.optional(v.number()),
-});
-
-export const animationQaValidator = v.object({
-  decision: animationQaDecisionValidator,
-  metrics: animationQaMetricsValidator,
-  reasonCodes: v.array(animationQaReasonCodeValidator),
+export const lottieValidationValidator = v.object({
+  decision: lottieValidationDecisionValidator,
+  errors: v.array(v.string()),
+  warnings: v.array(v.string()),
   version: v.string(),
 });
 

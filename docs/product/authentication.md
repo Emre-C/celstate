@@ -101,7 +101,7 @@ Clerk must expose a JWT template named **`convex`** (issuer domain → `CLERK_JW
 1. **Stable identity** — Provisioning keys off `sub` (`identity.subject` → `users.clerkUserId`). A *verified* `email` is the link key that adopts a pre-existing account and consolidates a cutover shell; it is stored **lowercased**. See `users.upsertUserRecord` / `mergeUserInto`.
 2. **Canonical resolution** — When one identity matches multiple rows (legacy account + shell), the **oldest row wins** (it holds the established history); the write path merges the rest into it. Read (`getMe`) and write (`storeUser`) share this ordering, so the UI is correct even before the merge mutation runs.
 3. **Email verification** — `users.storeUser` rejects only when Convex supplies an explicit `emailVerified === false`. Email-based adoption is allowed when `email_verified` is `true` or absent, never when `false`. A missing `email` claim is logged as a `console.warn` in the Convex deployment (a misconfiguration signal).
-4. **Provider hints** — `resolveAuthProviderFromIdentity` uses `connection_type` / email heuristics for analytics.
+4. **Provider hints** — `resolveAuthProviderFromIdentity` uses email heuristics for analytics (e.g. `@privaterelay.appleid.com` → Apple).
 
 ## Pre-merge verification (auth boundary changes)
 

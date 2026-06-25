@@ -4,8 +4,11 @@
 	import MonoLabel from './ui/MonoLabel.svelte';
 	import { formatTimeAgo, toDownloadFileSlug } from '../utils/format.js';
 	import { downloadUrlAsFile } from '../utils/download.js';
+	import { initPostHog, posthog } from '../analytics/client-posthog';
+	import { growthEvents, type ImageDownloadVariant } from '../analytics/growth-events.js';
 
 	let {
+		generationId,
 		prompt,
 		status,
 		statusMessage,
@@ -18,6 +21,7 @@
 		generationTimeMs,
 		aspectRatio = '1:1'
 	}: {
+		generationId: string;
 		prompt: string;
 		status: 'generating' | 'complete' | 'failed';
 		statusMessage?: string;
@@ -47,6 +51,13 @@
 		downloading = suffix;
 		try {
 			await downloadUrlAsFile(url, `celstate-${safeName}${suffix}.png`);
+			if (initPostHog()) {
+				posthog.capture(growthEvents.imageDownloaded, {
+					generation_id: generationId,
+					variant: (suffix === '-hires' ? 'hires' : 'standard') as ImageDownloadVariant,
+					aspect_ratio: aspectRatio,
+				});
+			}
 		} finally {
 			downloading = false;
 		}

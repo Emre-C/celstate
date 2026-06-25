@@ -162,7 +162,7 @@ script) both inherit it. No plaintext touches disk.
 
 **When to sync to Convex dev** (`pnpm secrets:sync:convex:dev`):
 
-- After `pnpm secrets:rotate:dev` — pushes the new JWT/Better-Auth/etc.
+- After `pnpm secrets:rotate:dev` — pushes the new
   values into the Convex **dev** deployment so server-side functions agree
   with the SvelteKit-side `doppler run` view.
 - After adding a brand-new backend secret name to Doppler `dev` (e.g. a
@@ -234,7 +234,7 @@ plausibly exposed dev values too (shared dev machine, leaked dev
 by `pnpm secrets:sync:convex:dev`.
 
 Always rotate the broadest-blast-radius secrets first: live Stripe key,
-service-account keys, JWT signing keys.
+service-account keys.
 
 ## Secret inventory
 
@@ -243,7 +243,6 @@ Names belong to one of three categories. **Never** put values in this doc.
 ### Auto-rotatable (script generates new value, uploads to Doppler)
 | Name | Generator | What it signs / authorizes |
 |---|---|---|
-| `JWT_PRIVATE_KEY` + `JWKS` | `pnpm secrets:rotate jwt` | Legacy RSA keypair (older auth stacks). Safe to skip when Convex no longer references these names. |
 | `VERIFICATION_RUNNER_SECRET` | `pnpm secrets:rotate verification-runner-secret` | Bearer for the production canary HTTP routes. |
 | `QA_USER_RESET_SECRET` | `pnpm secrets:rotate qa-user-reset-secret` | Bearer for the QA reset endpoint (dev/stg only). |
 
@@ -285,8 +284,7 @@ Names belong to one of three categories. **Never** put values in this doc.
 - **Atomic writes where possible.** Convex sync uses `env set --from-file
   --force`, which either applies all changes or none.
 - **Fail-closed on rotation.** GCP key rotation refuses to delete the old key
-  if Doppler upload of the new key fails. JWT rotation invalidates all
-  sessions on success — by design.
+  if Doppler upload of the new key fails.
 - **Defense in depth.** Even with Doppler in place, do not run `convex env
   list` (the original leak vector). Treat any plaintext output of a CLI run
   in a context with AI assistants or screen sharing as compromised.

@@ -34,18 +34,6 @@ const normalizeOptionalEmail = (email: string | undefined): string | undefined =
 };
 
 const resolveAuthProviderFromIdentity = (identity: UserIdentity): ResolvedAuthProvider => {
-  const connection =
-    (typeof identity["connection_type"] === "string" ? identity["connection_type"] : undefined) ??
-    (typeof identity["connectionType"] === "string" ? identity["connectionType"] : undefined);
-
-  const normalized = connection?.toLowerCase() ?? "";
-  if (normalized.includes("google")) {
-    return "google";
-  }
-  if (normalized.includes("apple")) {
-    return "apple";
-  }
-
   const email = identity.email?.trim().toLowerCase();
   if (email?.endsWith("@privaterelay.appleid.com")) {
     return "apple";
@@ -176,7 +164,7 @@ const mergeUserInto = async (
   }
 
   for (const gen of await ctx.db
-    .query("animationGenerations")
+    .query("lottieGenerations")
     .withIndex("by_user_created", (q) => q.eq("userId", dupId))
     .collect()) {
     await ctx.db.patch(gen._id, { userId: canonicalId });
@@ -290,9 +278,11 @@ const upsertUserRecord = async (
     distinctId: String(userId),
     event: "signed_up",
     properties: {
-      user_id: String(userId),
       auth_provider: profile.authProvider ?? "unknown",
+      email: user.email,
       initial_credits: GENERATION_CONFIG.initialCredits,
+      name: user.name,
+      user_id: String(userId),
     },
   });
 
@@ -478,49 +468,4 @@ export const grantWeeklyCredit = internalAction({
   },
 });
 
-/**
- * One-shot migration: clear the vestigial `workosUserId` from every user row so
- * the field can be dropped from the schema. Convex rejects a schema that omits a
- * field still present on existing documents, so this must run (and finish) in
- * prod before the field is removed. Paginated to avoid an unbounded scan.
- */
-export const clearWorkosUserIdPage = internalMutation({
-  args: { cursor: v.union(v.string(), v.null()) },
-  returns: v.object({
-    continueCursor: v.string(),
-    isDone: v.boolean(),
-    cleared: v.number(),
-  }),
-  handler: async (ctx, args) => {
-    const { page, continueCursor, isDone } = await ctx.db
-      .query("users")
-      .paginate({ numItems: 100, cursor: args.cursor });
-
-    let cleared = 0;
-    for (const user of page) {
-      if (user.workosUserId === undefined) continue;
-      await ctx.db.patch(user._id, { workosUserId: undefined });
-      cleared += 1;
-    }
-    return { continueCursor, isDone, cleared };
-  },
-});
-
-export const clearWorkosUserId = internalAction({
-  args: {},
-  returns: v.object({ totalCleared: v.number() }),
-  handler: async (ctx) => {
-    let cursor: string | null = null;
-    let totalCleared = 0;
-    for (;;) {
-      const result: { continueCursor: string; isDone: boolean; cleared: number } =
-        await ctx.runMutation(internal.users.clearWorkosUserIdPage, { cursor });
-      totalCleared += result.cleared;
-      if (result.isDone) {
-        return { totalCleared };
-      }
-      cursor = result.continueCursor;
-    }
-  },
-});
 

@@ -1,9 +1,9 @@
 import type { Doc, Id } from "../../_generated/dataModel.js";
-import type { Infer } from "convex/values";
 import { GENERATION_CONFIG } from "../config.js";
 import { generationStageValidator } from "../validation/validators.js";
+import type { GenerationStage } from "../../../lib/generation-types.js";
 
-export type GenerationStage = Infer<typeof generationStageValidator>;
+export type { GenerationStage };
 
 type GenerationRunPatch = Partial<Omit<Doc<"generations">, "_id" | "_creationTime">>;
 

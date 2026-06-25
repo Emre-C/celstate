@@ -10,6 +10,7 @@ pnpm ops:investigate generation --id <generationId>
 pnpm ops:investigate user --email <email>
 pnpm ops:investigate user --id <userId>
 pnpm ops:investigate recent --limit 5
+pnpm ops:investigate alerts --hours 24
 pnpm ops:investigate check
 ```
 
@@ -24,6 +25,7 @@ Default output is JSON stdout plus a concise diagnostic summary on stderr. The C
 | "Can they download it?" + ID | `pnpm ops:investigate generation --id <id>` | artifact storage presence, URL issuance, HTTP probe verdict |
 | "New user..." + email | `pnpm ops:investigate user --email <email>` | auth binding, credits, latest generations |
 | "New user..." without email/ID | `pnpm ops:investigate recent --limit 5`, then inspect likely user/generation | recent signup/failure candidates |
+| "Did alerts go out?" | `pnpm ops:investigate alerts --hours 24` | recent opsAlertEvents (signup, purchase, rotation reminder) with sent/failed outcome |
 | "Did they come back?" | Start with Convex user/generation investigation; add `--with-journey` only if browser behavior matters | later generation rows first, PostHog journey second |
 
 ## Decision Tree
@@ -32,9 +34,10 @@ Default output is JSON stdout plus a concise diagnostic summary on stderr. The C
 2. If there is a Discord generation alert, run `pnpm ops:investigate generation --id <generationId>`.
 3. If the question says "new user" or gives an email, run `pnpm ops:investigate user --email <email>`.
 4. If there is no ID or email, run `pnpm ops:investigate recent --limit 5`.
-5. Only add `--with-journey` when the Convex report answers the product state but not the user's browsing behavior.
-6. Do not search Sentry for generation pipeline failures. Use Sentry only for auth/frontend exceptions surfaced by health or auth alerts.
-7. Final response must answer the question directly. Do not tell the owner to run the command unless they ask for the command.
+5. If the question is about webhook/alert delivery (signup, purchase, rotation), run `pnpm ops:investigate alerts --hours 24`.
+6. Only add `--with-journey` when the Convex report answers the product state but not the user's browsing behavior.
+7. Do not search Sentry for generation pipeline failures. Use Sentry only for auth/frontend exceptions surfaced by health or auth alerts.
+8. Final response must answer the question directly. Do not tell the owner to run the command unless they ask for the command.
 
 ## Answer Shape
 

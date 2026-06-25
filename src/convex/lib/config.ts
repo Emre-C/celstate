@@ -115,55 +115,68 @@ export const GENERATION_CONFIG = {
   optimizedPngDither: 0.5,
 } as const;
 
-export const ANIMATION_ASPECT_RATIOS = {
-  "1:1": { label: "Square" },
-  "4:3": { label: "Control" },
-  "16:9": { label: "Widescreen" },
-  "9:16": { label: "Vertical" },
+export const LOTTIE_ASPECT_RATIOS = {
+  "1:1": { height: 512, label: "Square", width: 512 },
+  "4:3": { height: 480, label: "Landscape", width: 640 },
+  "16:9": { height: 540, label: "Widescreen", width: 960 },
+  "9:16": { height: 960, label: "Tall", width: 540 },
 } as const;
 
-export type AnimationAspectRatioKey = keyof typeof ANIMATION_ASPECT_RATIOS;
+export type LottieAspectRatioKey = keyof typeof LOTTIE_ASPECT_RATIOS;
 
-const VALID_ANIMATION_ASPECT_RATIOS = new Set<string>(
-  Object.keys(ANIMATION_ASPECT_RATIOS),
+const VALID_LOTTIE_ASPECT_RATIOS = new Set<string>(
+  Object.keys(LOTTIE_ASPECT_RATIOS),
 );
 
-export function isValidAnimationAspectRatio(
+export function isValidLottieAspectRatio(
   value: string,
-): value is AnimationAspectRatioKey {
-  return VALID_ANIMATION_ASPECT_RATIOS.has(value);
+): value is LottieAspectRatioKey {
+  return VALID_LOTTIE_ASPECT_RATIOS.has(value);
 }
 
-export const ANIMATION_DURATIONS_SECONDS = [2, 4, 6, 8] as const;
+export function getLottieDimensions(aspectRatio: LottieAspectRatioKey): {
+  height: number;
+  width: number;
+} {
+  const ratio = LOTTIE_ASPECT_RATIOS[aspectRatio];
+  return { height: ratio.height, width: ratio.width };
+}
 
-export type AnimationDurationSeconds = (typeof ANIMATION_DURATIONS_SECONDS)[number];
+export const LOTTIE_DURATIONS_SECONDS = [2, 4, 6, 8] as const;
 
-const VALID_ANIMATION_DURATIONS_SECONDS = new Set<number>(
-  ANIMATION_DURATIONS_SECONDS,
+export type LottieDurationSeconds = (typeof LOTTIE_DURATIONS_SECONDS)[number];
+
+const VALID_LOTTIE_DURATIONS_SECONDS = new Set<number>(
+  LOTTIE_DURATIONS_SECONDS,
 );
 
-export function isValidAnimationDurationSeconds(
+export function isValidLottieDurationSeconds(
   value: number,
-): value is AnimationDurationSeconds {
-  return VALID_ANIMATION_DURATIONS_SECONDS.has(value);
+): value is LottieDurationSeconds {
+  return VALID_LOTTIE_DURATIONS_SECONDS.has(value);
 }
 
-export const ANIMATION_GENERATION_CONFIG = {
-  defaultAspectRatio: "16:9" as AnimationAspectRatioKey,
-  defaultDurationSeconds: 4 as AnimationDurationSeconds,
-  maxActiveAnimationGenerations: 5,
-  maxAttributionValueLength: 120,
-  maxBrandColors: 6,
-  maxBrandInputLength: 80,
+export const LOTTIE_GENERATION_CONFIG = {
+  defaultAspectRatio: "1:1" as LottieAspectRatioKey,
+  defaultDurationSeconds: 4 as LottieDurationSeconds,
+  defaultFps: 60,
+  defaultModel: "gemini-3.1-pro-preview",
+  maxActiveGenerations: 3,
+  maxAttempts: 2,
+  maxJsonBytes: 400_000,
+  maxLayers: 80,
   maxPromptLength: 4_000,
-  maxReferenceImages: 4,
   maxRequestsPerWindow: 20,
   requestWindowMs: 24 * 60 * 60 * 1000,
 
-  // Phase -1 concierge validation records requests without charging credits.
-  // The automated pipeline can raise this once sprite generation + runtime export are live.
-  creditsPerAnimationRequest: 0,
+  /** Optional grounding markup (SVG/reference text) injected into the prompt. */
+  maxGroundingLength: 24_000,
 
-  /** Worker requeues to intake on transient provider/network errors before failing. */
-  maxWorkerRetries: 3,
+  /** Active runs with no progress past this age are reclaimed by the janitor. */
+  staleGenerationTimeoutMs: 10 * 60 * 1000,
+  /** Max rows reclaimed per status per cleanup tick. */
+  staleCleanupBatchSize: 25,
+
+  // V1 proves quality before charging.
+  creditsPerLottieGeneration: 0,
 } as const;

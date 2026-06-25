@@ -2,15 +2,13 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import {
   canaryPrincipalBindingFields,
-  animationAttributionValidator,
-  animationBrandInputsValidator,
-  animationDestinationValidator,
-  animationExportsValidator,
-  animationGenerationStatusValidator,
-  animationQaValidator,
-  animationUseCaseValidator,
   creditGrantReasonValidator,
+  generationFailureKindValidator,
+  generationOpsEventTypeValidator,
   generationStageValidator,
+  generationStatusValidator,
+  lottieGenerationStatusValidator,
+  lottieValidationValidator,
   transparentQaValidator,
   verificationEvidenceFields,
   verificationRunFields,
@@ -33,8 +31,6 @@ export default defineSchema({
   users: defineTable({
     tokenIdentifier: v.optional(v.string()),
     clerkUserId: v.optional(v.string()),
-    /** Legacy WorkOS subject — retained until prod rows are backfilled or re-bound via Clerk sign-in. */
-    workosUserId: v.optional(v.string()),
     name: v.optional(v.string()),
     image: v.optional(v.string()),
     email: v.optional(v.string()),
@@ -44,23 +40,19 @@ export default defineSchema({
   })
     .index("email", ["email"])
     .index("by_token", ["tokenIdentifier"])
-    .index("by_clerk_user", ["clerkUserId"]),
+    .index("by_clerk_user", ["clerkUserId"])
+    .index("by_createdAt", ["_creationTime"]),
 
   generations: defineTable({
     userId: v.id("users"),
     prompt: v.string(),
-    status: v.union(
-      v.literal("generating"),
-      v.literal("complete"),
-      v.literal("failed")
-    ),
+    status: generationStatusValidator,
     stage: v.optional(generationStageValidator),
     statusMessage: v.optional(v.string()),
     resultStorageId: v.optional(v.id("_storage")),
     whiteBgStorageId: v.optional(v.id("_storage")),
     blackBgStorageId: v.optional(v.id("_storage")),
     optimizedStorageId: v.optional(v.id("_storage")),
-    referenceStorageId: v.optional(v.id("_storage")),
     referenceStorageIds: v.optional(v.array(v.id("_storage"))),
     creditsCost: v.number(),
     aspectRatio: v.string(),
@@ -69,12 +61,7 @@ export default defineSchema({
     stageStartedAt: v.optional(v.number()),
     completedAt: v.optional(v.number()),
     error: v.optional(v.string()),
-    failureKind: v.optional(v.union(
-      v.literal("timeout"),
-      v.literal("provider_error"),
-      v.literal("processing_error"),
-      v.literal("unknown")
-    )),
+    failureKind: v.optional(generationFailureKindValidator),
     failureStage: v.optional(generationStageValidator),
     transparentQa: v.optional(transparentQaValidator),
     generationTimeMs: v.optional(v.number()),
@@ -93,55 +80,36 @@ export default defineSchema({
     .index("by_createdAt", ["createdAt"])
     .index("by_status", ["status"]),
 
-  animationGenerations: defineTable({
+  lottieGenerations: defineTable({
     userId: v.id("users"),
     prompt: v.string(),
-    useCase: animationUseCaseValidator,
-    destination: animationDestinationValidator,
-    productionBrief: v.optional(v.string()),
-    status: animationGenerationStatusValidator,
+    grounding: v.optional(v.string()),
+    status: lottieGenerationStatusValidator,
     statusMessage: v.optional(v.string()),
     aspectRatio: v.string(),
     durationSeconds: v.number(),
-    creditsCost: v.number(),
-    stageStartedAt: v.optional(v.number()),
-    lastProgressAt: v.optional(v.number()),
-    retryCount: v.number(),
-    creditRefundedAt: v.optional(v.number()),
-    referenceGenerationId: v.optional(v.id("generations")),
-    uploadedReferenceStorageIds: v.optional(v.array(v.id("_storage"))),
-    brandInputs: v.optional(animationBrandInputsValidator),
-    attribution: v.optional(animationAttributionValidator),
-    canonicalFrameManifestStorageId: v.optional(v.id("_storage")),
-    previewStorageId: v.optional(v.id("_storage")),
-    exports: v.optional(animationExportsValidator),
-    animationQa: v.optional(animationQaValidator),
+    fps: v.number(),
     createdAt: v.number(),
+    lastProgressAt: v.optional(v.number()),
     completedAt: v.optional(v.number()),
     failedAt: v.optional(v.number()),
     error: v.optional(v.string()),
+    attemptCount: v.number(),
+    creditsCost: v.number(),
+    creditRefundedAt: v.optional(v.number()),
+    lottieStorageId: v.optional(v.id("_storage")),
+    validation: v.optional(lottieValidationValidator),
   })
     .index("by_user_created", ["userId", "createdAt"])
     .index("by_user_status_created", ["userId", "status", "createdAt"])
-    .index("by_createdAt", ["createdAt"])
     .index("by_status_last_progress", ["status", "lastProgressAt"])
-    .index("by_attribution_campaign_created", ["attribution.campaignId", "createdAt"])
-    .index("by_attribution_creator_code_created", ["attribution.creatorCode", "createdAt"]),
+    .index("by_createdAt", ["createdAt"]),
 
   generationOpsEvents: defineTable({
     generationId: v.id("generations"),
     userId: v.id("users"),
     userEmail: v.optional(v.string()),
-    eventType: v.union(
-      v.literal("generation_requested"),
-      v.literal("stage_succeeded"),
-      v.literal("stage_retry_scheduled"),
-      v.literal("generation_completed"),
-      v.literal("generation_failed"),
-      v.literal("generation_stalled"),
-      v.literal("alert_sent"),
-      v.literal("alert_failed")
-    ),
+    eventType: generationOpsEventTypeValidator,
     severity: v.optional(v.union(
       v.literal("info"),
       v.literal("warning"),
@@ -159,6 +127,19 @@ export default defineSchema({
     .index("by_generation", ["generationId", "createdAt"])
     .index("by_createdAt", ["createdAt"])
     .index("by_eventType_createdAt", ["eventType", "createdAt"]),
+
+  opsAlertEvents: defineTable({
+    alertType: v.union(
+      v.literal("signup_alert"),
+      v.literal("purchase_alert"),
+      v.literal("secret_rotation_reminder"),
+    ),
+    outcome: v.union(v.literal("sent"), v.literal("failed")),
+    error: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_createdAt", ["createdAt"])
+    .index("by_alertType_createdAt", ["alertType", "createdAt"]),
 
   creditGrants: defineTable({
     userId: v.id("users"),

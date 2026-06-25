@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { internalQuery } from "./_generated/server.js";
 import {
+  generationStatusValidator,
   transparentQaDecisionValidator,
   transparentQaReasonCodeValidator,
 } from "./lib/validation/validators.js";
@@ -9,14 +10,11 @@ import {
   type TransparentQaNumericMetricKey,
   type TransparentQaReasonCode,
 } from "./lib/qa/transparentQa.js";
+import type { GenerationStatus } from "../lib/generation-types.js";
 
-type GenerationStatusFilter = "complete" | "generating" | "failed";
+type GenerationStatusFilter = GenerationStatus;
 
-const generationStatusFilterValidator = v.union(
-  v.literal("complete"),
-  v.literal("generating"),
-  v.literal("failed"),
-);
+const generationStatusFilterValidator = generationStatusValidator;
 
 interface TransparentQaMetricDistributionSummary {
   count: number;

@@ -183,6 +183,8 @@ type ClientPostHogEvent =
   | "generation_started"
   | "generation_completed"
   | "generation_failed"
+  | "image_downloaded"
+  | "lottie_downloaded"
   | "credits_purchase_initiated"
   | "credits_checkout_returned"
   | "session_attribution_registered";
@@ -203,6 +205,17 @@ interface GenerationFailedProps {
   failure_kind: "timeout" | "provider_error" | "processing_error" | "unknown";
   failure_stage?: "white_background" | "black_background" | "finalizing";
   retry_count?: number;
+}
+
+interface ImageDownloadedProps {
+  generation_id: string;
+  variant: "standard" | "hires";
+  aspect_ratio: string;
+}
+
+interface LottieDownloadedProps {
+  generation_id: string;
+  aspect_ratio: string;
 }
 
 interface CreditsPurchaseInitiatedProps {
@@ -505,6 +518,48 @@ cleanupStaleGenerations (cron ~1min):
       → scheduleGenerationAlert(generation_stalled)
 ```
 
+### 11.5 Non-generation ops alert events — `opsAlertEvents`
+
+```typescript
+type OpsAlertType = "signup_alert" | "purchase_alert" | "secret_rotation_reminder";
+
+interface OpsAlertEventDoc {
+  alertType: OpsAlertType;
+  outcome: "sent" | "failed";
+  error?: string;
+  createdAt: number;
+}
+```
+
+```yaml
+indexes:
+  - ["createdAt"]                  # by_createdAt
+  - ["alertType", "createdAt"]     # by_alertType_createdAt
+```
+
+```pseudo
+sendSignupAlert, sendSecretRotationReminder, handleCreditPackCheckout:
+  result = sendOpsWebhook(request, { onError: console.error })
+  TRY ctx.runMutation(recordOpsAlertEvent, { alertType, outcome: result.ok ? "sent" : "failed", error })
+  CATCH → console.error  # recording failure must never break the caller (especially Stripe webhook)
+```
+
+```yaml
+invariants:
+  - "opsAlertEvents records non-generation webhook delivery outcomes only"
+  - "recordOpsAlertEvent is wrapped in try/catch at every call site — recording failure must not cascade"
+  - "sendOpsWebhook returns { ok: true } | { ok: false; error } — callers use the result to determine outcome"
+```
+
+### 11.6 Convex log streams — not configured (free tier)
+
+Convex log streams (Axiom, Datadog, PostHog, custom webhook) require a Convex Pro subscription. Celstate is on the free tier, so:
+
+- `console.error` / `console.log` output from Convex functions is **transient** — visible only in the Convex dashboard Logs page (short retention) or via `npx convex logs` (live tail, no persistence).
+- **No code change can fix this** — log stream configuration is a dashboard-only ops task.
+- The `generationOpsEvents` and `opsAlertEvents` tables are the **durable, queryable** observability layer. They do not depend on log streams.
+- The `pnpm ops:investigate alerts` CLI command queries `opsAlertEvents` for non-generation webhook delivery outcomes.
+
 ---
 
 ## 12. Ops webhook routing
@@ -723,6 +778,8 @@ client:
   root_layout_capture: "src/routes/+layout.svelte"
   app_identify: "src/routes/(app)/app/+layout.svelte"
   generation_events: "src/routes/(app)/app/+page.svelte"
+  image_download_capture: "src/lib/components/GenerationCard.svelte"
+  lottie_download_capture: "src/lib/components/LottieGenerationCard.svelte"
 tests:
   - "src/lib/analytics/generation.test.ts"
   - "src/lib/analytics/session-attribution.test.ts"

@@ -128,6 +128,7 @@ export const generationSummaryValidator = v.object({
 	failureStage: v.optional(generationStageValidator),
 	id: v.string(),
 	optimizedStorageIdPresent: v.boolean(),
+	prompt: v.string(),
 	resultStorageIdPresent: v.boolean(),
 	retryCount: v.number(),
 	stage: v.optional(generationStageValidator),
@@ -231,5 +232,23 @@ export const criticalPathHealthReportValidator = v.object({
 		download: criticalPathVerdictValidator,
 		generation: criticalPathVerdictValidator,
 		recommendedAction: v.string()
+	})
+});
+
+export const recentSignupsReportValidator = v.object({
+	signups: v.array(
+		v.object({
+			createdAt: v.number(),
+			credits: v.optional(v.number()),
+			email: v.optional(v.string()),
+			id: v.string(),
+			name: v.optional(v.string())
+		})
+	),
+	window: v.object({
+		hoursWindow: v.number(),
+		limit: v.number(),
+		now: v.number(),
+		since: v.number()
 	})
 });

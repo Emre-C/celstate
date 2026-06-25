@@ -429,6 +429,7 @@ const ANALYSIS_QUEUE: readonly AnalysisQuery[] = [
 - `landing_viewed`, `landing_cta_clicked`, `auth_sign_in_started` — GH-004 landing → signup measurement (client).
 - `signed_up` — Convex on first user row (server).
 - `generation_started`, `generation_completed`, `generation_failed` — generation pipeline (client / Convex as implemented).
+- `image_downloaded`, `lottie_downloaded` — artifact download tracking, fired client-side after successful `downloadUrlAsFile` (client).
 - `zero_credits_prompt_shown`, `credits_purchase_cta_clicked` — GH-003 free→paid bridge CTAs (client).
 - `credits_purchase_initiated`, `credits_purchase_completed`, `credits_checkout_returned` — purchase funnel (client + Convex server for completed).
 - `session_attribution_registered` — first-load attribution (client).

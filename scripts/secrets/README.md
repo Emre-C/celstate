@@ -14,7 +14,7 @@ the only safe ways to inspect.
 
 | Script | Purpose |
 |---|---|
-| `rotate.mjs` | Generate fresh values for auto-rotatable secrets (JWT keypair, Verification Runner secret, QA reset secret) and upload to Doppler. |
+| `rotate.mjs` | Generate fresh values for auto-rotatable secrets (Verification Runner secret, QA reset secret) and upload to Doppler. |
 | `gcp-rotate-sa-key.mjs` | Rotate a GCP service account key: create new key via `gcloud`, upload JSON to Doppler, delete old key. |
 | `sync.mjs` | Pull from Doppler and push to a target system: Convex (`prod`/`dev`), Vercel (`production`/`preview`/`development`), or GitHub Actions secrets in the current repo. The `pnpm` shortcuts pin both `--project=celstate` and `--config=<dev\|prd>` so they are insensitive to your local `doppler setup`. |
 | `bootstrap-dev.mjs` | One-shot migration tool: read legacy `.env` / `.env.local` from disk silently, copy a curated subset of values from Doppler `prd`, rename legacy names to canonical names, and upload to Doppler `dev`. Run only when bootstrapping or rebuilding Doppler dev from a repo that still has legacy env files. After it succeeds, archive the `.env*` files and follow `pnpm secrets:rotate:dev` + `pnpm secrets:sync:convex:dev`. |
@@ -80,8 +80,8 @@ After updating Doppler with the new manual values, run the sync.
 ### Adding a new secret
 
 Decide first whether the secret is needed in dev, prod, or both. Most are
-both, but with **different values** per config (Stripe test vs live, JWT
-keypairs, Vertex SA, `SITE_URL`, etc.).
+both, but with **different values** per config (Stripe test vs live,
+Vertex SA, `SITE_URL`, etc.).
 
 ```pwsh
 # Add to prd (production / Vercel preview / GitHub Actions consumers):
@@ -135,8 +135,7 @@ output looks right before pruning.
 - **Atomic writes where possible.** Convex sync uses `env set --from-file
   --force`, which either applies all changes or none.
 - **Fail-closed on rotation.** GCP key rotation refuses to delete the old key
-  if Doppler upload of the new key fails. JWT rotation invalidates all
-  sessions on success — by design.
+  if Doppler upload of the new key fails.
 - **No secret values flow through this repository.** The scripts contain logic
   only; values exist only in Doppler, Convex, Vercel, and GitHub Actions
   secret stores at rest.

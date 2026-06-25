@@ -254,7 +254,7 @@ export async function handleMcpRequest(
       error instanceof Error ? error.message : "Internal MCP error";
     return jsonError(request, message, 500, requestId);
   } finally {
-    await transport.close().catch(() => {});
-    await server.close().catch(() => {});
+    await transport.close().catch((error) => console.error("MCP transport close failed", error));
+    await server.close().catch((error) => console.error("MCP server close failed", error));
   }
 }

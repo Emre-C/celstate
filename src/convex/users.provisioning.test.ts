@@ -128,7 +128,7 @@ describe("Clerk provisioning — users.storeUser", () => {
 
   it("consolidates a cutover shell into the legacy account, repointing its records", async () => {
     const t = createTest();
-    const { legacyId, shellId, genId, animId } = await t.run(async (ctx) => {
+    const { legacyId, shellId, genId, lottieId } = await t.run(async (ctx) => {
       const legacyId = await ctx.db.insert("users", {
         email: "merge@celstate.test",
         credits: 7,
@@ -149,19 +149,18 @@ describe("Clerk provisioning — users.storeUser", () => {
         aspectRatio: "1:1",
         createdAt: 1,
       });
-      const animId = await ctx.db.insert("animationGenerations", {
+      const lottieId = await ctx.db.insert("lottieGenerations", {
         userId: shellId,
-        prompt: "stranded-anim",
-        useCase: "small_accent",
-        destination: "web_runtime",
+        prompt: "stranded-lottie",
         status: "complete",
         aspectRatio: "1:1",
-        durationSeconds: 2,
-        creditsCost: 1,
-        retryCount: 0,
+        durationSeconds: 4,
+        fps: 60,
         createdAt: 1,
+        attemptCount: 1,
+        creditsCost: 0,
       });
-      return { legacyId, shellId, genId, animId };
+      return { legacyId, shellId, genId, lottieId };
     });
 
     const asUser = t.withIdentity({
@@ -179,7 +178,7 @@ describe("Clerk provisioning — users.storeUser", () => {
     await t.run(async (ctx) => {
       expect(await ctx.db.get(shellId)).toBeNull(); // shell consolidated away
       expect((await ctx.db.get(genId))?.userId).toEqual(legacyId);
-      expect((await ctx.db.get(animId))?.userId).toEqual(legacyId);
+      expect((await ctx.db.get(lottieId))?.userId).toEqual(legacyId);
     });
   });
 

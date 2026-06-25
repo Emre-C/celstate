@@ -4,10 +4,10 @@ import { GENERATION_CONFIG } from "./config.js";
 import {
   assertRetentionBoundedCutoff,
   computeExpiredArtifactCutoff,
-  isAnimationGenerationEligibleForRetentionPurge,
   isGenerationEligibleForRetentionPurge,
-  storageIdsFromAnimationGeneration,
+  isLottieGenerationEligibleForRetentionPurge,
   storageIdsFromGeneration,
+  storageIdsFromLottieGeneration,
 } from "./generationArtifactStorage.js";
 
 describe("generationArtifactStorage", () => {
@@ -58,60 +58,34 @@ describe("generationArtifactStorage", () => {
     ).toBe(false);
   });
 
-  it("only terminal animations older than cutoff are retention-eligible", () => {
-    const cutoff = 1_000;
+  it("tracks terminal Lottie generations for retention and storage purge", () => {
+    const storageId = "kg_lottie" as Id<"_storage">;
     const base = {
-      _id: "a1" as Id<"animationGenerations">,
+      _id: "l1" as Id<"lottieGenerations">,
       _creationTime: 0,
       userId: "u1" as Id<"users">,
       prompt: "p",
-      useCase: "small_accent" as const,
-      destination: "web_runtime" as const,
       aspectRatio: "1:1",
       durationSeconds: 4,
-      creditsCost: 1,
-      retryCount: 0,
+      fps: 60,
+      attemptCount: 1,
+      creditsCost: 0,
       createdAt: 500,
-    } satisfies Partial<Doc<"animationGenerations">>;
+      lottieStorageId: storageId,
+    } satisfies Partial<Doc<"lottieGenerations">>;
 
-    expect(
-      isAnimationGenerationEligibleForRetentionPurge(
-        { ...base, status: "failed" } as Doc<"animationGenerations">,
-        cutoff,
-      ),
-    ).toBe(true);
-    expect(
-      isAnimationGenerationEligibleForRetentionPurge(
-        { ...base, status: "exporting" } as Doc<"animationGenerations">,
-        cutoff,
-      ),
-    ).toBe(false);
-  });
-
-  it("dedupes duplicate animation export storage ids", () => {
-    const shared = "kg_shared" as Id<"_storage">;
-    const ids = storageIdsFromAnimationGeneration({
-      _id: "a1" as Id<"animationGenerations">,
-      _creationTime: 0,
-      userId: "u1" as Id<"users">,
-      prompt: "p",
-      useCase: "small_accent",
-      destination: "web_runtime",
+    expect(storageIdsFromLottieGeneration({
+      ...base,
       status: "complete",
-      aspectRatio: "1:1",
-      durationSeconds: 4,
-      creditsCost: 1,
-      retryCount: 0,
-      createdAt: 1,
-      canonicalFrameManifestStorageId: shared,
-      previewStorageId: shared,
-      exports: {
-        runtimeManifestStorageId: shared,
-        apngStorageId: shared,
-      },
-    } as Doc<"animationGenerations">);
-
-    expect(ids).toEqual([shared]);
+    } as Doc<"lottieGenerations">)).toEqual([storageId]);
+    expect(isLottieGenerationEligibleForRetentionPurge({
+      ...base,
+      status: "complete",
+    } as Doc<"lottieGenerations">, 1_000)).toBe(true);
+    expect(isLottieGenerationEligibleForRetentionPurge({
+      ...base,
+      status: "generating",
+    } as Doc<"lottieGenerations">, 1_000)).toBe(false);
   });
 
   it("collects all static generation storage fields", () => {

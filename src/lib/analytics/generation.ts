@@ -1,19 +1,13 @@
-export const GENERATION_FAILURE_KINDS = [
-	'timeout',
-	'provider_error',
-	'processing_error',
-	'unknown'
-] as const;
+import {
+	GENERATION_FAILURE_KINDS,
+	GENERATION_STAGES,
+	type GenerationFailureKind,
+	type GenerationStage,
+} from '../generation-types.js';
 
-export type GenerationFailureKind = (typeof GENERATION_FAILURE_KINDS)[number];
+export type { GenerationFailureKind };
 
-export const GENERATION_FAILURE_STAGES = [
-	'white_background',
-	'black_background',
-	'finalizing'
-] as const;
-
-export type GenerationFailureStage = (typeof GENERATION_FAILURE_STAGES)[number];
+export type GenerationFailureStage = GenerationStage;
 
 export interface GenerationFailureClassificationInput {
 	error?: string | null;
@@ -74,7 +68,7 @@ export function normalizeGenerationFailureStage(value: unknown): GenerationFailu
 		return undefined;
 	}
 
-	return GENERATION_FAILURE_STAGES.includes(value as GenerationFailureStage)
+	return GENERATION_STAGES.includes(value as GenerationStage)
 		? (value as GenerationFailureStage)
 		: undefined;
 }

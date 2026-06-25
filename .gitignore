@@ -86,3 +86,6 @@ replit.nix
 
 # Living-UI G-gate probe output (generated images)
 scripts/living-ui/.gctte-out/
+
+.claude/
+

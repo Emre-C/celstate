@@ -6,7 +6,7 @@ export type StorageDeleteReason =
   | "orphan_cleanup"
   | "qa_user_reset";
 
-/** Minimum age before generation / animation artifacts may be deleted. */
+/** Minimum age before generation and Lottie artifacts may be deleted. */
 export const GENERATION_ARTIFACT_RETENTION_MS =
   GENERATION_CONFIG.generationArtifactRetentionMs;
 
@@ -40,7 +40,6 @@ export function storageIdsFromGeneration(gen: Doc<"generations">): Id<"_storage"
   push(gen.whiteBgStorageId);
   push(gen.blackBgStorageId);
   push(gen.optimizedStorageId);
-  push(gen.referenceStorageId);
   if (gen.referenceStorageIds) {
     for (const id of gen.referenceStorageIds) {
       ids.push(id);
@@ -49,27 +48,13 @@ export function storageIdsFromGeneration(gen: Doc<"generations">): Id<"_storage"
   return uniqueStorageIds(ids);
 }
 
-export function storageIdsFromAnimationGeneration(
-  gen: Doc<"animationGenerations">,
+export function storageIdsFromLottieGeneration(
+  gen: Doc<"lottieGenerations">,
 ): Id<"_storage">[] {
   const ids: Id<"_storage">[] = [];
-  const push = (id: Id<"_storage"> | undefined) => {
-    if (id !== undefined) ids.push(id);
-  };
-
-  push(gen.canonicalFrameManifestStorageId);
-  push(gen.previewStorageId);
-  push(gen.exports?.apngStorageId);
-  push(gen.exports?.pngSequenceStorageId);
-  push(gen.exports?.runtimeManifestStorageId);
-  push(gen.exports?.spriteSheetStorageId);
-  push(gen.exports?.webpSpriteSheetStorageId);
-  if (gen.uploadedReferenceStorageIds) {
-    for (const id of gen.uploadedReferenceStorageIds) {
-      ids.push(id);
-    }
+  if (gen.lottieStorageId !== undefined) {
+    ids.push(gen.lottieStorageId);
   }
-
   return uniqueStorageIds(ids);
 }
 
@@ -77,8 +62,8 @@ export function isTerminalGenerationStatus(status: Doc<"generations">["status"])
   return status === "complete" || status === "failed";
 }
 
-export function isTerminalAnimationGenerationStatus(
-  status: Doc<"animationGenerations">["status"],
+export function isTerminalLottieGenerationStatus(
+  status: Doc<"lottieGenerations">["status"],
 ): boolean {
   return status === "complete" || status === "failed";
 }
@@ -90,9 +75,9 @@ export function isGenerationEligibleForRetentionPurge(
   return isTerminalGenerationStatus(gen.status) && gen.createdAt < cutoffMs;
 }
 
-export function isAnimationGenerationEligibleForRetentionPurge(
-  gen: Doc<"animationGenerations">,
+export function isLottieGenerationEligibleForRetentionPurge(
+  gen: Doc<"lottieGenerations">,
   cutoffMs: number,
 ): boolean {
-  return isTerminalAnimationGenerationStatus(gen.status) && gen.createdAt < cutoffMs;
+  return isTerminalLottieGenerationStatus(gen.status) && gen.createdAt < cutoffMs;
 }

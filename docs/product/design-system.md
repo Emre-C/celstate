@@ -7,6 +7,20 @@
 - **Aesthetic**: Warm editorial / studio-quality. Light-mode only.
 - **Tone**: Premium, confident, designed — NOT dark-mode dev-tool, NOT AI-generated-looking
 
+## Illustrated UI Ornament Guardrail
+
+Before any illustrated UI work, read
+`docs/product/illustrated-ui-ornament-vision.md`.
+
+The active direction is **transparent ornament assets for declared slots in a
+real app**. Code owns layout, scrolling, safe zones, text, controls,
+accessibility, and interaction. Celstate owns alpha-native visual craft.
+
+Use the terms "transparent ornament asset", "slot", "scroll content layer", and
+"alpha-native vignette". Do not propose Living UI, animation workers, runtime
+controls, generated full-screen UI, safe-zone inference, or 2AFC/F-gate studies
+unless those retired paths are explicitly resurrected.
+
 ## Color Tokens
 
 Defined in `src/app.css` via Tailwind `@theme` and `:root`.

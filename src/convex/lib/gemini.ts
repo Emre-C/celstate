@@ -1,4 +1,4 @@
-import { GoogleGenAI, ThinkingLevel } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { GENERATION_CONFIG } from "./config.js";
 
 type GeminiImageMimeType =
@@ -37,6 +37,14 @@ export interface GeminiRuntimeConfig {
   };
   location: string;
   project: string;
+}
+
+export interface GeminiStructuredTextArgs {
+  model: string;
+  prompt: string;
+  responseSchema: Record<string, unknown>;
+  systemInstruction?: string;
+  thinkingLevel?: "low" | "medium" | "high";
 }
 
 const GEMINI_IMAGE_MIME_TYPES = new Set<GeminiImageMimeType>([
@@ -164,6 +172,54 @@ export function createGeminiClient(runtimeConfig: GeminiRuntimeConfig): GoogleGe
     project: runtimeConfig.project,
     vertexai: true,
   });
+}
+
+export function createGeminiEnterpriseClient(runtimeConfig: GeminiRuntimeConfig): GoogleGenAI {
+  return new GoogleGenAI({
+    ...(runtimeConfig.googleAuthOptions
+      ? { googleAuthOptions: runtimeConfig.googleAuthOptions }
+      : {}),
+    enterprise: true,
+    location: runtimeConfig.location,
+    project: runtimeConfig.project,
+  });
+}
+
+export async function generateStructuredText(
+  runtimeConfig: GeminiRuntimeConfig,
+  args: GeminiStructuredTextArgs,
+  client?: GoogleGenAI,
+): Promise<string> {
+  const ai = client ?? createGeminiEnterpriseClient(runtimeConfig);
+  const interaction = await ai.interactions.create({
+    api_version: "v1beta",
+    generation_config: {
+      max_output_tokens: 60_000,
+      temperature: 0.2,
+      thinking_level: args.thinkingLevel ?? "low",
+    },
+    input: args.prompt,
+    model: args.model,
+    response_format: {
+      mime_type: "application/json",
+      schema: args.responseSchema,
+      type: "text",
+    },
+    response_modalities: ["text"],
+    store: false,
+    system_instruction: args.systemInstruction,
+  });
+
+  if (interaction.status !== "completed") {
+    throw new Error(`Gemini interaction did not complete: ${interaction.status}`);
+  }
+
+  const text = interaction.output_text?.trim();
+  if (!text) {
+    throw new Error("Gemini returned an empty structured text response");
+  }
+
+  return text;
 }
 
 function extractImageFromResponse(response: {

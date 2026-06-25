@@ -10,15 +10,7 @@ describe("mergedReferenceStorageIds", () => {
     expect(mergedReferenceStorageIds({ referenceStorageIds: [a, b] })).toEqual([a, b]);
   });
 
-  it("uses legacy singular when the array is absent", () => {
-    expect(mergedReferenceStorageIds({ referenceStorageId: a })).toEqual([a]);
-  });
-
-  it("does not duplicate when the legacy id is already listed", () => {
-    expect(mergedReferenceStorageIds({ referenceStorageIds: [a], referenceStorageId: a })).toEqual([a]);
-  });
-
-  it("appends the legacy id when it is not in the array", () => {
-    expect(mergedReferenceStorageIds({ referenceStorageIds: [a], referenceStorageId: b })).toEqual([a, b]);
+  it("returns empty array when the array is absent", () => {
+    expect(mergedReferenceStorageIds({})).toEqual([]);
   });
 });

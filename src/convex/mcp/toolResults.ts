@@ -13,12 +13,7 @@ export function createErrorResult(text: string): CallToolResult {
   };
 }
 
-export function getErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-  return "Unknown error";
-}
+export { getErrorMessage } from "../../lib/utils/errors.js";
 
 export function truncateText(value: string, maxLength: number): string {
   if (value.length <= maxLength) {

@@ -1,18 +1,11 @@
 import type { ResolvedAuthProvider } from '../../lib/auth/providers.js';
-import type { GenerationStage } from './generation/generationRun.js';
+import {
+	GENERATION_OPS_EVENT_TYPES,
+	type GenerationOpsEventType,
+	type GenerationStage,
+} from '../../lib/generation-types.js';
 
-export const GENERATION_OPS_EVENT_TYPES = [
-	'generation_requested',
-	'stage_succeeded',
-	'stage_retry_scheduled',
-	'generation_completed',
-	'generation_failed',
-	'generation_stalled',
-	'alert_sent',
-	'alert_failed'
-] as const;
-
-export type GenerationOpsEventType = (typeof GENERATION_OPS_EVENT_TYPES)[number];
+export { GENERATION_OPS_EVENT_TYPES, type GenerationOpsEventType };
 
 export const OPS_ALERT_SEVERITIES = ['info', 'warning', 'critical'] as const;
 
@@ -645,5 +638,47 @@ export function summarizeGenerationOpsEvents(
 export function assertOkWebhookResponse(response: Response): void {
 	if (!response.ok) {
 		throw new Error(`Webhook responded with ${response.status} ${response.statusText}`);
+	}
+}
+
+export interface OpsWebhookRequest {
+	body: string;
+	headers: Record<string, string>;
+	url: string;
+}
+
+export interface SendOpsWebhookOptions {
+	/** Called when the fetch or assertion throws. */
+	onError?: (error: unknown) => void;
+}
+
+export type SendOpsWebhookResult =
+	| { ok: true }
+	| { ok: false; error: unknown };
+
+/**
+ * Sends an ops webhook request and asserts a 2xx response.
+ * On failure, calls `onError` if provided (otherwise the error propagates).
+ * Returns a result type so callers can record outcomes to DB without try/catch.
+ */
+export async function sendOpsWebhook(
+	request: OpsWebhookRequest,
+	options?: SendOpsWebhookOptions,
+): Promise<SendOpsWebhookResult> {
+	try {
+		const response = await fetch(request.url, {
+			body: request.body,
+			headers: request.headers,
+			method: 'POST',
+		});
+
+		assertOkWebhookResponse(response);
+		return { ok: true };
+	} catch (error) {
+		if (options?.onError) {
+			options.onError(error);
+			return { ok: false, error };
+		}
+		throw error;
 	}
 }

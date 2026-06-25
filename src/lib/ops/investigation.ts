@@ -1,3 +1,10 @@
+import {
+	type GenerationFailureKind,
+	type GenerationOpsEventType,
+	type GenerationStage,
+	type GenerationStatus,
+} from '../generation-types.js';
+
 export const CRITICAL_PATH_VERDICTS = [
 	'pass',
 	'fail',
@@ -7,22 +14,6 @@ export const CRITICAL_PATH_VERDICTS = [
 ] as const;
 
 export type CriticalPathVerdict = (typeof CRITICAL_PATH_VERDICTS)[number];
-
-export type GenerationStage = 'white_background' | 'black_background' | 'finalizing';
-
-export type GenerationFailureKind = 'timeout' | 'provider_error' | 'processing_error' | 'unknown';
-
-export type GenerationStatus = 'generating' | 'complete' | 'failed';
-
-export type OpsEventType =
-	| 'generation_requested'
-	| 'stage_succeeded'
-	| 'stage_retry_scheduled'
-	| 'generation_completed'
-	| 'generation_failed'
-	| 'generation_stalled'
-	| 'alert_sent'
-	| 'alert_failed';
 
 export interface DownloadProbe {
 	readonly ok: boolean;
@@ -46,7 +37,7 @@ export interface OpsTimelineEvent {
 	readonly attemptDurationMs?: number;
 	readonly createdAt: number;
 	readonly error?: string;
-	readonly eventType: OpsEventType;
+	readonly eventType: GenerationOpsEventType;
 	readonly generationDurationMs?: number;
 	readonly retryCount?: number;
 	readonly severity?: 'info' | 'warning' | 'critical';

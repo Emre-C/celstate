@@ -11,10 +11,13 @@ import {
 } from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
 import type { Doc, Id } from "./_generated/dataModel.js";
-import { GENERATION_CONFIG, isValidAspectRatio } from "./lib/config.js";
+import { GENERATION_CONFIG } from "./lib/config.js";
 import { insertGenerationOpsEventRow } from "./lib/generation/generationOpsEvents.js";
+import { validatePromptInput, validateAspectRatioInput } from "./lib/generation/validation.js";
 import {
+  generationFailureKindValidator,
   generationStageValidator,
+  generationStatusValidator,
   transparentQaValidator,
 } from "./lib/validation/validators.js";
 import {
@@ -47,18 +50,13 @@ const generationWithUrlsValidator = v.object({
   _creationTime: v.number(),
   userId: v.id("users"),
   prompt: v.string(),
-  status: v.union(
-    v.literal("generating"),
-    v.literal("complete"),
-    v.literal("failed"),
-  ),
+  status: generationStatusValidator,
   stage: v.optional(generationStageValidator),
   statusMessage: v.optional(v.string()),
   resultStorageId: v.optional(v.id("_storage")),
   whiteBgStorageId: v.optional(v.id("_storage")),
   blackBgStorageId: v.optional(v.id("_storage")),
   optimizedStorageId: v.optional(v.id("_storage")),
-  referenceStorageId: v.optional(v.id("_storage")),
   referenceStorageIds: v.optional(v.array(v.id("_storage"))),
   creditsCost: v.number(),
   aspectRatio: v.string(),
@@ -67,12 +65,7 @@ const generationWithUrlsValidator = v.object({
   stageStartedAt: v.optional(v.number()),
   completedAt: v.optional(v.number()),
   error: v.optional(v.string()),
-  failureKind: v.optional(v.union(
-    v.literal("timeout"),
-    v.literal("provider_error"),
-    v.literal("processing_error"),
-    v.literal("unknown"),
-  )),
+  failureKind: v.optional(generationFailureKindValidator),
   failureStage: v.optional(generationStageValidator),
   transparentQa: v.optional(transparentQaValidator),
   generationTimeMs: v.optional(v.number()),
@@ -157,11 +150,7 @@ async function validateReferenceStorageIds(
   }
 }
 
-const generationStatusFilterValidator = v.union(
-  v.literal("complete"),
-  v.literal("generating"),
-  v.literal("failed"),
-);
+const generationStatusFilterValidator = generationStatusValidator;
 
 async function resolveGenerationWithUrls(
   ctx: Pick<QueryCtx, "storage">,
@@ -268,21 +257,10 @@ export const requestGeneration = mutation({
   handler: async (ctx, args) => {
     const appUser = await upsertCurrentUser(ctx);
 
-    const prompt = args.prompt.trim();
-    if (!prompt) {
-      throw new ConvexError("Prompt is required");
-    }
-
-    if (prompt.length > GENERATION_CONFIG.maxPromptLength) {
-      throw new ConvexError(
-        `Prompt too long (max ${GENERATION_CONFIG.maxPromptLength} characters)`,
-      );
-    }
-
-    const aspectRatio = args.aspectRatio ?? GENERATION_CONFIG.defaultAspectRatio;
-    if (!isValidAspectRatio(aspectRatio)) {
-      throw new ConvexError(`Unsupported aspect ratio: ${aspectRatio}`);
-    }
+    const prompt = validatePromptInput(args.prompt);
+    const aspectRatio = validateAspectRatioInput(
+      args.aspectRatio ?? GENERATION_CONFIG.defaultAspectRatio,
+    );
 
     const referenceStorageIds = args.referenceStorageIds ?? [];
     if (referenceStorageIds.length > GENERATION_CONFIG.maxReferenceImages) {
@@ -320,16 +298,7 @@ export const requestGenerationForCanaryRunner = internalMutation({
       );
     }
 
-    const prompt = args.prompt.trim();
-    if (!prompt) {
-      throw new ConvexError("Prompt is required");
-    }
-    if (prompt.length > GENERATION_CONFIG.maxPromptLength) {
-      throw new ConvexError(
-        `Prompt too long (max ${GENERATION_CONFIG.maxPromptLength} characters)`,
-      );
-    }
-
+    const prompt = validatePromptInput(args.prompt);
     const aspectRatio = GENERATION_CONFIG.defaultAspectRatio;
     const referenceStorageIds: Id<"_storage">[] = [];
     await validateReferenceStorageIds(ctx, referenceStorageIds);
@@ -749,17 +718,12 @@ export const getById = internalQuery({
       _creationTime: v.number(),
       userId: v.id("users"),
       prompt: v.string(),
-      status: v.union(
-        v.literal("generating"),
-        v.literal("complete"),
-        v.literal("failed"),
-      ),
+      status: generationStatusValidator,
       statusMessage: v.optional(v.string()),
       resultStorageId: v.optional(v.id("_storage")),
       whiteBgStorageId: v.optional(v.id("_storage")),
       blackBgStorageId: v.optional(v.id("_storage")),
       optimizedStorageId: v.optional(v.id("_storage")),
-      referenceStorageId: v.optional(v.id("_storage")),
       referenceStorageIds: v.optional(v.array(v.id("_storage"))),
       creditsCost: v.number(),
       aspectRatio: v.string(),
@@ -768,12 +732,7 @@ export const getById = internalQuery({
       stageStartedAt: v.optional(v.number()),
       completedAt: v.optional(v.number()),
       error: v.optional(v.string()),
-      failureKind: v.optional(v.union(
-        v.literal("timeout"),
-        v.literal("provider_error"),
-        v.literal("processing_error"),
-        v.literal("unknown"),
-      )),
+      failureKind: v.optional(generationFailureKindValidator),
       failureStage: v.optional(generationStageValidator),
       transparentQa: v.optional(transparentQaValidator),
       generationTimeMs: v.optional(v.number()),
@@ -961,55 +920,6 @@ export const getGenerationStorageIdPage = internalQuery({
   },
 });
 
-export const backfillReferenceStorageIdPage = internalMutation({
-  args: { cursor: v.union(v.string(), v.null()) },
-  returns: v.object({
-    continueCursor: v.string(),
-    isDone: v.boolean(),
-    patched: v.number(),
-  }),
-  handler: async (ctx, args) => {
-    const { page, continueCursor, isDone } = await ctx.db
-      .query("generations")
-      .paginate({ numItems: 100, cursor: args.cursor });
-
-    let patched = 0;
-    for (const gen of page) {
-      if (!gen.referenceStorageId) continue;
-      const existing = gen.referenceStorageIds ?? [];
-      const merged: Id<"_storage">[] = existing.includes(gen.referenceStorageId)
-        ? existing
-        : [...existing, gen.referenceStorageId];
-      await ctx.db.patch(gen._id, {
-        referenceStorageIds: merged.length > 0 ? merged : undefined,
-        referenceStorageId: undefined,
-      });
-      patched += 1;
-    }
-    return { continueCursor, isDone, patched };
-  },
-});
-
-export const backfillReferenceStorageId = internalAction({
-  args: {},
-  returns: v.object({ totalPatched: v.number() }),
-  handler: async (ctx) => {
-    let cursor: string | null = null;
-    let totalPatched = 0;
-    for (;;) {
-      const result: {
-        continueCursor: string;
-        isDone: boolean;
-        patched: number;
-      } = await ctx.runMutation(internal.generations.backfillReferenceStorageIdPage, { cursor });
-      totalPatched += result.patched;
-      if (result.isDone) {
-        return { totalPatched };
-      }
-      cursor = result.continueCursor;
-    }
-  },
-});
 
 const storageDeleteReasonValidator = v.union(
   v.literal("expired_retention"),
@@ -1192,18 +1102,8 @@ export const requestGenerationForMcp = internalMutation({
   },
   returns: v.id("generations"),
   handler: async (ctx, args) => {
-    const prompt = args.prompt.trim();
-    if (!prompt) {
-      throw new ConvexError("Prompt is required");
-    }
-    if (prompt.length > GENERATION_CONFIG.maxPromptLength) {
-      throw new ConvexError(
-        `Prompt too long (max ${GENERATION_CONFIG.maxPromptLength} characters)`,
-      );
-    }
-    if (!isValidAspectRatio(args.aspectRatio)) {
-      throw new ConvexError(`Unsupported aspect ratio: ${args.aspectRatio}`);
-    }
+    const prompt = validatePromptInput(args.prompt);
+    validateAspectRatioInput(args.aspectRatio);
 
     return requestGenerationCore(ctx, {
       userId: args.userId,

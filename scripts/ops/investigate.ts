@@ -6,7 +6,7 @@ import { attachGenerationDownloadProbes, type DownloadProbe, type GenerationInve
 import { mergedEnvForScripts } from '../lib/env-files.js';
 import { readPostHogConfig, runHogQLQuery, type HogQLQueryResponse } from '../lib/posthog-api.js';
 
-type Command = 'health' | 'generation' | 'user' | 'recent' | 'check' | 'help';
+type Command = 'health' | 'generation' | 'user' | 'recent' | 'alerts' | 'check' | 'help';
 
 interface ParsedArgs {
 	readonly command: Command;
@@ -34,7 +34,7 @@ interface GenerationReadModel {
 	readonly report: GenerationInvestigationReport;
 }
 
-const COMMANDS = new Set<Command>(['health', 'generation', 'user', 'recent', 'check', 'help']);
+const COMMANDS = new Set<Command>(['health', 'generation', 'user', 'recent', 'alerts', 'check', 'help']);
 const DOWNLOAD_PROBE_TIMEOUT_MS = 10_000;
 
 export function parseArgs(argv: readonly string[]): ParsedArgs {
@@ -167,6 +167,12 @@ export function buildInvocationForCommand(args: ParsedArgs, now: number): Convex
 				limit: getOptionNumber(args, 'limit'),
 				now
 			});
+		case 'alerts':
+			return buildConvexRunInvocation('ops:getRecentOpsAlertEvents', {
+				hoursWindow: getOptionNumber(args, 'hours'),
+				limit: getOptionNumber(args, 'limit'),
+				now
+			});
 		case 'check':
 		case 'help':
 			throw new Error(`${args.command} does not map to a Convex read model`);
@@ -197,10 +203,34 @@ function parseJsonOutput(stdout: string): unknown {
 	throw new Error(`Unable to parse Convex JSON output: ${trimmed.slice(0, 500)}`);
 }
 
+/**
+ * Strips inline comments from CONVEX_DEPLOYMENT before passing it to child
+ * processes. The Convex CLI's `stripDeploymentTypePrefix` splits on `:` and
+ * takes the last segment — if the value contains a comment with colons (e.g.
+ * `dev:llama-123 # team: foo, project: bar`), the last segment becomes
+ * ` bar` from the comment instead of the real deployment name. We also remove
+ * the env var entirely when `--prod` is already in the args, so the CLI uses
+ * the `--prod` flag instead of a dev deployment from the environment.
+ */
+function sanitizedConvexEnv(args: readonly string[]): Record<string, string | undefined> {
+	const env = { ...process.env };
+	const hasProdFlag = args.includes('--prod');
+	if (hasProdFlag) {
+		delete env.CONVEX_DEPLOYMENT;
+	} else if (env.CONVEX_DEPLOYMENT) {
+		const hashIndex = env.CONVEX_DEPLOYMENT.indexOf('#');
+		if (hashIndex >= 0) {
+			env.CONVEX_DEPLOYMENT = env.CONVEX_DEPLOYMENT.slice(0, hashIndex).trim();
+		}
+	}
+	return env;
+}
+
 function runConvexJson(invocation: ConvexInvocation): unknown {
 	const result = spawnSync(invocation.command, invocation.args, {
 		cwd: process.cwd(),
 		encoding: 'utf8',
+		env: sanitizedConvexEnv(invocation.args),
 		stdio: ['ignore', 'pipe', 'pipe']
 	});
 	if (result.error) {
@@ -341,6 +371,35 @@ function summarizeRecent(report: { readonly incidents: readonly unknown[] }): st
 	return [`RECENT INCIDENTS: ${report.incidents.length}`, 'NEXT ACTION: Inspect a generation ID from the incident list.'].join('\n');
 }
 
+function summarizeAlerts(report: {
+	readonly events: readonly {
+		readonly alertType: string;
+		readonly createdAt: number;
+		readonly error?: string;
+		readonly outcome: string;
+	}[];
+	readonly window: { readonly hoursWindow: number; readonly since: number };
+}): string {
+	const failures = report.events.filter((event) => event.outcome === 'failed');
+	if (report.events.length === 0) {
+		return `OPS ALERTS: 0 events in last ${report.window.hoursWindow}h\nNEXT ACTION: No webhook delivery issues detected.`;
+	}
+	const lines = [
+		`OPS ALERTS: ${report.events.length} events (${failures.length} failed) in last ${report.window.hoursWindow}h`
+	];
+	for (const event of report.events.slice(0, 10)) {
+		const time = new Date(event.createdAt).toISOString();
+		const detail = event.outcome === 'failed' && event.error ? ` — ${event.error}` : '';
+		lines.push(`  ${event.outcome.toUpperCase()} ${event.alertType} @ ${time}${detail}`);
+	}
+	if (failures.length > 0) {
+		lines.push('NEXT ACTION: Investigate webhook URL or network connectivity for failed deliveries.');
+	} else {
+		lines.push('NEXT ACTION: All deliveries succeeded. No action needed.');
+	}
+	return lines.join('\n');
+}
+
 function escapeHogql(value: string): string {
 	return `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
 }
@@ -408,6 +467,7 @@ Commands:
   pnpm ops:investigate user --email <email>
   pnpm ops:investigate user --id <userId>
   pnpm ops:investigate recent --limit 5
+  pnpm ops:investigate alerts --hours 24
   pnpm ops:investigate check
 
 Options:
@@ -525,6 +585,19 @@ async function run(args: ParsedArgs): Promise<number> {
 			});
 		}
 		return 0;
+	}
+
+	if (args.command === 'alerts') {
+		const report = rawReport as Parameters<typeof summarizeAlerts>[0];
+		writeSummary(summarizeAlerts(report), humanOnly);
+		if (!humanOnly) {
+			writeJson({
+				command: args.command,
+				report
+			});
+		}
+		const hasFailures = report.events.some((event) => event.outcome === 'failed');
+		return hasFailures ? 2 : 0;
 	}
 
 	const report = rawReport as Parameters<typeof summarizeRecent>[0];

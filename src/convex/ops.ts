@@ -2,18 +2,21 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import { internalAction, internalMutation, internalQuery, type QueryCtx } from "./_generated/server.js";
 import type { Doc } from "./_generated/dataModel.js";
-import { generationStageValidator } from "./lib/validation/validators.js";
+import {
+  generationOpsEventTypeValidator,
+  generationStageValidator,
+} from "./lib/validation/validators.js";
 import {
   buildGenerationInvestigationVerdict,
   type CriticalPathVerdict,
   type OpsTimelineEvent,
 } from "../lib/ops/investigation.js";
 import {
-  assertOkWebhookResponse,
   buildGenerationAlertRequest,
   buildSecretRotationReminderRequest,
   buildSignupAlertRequest,
   readOpsAlertRuntimeConfig,
+  sendOpsWebhook,
   summarizeGenerationOpsEvents,
 } from "./lib/ops.js";
 import { insertGenerationOpsEventRow } from "./lib/generation/generationOpsEvents.js";
@@ -21,6 +24,7 @@ import {
   criticalPathHealthReportValidator,
   generationInvestigationReadModelValidator,
   recentGenerationIncidentsReportValidator,
+  recentSignupsReportValidator,
   userInvestigationReportValidator,
 } from "./lib/opsInvestigation.js";
 
@@ -67,6 +71,28 @@ export const recordAlertEvent = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     await insertGenerationOpsEventRow(ctx, args);
+    return null;
+  },
+});
+
+export const recordOpsAlertEvent = internalMutation({
+  args: {
+    alertType: v.union(
+      v.literal("signup_alert"),
+      v.literal("purchase_alert"),
+      v.literal("secret_rotation_reminder"),
+    ),
+    outcome: v.union(v.literal("sent"), v.literal("failed")),
+    error: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.insert("opsAlertEvents", {
+      alertType: args.alertType,
+      outcome: args.outcome,
+      error: args.error,
+      createdAt: Date.now(),
+    });
     return null;
   },
 });
@@ -136,13 +162,7 @@ export const sendGenerationAlert = internalAction({
         userId: String(generation.userId),
       });
 
-      const response = await fetch(request.url, {
-        method: "POST",
-        headers: request.headers,
-        body: request.body,
-      });
-
-      assertOkWebhookResponse(response);
+      await sendOpsWebhook(request);
 
       await ctx.runMutation(internal.ops.recordAlertEvent, {
         ...alertBase,
@@ -165,7 +185,7 @@ export const sendSecretRotationReminder = internalAction({
     cadenceLabel: v.optional(v.string()),
   },
   returns: v.null(),
-  handler: async (_ctx, args) => {
+  handler: async (ctx, args) => {
     const opsConfig = readOpsAlertRuntimeConfig();
     if (!opsConfig.webhookUrl) {
       console.warn("Skipping secret rotation reminder: OPS_ALERT_WEBHOOK_URL not configured");
@@ -176,22 +196,24 @@ export const sendSecretRotationReminder = internalAction({
     const gcpProjectId = process.env.VERTEX_AI_PROJECT_ID?.trim() || undefined;
     const gcpServiceAccountEmail = readGcpServiceAccountEmail();
 
+    const request = buildSecretRotationReminderRequest(opsConfig, {
+      cadenceLabel,
+      gcpProjectId,
+      gcpServiceAccountEmail,
+    });
+
+    const result = await sendOpsWebhook(request, {
+      onError: (error) => console.error("Failed to post secret rotation reminder", error),
+    });
+
     try {
-      const request = buildSecretRotationReminderRequest(opsConfig, {
-        cadenceLabel,
-        gcpProjectId,
-        gcpServiceAccountEmail,
+      await ctx.runMutation(internal.ops.recordOpsAlertEvent, {
+        alertType: "secret_rotation_reminder",
+        outcome: result.ok ? "sent" : "failed",
+        error: result.ok ? undefined : (result.error instanceof Error ? result.error.message : String(result.error)),
       });
-
-      const response = await fetch(request.url, {
-        body: request.body,
-        headers: request.headers,
-        method: "POST",
-      });
-
-      assertOkWebhookResponse(response);
-    } catch (error) {
-      console.error("Failed to post secret rotation reminder", error);
+    } catch (recordError) {
+      console.error("Failed to record ops alert event", recordError);
     }
 
     return null;
@@ -234,30 +256,32 @@ export const sendSignupAlert = internalAction({
     userId: v.string(),
   },
   returns: v.null(),
-  handler: async (_ctx, args) => {
+  handler: async (ctx, args) => {
     const opsConfig = readOpsAlertRuntimeConfig();
     if (!opsConfig.webhookUrl) {
       return null;
     }
 
+    const request = buildSignupAlertRequest(opsConfig, {
+      authProvider: args.authProvider,
+      initialCredits: args.initialCredits,
+      name: args.name,
+      userEmail: args.userEmail,
+      userId: args.userId,
+    });
+
+    const result = await sendOpsWebhook(request, {
+      onError: (error) => console.error("Failed to send signup Discord notification", error),
+    });
+
     try {
-      const request = buildSignupAlertRequest(opsConfig, {
-        authProvider: args.authProvider,
-        initialCredits: args.initialCredits,
-        name: args.name,
-        userEmail: args.userEmail,
-        userId: args.userId,
+      await ctx.runMutation(internal.ops.recordOpsAlertEvent, {
+        alertType: "signup_alert",
+        outcome: result.ok ? "sent" : "failed",
+        error: result.ok ? undefined : (result.error instanceof Error ? result.error.message : String(result.error)),
       });
-
-      const response = await fetch(request.url, {
-        body: request.body,
-        headers: request.headers,
-        method: "POST",
-      });
-
-      assertOkWebhookResponse(response);
-    } catch (error) {
-      console.error("Failed to send signup Discord notification", error);
+    } catch (recordError) {
+      console.error("Failed to record ops alert event", recordError);
     }
 
     return null;
@@ -268,16 +292,7 @@ const recentOpsEventValidator = v.object({
   attemptDurationMs: v.optional(v.number()),
   createdAt: v.number(),
   error: v.optional(v.string()),
-  eventType: v.union(
-    v.literal("generation_requested"),
-    v.literal("stage_succeeded"),
-    v.literal("stage_retry_scheduled"),
-    v.literal("generation_completed"),
-    v.literal("generation_failed"),
-    v.literal("generation_stalled"),
-    v.literal("alert_sent"),
-    v.literal("alert_failed"),
-  ),
+  eventType: generationOpsEventTypeValidator,
   generationDurationMs: v.optional(v.number()),
   generationId: v.id("generations"),
   retryCount: v.optional(v.number()),
@@ -416,6 +431,7 @@ function toGenerationSummary(generation: Doc<"generations">) {
     failureStage: generation.failureStage,
     id: String(generation._id),
     optimizedStorageIdPresent: generation.optimizedStorageId !== undefined,
+    prompt: generation.prompt,
     resultStorageIdPresent: generation.resultStorageId !== undefined,
     retryCount: generation.retryCount ?? 0,
     stage: generation.stage,
@@ -803,6 +819,96 @@ export const getLatestCriticalPathHealth = internalQuery({
         download,
         generation,
         recommendedAction,
+      },
+    };
+  },
+});
+
+export const listRecentSignups = internalQuery({
+  args: {
+    hoursWindow: v.optional(v.number()),
+    limit: v.optional(v.number()),
+    now: v.number(),
+  },
+  returns: recentSignupsReportValidator,
+  handler: async (ctx, args) => {
+    const hoursWindow = clampHoursWindow(args.hoursWindow);
+    const limit = clampLimit(args.limit, 10, 50);
+    const since = args.now - hoursWindow * 60 * 60 * 1000;
+
+    const recentUsers = await ctx.db
+      .query("users")
+      .withIndex("by_createdAt", (q) => q.gte("_creationTime", since))
+      .order("desc")
+      .take(limit);
+
+    return {
+      signups: recentUsers.map((user) => ({
+        createdAt: user._creationTime,
+        credits: user.credits,
+        email: user.email,
+        id: String(user._id),
+        name: user.name,
+      })),
+      window: {
+        hoursWindow,
+        limit,
+        now: args.now,
+        since,
+      },
+    };
+  },
+});
+
+export const getRecentOpsAlertEvents = internalQuery({
+  args: {
+    hoursWindow: v.optional(v.number()),
+    limit: v.optional(v.number()),
+    now: v.number(),
+  },
+  returns: v.object({
+    events: v.array(
+      v.object({
+        alertType: v.union(
+          v.literal("signup_alert"),
+          v.literal("purchase_alert"),
+          v.literal("secret_rotation_reminder"),
+        ),
+        createdAt: v.number(),
+        error: v.optional(v.string()),
+        outcome: v.union(v.literal("sent"), v.literal("failed")),
+      }),
+    ),
+    window: v.object({
+      hoursWindow: v.number(),
+      limit: v.number(),
+      now: v.number(),
+      since: v.number(),
+    }),
+  }),
+  handler: async (ctx, args) => {
+    const hoursWindow = clampHoursWindow(args.hoursWindow);
+    const limit = clampLimit(args.limit, 20, 100);
+    const since = args.now - hoursWindow * 60 * 60 * 1000;
+
+    const events = await ctx.db
+      .query("opsAlertEvents")
+      .withIndex("by_createdAt", (q) => q.gte("createdAt", since))
+      .order("desc")
+      .take(limit);
+
+    return {
+      events: events.map((event) => ({
+        alertType: event.alertType,
+        createdAt: event.createdAt,
+        error: event.error,
+        outcome: event.outcome,
+      })),
+      window: {
+        hoursWindow,
+        limit,
+        now: args.now,
+        since,
       },
     };
   },

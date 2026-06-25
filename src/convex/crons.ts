@@ -10,6 +10,12 @@ crons.interval(
 );
 
 crons.interval(
+  "cleanup stale lottie generations",
+  { minutes: 5 },
+  internal.lottieGenerations.cleanupStaleLottieGenerations,
+);
+
+crons.interval(
   "cleanup expired upload url issues",
   { hours: 1 },
   internal.generations.cleanupExpiredUploadUrlIssues,
@@ -38,7 +44,7 @@ crons.cron(
 // Quarterly secret-rotation reminder posted to the Discord ops webhook
 // (OPS_ALERT_WEBHOOK_URL). Runs at 14:00 UTC on the 1st day of January,
 // April, July, and October — ~91 days apart, the standard cadence for
-// rotating Clerk credentials, JWT (legacy), Vertex SA keys, and the manually-rotated
+// rotating Clerk credentials, Vertex SA keys, and the manually-rotated
 // vendor secrets (Stripe, Google OAuth). Background:
 // docs/runbooks/SECRETS-MANAGEMENT.md.
 crons.cron(
