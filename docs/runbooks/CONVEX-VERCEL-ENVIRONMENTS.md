@@ -36,8 +36,8 @@ Stripe, Vertex, Clerk (`CLERK_JWT_ISSUER_DOMAIN` for JWT validation), and hostin
 
 | Intent | Command / action |
 |--------|-------------------|
-| Push code to **dev** only | `pnpm exec convex dev` (or `convex dev --once`) |
-| Push code to **production** | `pnpm exec convex deploy` (from a clean tree; see [CLI deploy](https://docs.convex.dev/cli#deploy-convex-functions-to-production)) |
+| Push code to **dev** only | `pnpm deploy:convex` (one-shot `convex dev --once`; does not watch) |
+| Push code to **production** | `pnpm deploy:convex:prod` (bounded wrapper around [CLI deploy](https://docs.convex.dev/cli#deploy-convex-functions-to-production)) |
 | Compare env vars (names only, safe) | `pnpm secrets:diff` |
 | Update env vars on **dev** | Edit in Doppler `dev`, then `pnpm secrets:sync:convex:dev` |
 | Update env vars on **production** | Edit in Doppler `prd`, then `pnpm secrets:sync:convex` |
@@ -59,14 +59,14 @@ This repo follows **split deploys** (see [VERCEL-DEPLOYMENT.md](./VERCEL-DEPLOYM
 - **Vercel** — SvelteKit frontend. `PUBLIC_*` for the browser **plus** `CLERK_SECRET_KEY` / optional `SENTRY_DSN` for Clerk (synced from Doppler). Stripe/Vertex secrets stay on Convex only.
 - **Convex** — All backend secrets, webhooks, and HTTP actions.
 
-Convex’s Vercel guide also describes an **integrated** workflow: build command `npx convex deploy --cmd 'npm run build'` plus `CONVEX_DEPLOY_KEY` on Vercel ([Using Convex with Vercel](https://docs.convex.dev/production/hosting/vercel)). Celstate may still deploy Convex **manually** from the machine; the same **prod vs preview vs dev** separation rules apply.
+Convex’s Vercel guide also describes an **integrated** workflow: build command `npx convex deploy --cmd 'npm run build'` plus `CONVEX_DEPLOY_KEY` on Vercel ([Using Convex with Vercel](https://docs.convex.dev/production/hosting/vercel)). Celstate deploys Convex through `pnpm deploy:convex` / `pnpm deploy:convex:prod`; the same **prod vs preview vs dev** separation rules apply.
 
 ---
 
 ## Production checklist (before/after prod changes)
 
 1. In the dashboard, select the **production** deployment.
-2. After `convex deploy`, smoke-test auth, billing, and generation on the live site.
+2. After `pnpm deploy:convex:prod`, smoke-test auth, billing, and generation on the live site.
 3. For env-only changes on prod, use `--prod` explicitly and double-check the key name and value (no test keys).
 
 ---
