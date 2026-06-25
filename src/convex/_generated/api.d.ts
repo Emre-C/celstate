@@ -29,6 +29,8 @@ import type * as lib_generation_generationRun from "../lib/generation/generation
 import type * as lib_generation_matte from "../lib/generation/matte.js";
 import type * as lib_generation_optimize from "../lib/generation/optimize.js";
 import type * as lib_generation_prompts from "../lib/generation/prompts.js";
+import type * as lib_generation_userArtifactDeletion from "../lib/generation/userArtifactDeletion.js";
+import type * as lib_generation_validation from "../lib/generation/validation.js";
 import type * as lib_lottie_lottieGenerationRun from "../lib/lottie/lottieGenerationRun.js";
 import type * as lib_lottie_lottiePrompt from "../lib/lottie/lottiePrompt.js";
 import type * as lib_lottie_lottieValidation from "../lib/lottie/lottieValidation.js";
@@ -87,6 +89,8 @@ declare const fullApi: ApiFromModules<{
   "lib/generation/matte": typeof lib_generation_matte;
   "lib/generation/optimize": typeof lib_generation_optimize;
   "lib/generation/prompts": typeof lib_generation_prompts;
+  "lib/generation/userArtifactDeletion": typeof lib_generation_userArtifactDeletion;
+  "lib/generation/validation": typeof lib_generation_validation;
   "lib/lottie/lottieGenerationRun": typeof lib_lottie_lottieGenerationRun;
   "lib/lottie/lottiePrompt": typeof lib_lottie_lottiePrompt;
   "lib/lottie/lottieValidation": typeof lib_lottie_lottieValidation;

@@ -838,7 +838,7 @@ export const listRecentSignups = internalQuery({
 
     const recentUsers = await ctx.db
       .query("users")
-      .withIndex("by_createdAt", (q) => q.gte("_creationTime", since))
+      .filter((q) => q.gte(q.field("_creationTime"), since))
       .order("desc")
       .take(limit);
 

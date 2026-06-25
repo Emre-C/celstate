@@ -40,8 +40,7 @@ export default defineSchema({
   })
     .index("email", ["email"])
     .index("by_token", ["tokenIdentifier"])
-    .index("by_clerk_user", ["clerkUserId"])
-    .index("by_createdAt", ["_creationTime"]),
+    .index("by_clerk_user", ["clerkUserId"]),
 
   generations: defineTable({
     userId: v.id("users"),
