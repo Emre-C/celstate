@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Celstate — Product Vision & Status</title>
+<style>
+  :root {
+    --bg: #F5F3ED;
+    --text: #1C1917;
+    --dim: #78716C;
+    --accent: #C2410C;
+    --border: #E2DED6;
+    --green: #16a34a;
+    --amber: #d97706;
+    --red: #dc2626;
+    --card-bg: #efede5;
+    --card-border: #e2ded6;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+
+  /* Typography */
+  h1 {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-style: italic;
+    font-size: 2.5rem;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    margin-bottom: 0.5rem;
+  }
+
+  h2 {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-style: italic;
+    font-size: 1.6rem;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    margin-bottom: 1rem;
+    padding-top: 2.5rem;
+    border-top: 1px solid var(--border);
+  }
+
+  h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+
+  p {
+    font-size: 0.95rem;
+    color: var(--text);
+    margin-bottom: 0.75rem;
+  }
+
+  .dim { color: var(--dim); }
+  .accent { color: var(--accent); }
+
+  .section-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+  }
+
+  /* Header */
+  .header {
+    margin-bottom: 3rem;
+  }
+
+  .header h1 {
+    font-size: 2.8rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .header p {
+    font-size: 1.05rem;
+    color: var(--dim);
+    max-width: 560px;
+  }
+
+  .last-updated {
+    font-size: 0.75rem;
+    color: var(--dim);
+    margin-top: 1rem;
+  }
+
+  /* Status badges */
+  .badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 3px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+
+  .badge-functional { background: #dcfce7; color: #166534; }
+  .badge-partial { background: #fef3c7; color: #92400e; }
+  .badge-planned { background: #f3f4f6; color: #6b7280; }
+  .badge-deferred { background: #f3f4f6; color: #9ca3af; }
+  .badge-beta_ready { background: #dcfce7; color: #166534; }
+  .badge-not_started { background: #fee2e2; color: #991b1b; }
+
+  .badge-high { background: #fee2e2; color: #991b1b; }
+  .badge-medium { background: #fef3c7; color: #92400e; }
+  .badge-low { background: #f3f4f6; color: #6b7280; }
+  .badge-blocker { background: #fee2e2; color: #991b1b; }
+
+  .badge-open { background: #fef3c7; color: #92400e; }
+  .badge-resolved { background: #dcfce7; color: #166534; }
+
+  /* Cards */
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .card-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+  }
+
+  .card-body p {
+    font-size: 0.875rem;
+    color: var(--dim);
+    margin-bottom: 0.5rem;
+  }
+
+  .card-meta {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 0.5rem;
+  }
+
+  /* Feature grid */
+  .feature-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  @media (max-width: 720px) {
+    .feature-grid { grid-template-columns: 1fr; }
+  }
+
+  .feature-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    padding: 1.25rem;
+  }
+
+  .feature-card h3 {
+    margin-bottom: 0.25rem;
+  }
+
+  .feature-card p {
+    font-size: 0.825rem;
+    color: var(--dim);
+    margin-bottom: 0.5rem;
+  }
+
+  .feature-card .badge {
+    margin-bottom: 0.5rem;
+  }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+  }
+
+  th {
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--dim);
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  td {
+    padding: 0.625rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  td p {
+    font-size: 0.825rem;
+    color: var(--dim);
+    margin: 0;
+  }
+
+  /* Callouts */
+  .callout {
+    border-left: 3px solid var(--accent);
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    background: rgba(194, 65, 12, 0.04);
+  }
+
+  .callout p {
+    margin: 0;
+  }
+
+  .callout-warning {
+    border-left-color: var(--amber);
+    background: rgba(217, 119, 6, 0.04);
+  }
+
+  .callout-danger {
+    border-left-color: var(--red);
+    background: rgba(220, 38, 38, 0.04);
+  }
+
+  /* Lists */
+  ul {
+    list-style: none;
+    padding: 0;
+  }
+
+  ul li {
+    font-size: 0.875rem;
+    padding: 0.375rem 0;
+    color: var(--text);
+    position: relative;
+    padding-left: 1.25rem;
+  }
+
+  ul li::before {
+    content: "—";
+    position: absolute;
+    left: 0;
+    color: var(--dim);
+  }
+
+  ul li.dim { color: var(--dim); }
+
+  /* Beta snapshot */
+  .snapshot-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .snapshot-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    padding: 1.25rem;
+    text-align: center;
+  }
+
+  .snapshot-number {
+    font-family: Georgia, serif;
+    font-style: italic;
+    font-size: 2rem;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 0.25rem;
+  }
+
+  .snapshot-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--dim);
+  }
+
+  /* Defects summary */
+  .defect-summary {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+  }
+
+  .defect-stat {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .defect-stat-number {
+    font-size: 1.5rem;
+    font-weight: 600;
+  }
+
+  .defect-stat-label {
+    font-size: 0.8rem;
+    color: var(--dim);
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ========== HEADER ========== -->
+  <div class="header">
+    <div class="section-label">Product Vision & Status</div>
+    <h1>Celstate</h1>
+    <p>
+      AI transparent-background image generator. Describe anything — a logo, a character,
+      a product shot — and get it back already transparent. No background removal, no halos,
+      no edge degradation. Just your vision, clean and ready to use.
+    </p>
+    <div class="last-updated">Last updated: June 25, 2026</div>
+  </div>
+
+  <!-- ========== NORTH STAR VISION ========== -->
+  <h2>North Star</h2>
+  <p>
+    Celstate is the fastest path from imagination to a production-ready transparent image.
+    The core technical differentiation is <strong>difference matting</strong> — a mathematically
+    exact alpha recovery technique that generates the same subject on white and black backgrounds,
+    then solves for perfect transparency. No ML-based background removal, no edge artifacts.
+  </p>
+  <p>
+    The product extends from static images to transparent vector animations (Lottie JSON),
+    positioning Celstate as the transparent-asset layer for creatives, designers, and AI agents.
+  </p>
+
+  <!-- ========== PRODUCT THESIS ========== -->
+  <h2>Product Thesis</h2>
+  <div class="callout">
+    <p>
+      <strong>Transparent images. Nothing else.</strong>
+      Professionals in focused productivity mode arrive with intent, not to browse.
+      They need transparent-background images and want to describe what they need and get it fast.
+      The app should respect their time and reward their focus.
+    </p>
+  </div>
+  <p>
+    The business model is equally simple: start free (3 credits + weekly drip), buy credit packs
+    when you need more ($5 or $10 one-time). No subscriptions, no expiration, no complexity.
+  </p>
+
+  <!-- ========== TARGET USER ========== -->
+  <h2>Target User & Core Promise</h2>
+  <ul>
+    <li><strong>Who:</strong> Creatives, designers, marketers, and AI agents who need transparent PNGs — logos, characters, product shots, icons, stickers.</li>
+    <li><strong>Promise:</strong> Describe it. Generate it. Already transparent.</li>
+    <li><strong>Quality bar:</strong> 32-bit RGBA PNGs with a proper alpha channel. Edges that hold up on any background. No halos, no color bleed, no fringing.</li>
+    <li><strong>Speed bar:</strong> Type a prompt, get your image. No queues, no multi-step workflows.</li>
+  </ul>
+
+  <!-- ========== CURRENT APP SHAPE ========== -->
+  <h2>Current App Shape</h2>
+  <p>
+    The app is a SvelteKit frontend with a Convex backend, deployed on Vercel. Authentication
+    uses Clerk with Convex custom JWT validation. Image generation runs through Vertex AI
+    (gemini-3.1-flash-image-preview) in a staged durable pipeline. Credits and payments are
+    handled via Stripe. A remote MCP server exposes tools for agentic clients.
+  </p>
+  <ul>
+    <li><strong>Frontend:</strong> SvelteKit 5, TailwindCSS 4, light-mode only, warm parchment palette</li>
+    <li><strong>Backend:</strong> Convex (real-time sync, mutations, actions, cron jobs, HTTP actions)</li>
+    <li><strong>AI:</strong> Vertex AI via @google/genai (image generation), Gemini structured output (Lottie)</li>
+    <li><strong>Auth:</strong> Clerk (Google live, Apple when enabled) + Convex JWT template</li>
+    <li><strong>Payments:</strong> Stripe Checkout (one-time credit pack purchases)</li>
+    <li><strong>Deploy:</strong> Vercel (frontend) + Convex (backend), with automated deploy verification</li>
+    <li><strong>Observability:</strong> PostHog (analytics), Sentry (exceptions), Discord/Slack webhooks (ops alerts)</li>
+  </ul>
+
+  <!-- ========== FEATURE STATUS OVERVIEW ========== -->
+  <h2>Feature Status Overview</h2>
+  <div class="feature-grid">
+
+    <div class="feature-card">
+      <div class="badge badge-functional">Functional</div>
+      <h3>Image Generation</h3>
+      <p>Transparent PNG generation via difference matting. Three-stage Vertex AI pipeline with deterministic QA, retry logic, and artifact retention. The core product capability.</p>
+      <div class="card-meta">
+        <span class="badge badge-low">Confidence: High</span>
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <div class="badge badge-functional">Functional</div>
+      <h3>Credits & Payments</h3>
+      <p>Credit system with Stripe one-time purchases, weekly drip, abuse prevention, and settlement tracking. Credit pack purchase module mid-migration (Stage 2 of 7).</p>
+      <div class="card-meta">
+        <span class="badge badge-low">Confidence: High</span>
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <div class="badge badge-functional">Functional</div>
+      <h3>Authentication</h3>
+      <p>Clerk social sign-in (Google live, Apple pending) with Convex JWT. Server-side route guards, canonical host redirects, auth alerting. Stable after multiple migrations.</p>
+      <div class="card-meta">
+        <span class="badge badge-low">Confidence: High</span>
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <div class="badge badge-partial">Partial</div>
+      <h3>Lottie Animation Generation</h3>
+      <p>V1 internal control plane for Lottie JSON generation. Strict safety validator and lottie-web preview, but no render QA stage. Quality bar is "valid JSON" not "render-verified motion."</p>
+      <div class="card-meta">
+        <span class="badge badge-medium">Confidence: Medium</span>
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <div class="badge badge-functional">Functional</div>
+      <h3>MCP Server</h3>
+      <p>Remote MCP endpoint for agentic clients (Claude Code, Cursor). Stateless HTTP transport, bearer token auth, four tools. SvelteKit proxy to Convex HTTP action.</p>
+      <div class="card-meta">
+        <span class="badge badge-low">Confidence: High</span>
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <div class="badge badge-functional">Functional</div>
+      <h3>Marketing Landing</h3>
+      <p>Public landing page with hero, edge-quality zoom inspector, feature grid, pricing tiers, SEO/JSON-LD. Editorial design matching the warm parchment brand.</p>
+      <div class="card-meta">
+        <span class="badge badge-low">Confidence: High</span>
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <div class="badge badge-functional">Functional</div>
+      <h3>Production Confidence</h3>
+      <p>Automated deploy verification across auth, generation, checkout, and settlement domains. Canary principals, gate evaluation, Stripe refund automation. Deploy-triggered via GitHub.</p>
+      <div class="card-meta">
+        <span class="badge badge-medium">Confidence: Medium</span>
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <div class="badge badge-functional">Functional</div>
+      <h3>Observability & Ops</h3>
+      <p>PostHog analytics, Sentry exceptions, ops webhooks, growth-ops CLI, ops investigation CLI. Channel partition: webhooks for humans, PostHog for analytics, Sentry for errors.</p>
+      <div class="card-meta">
+        <span class="badge badge-low">Confidence: High</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ========== BETA READINESS SNAPSHOT ========== -->
+  <h2>Beta Readiness Snapshot</h2>
+  <div class="snapshot-grid">
+    <div class="snapshot-card">
+      <span class="snapshot-number">7</span>
+      <span class="snapshot-label">Features Functional</span>
+    </div>
+    <div class="snapshot-card">
+      <span class="snapshot-number">1</span>
+      <span class="snapshot-label">Feature Partial</span>
+    </div>
+    <div class="snapshot-card">
+      <span class="snapshot-number">1</span>
+      <span class="snapshot-label">Beta Blockers</span>
+    </div>
+    <div class="snapshot-card">
+      <span class="snapshot-number">6</span>
+      <span class="snapshot-label">Open Defects</span>
+    </div>
+  </div>
+
+  <div class="callout callout-warning">
+    <p>
+      <strong>Beta blockers (must fix):</strong>
+      Credit Pack Purchase Stage 3 webhook cutover pending. The prior Lottie
+      storage-failure and idempotent-refund blockers are resolved in code.
+    </p>
+  </div>
+
+  <!-- ========== MAJOR PRODUCT GAPS ========== -->
+  <h2>Major Product Gaps</h2>
+  <ul>
+    <li><strong>Assisted Mode not implemented:</strong> Spec exists for a designer LLM layer that refines prompts before generation, but no code has been written. Not beta-blocking.</li>
+    <li><strong>No live generation demo on landing:</strong> Prospective users cannot try the product without signing up. A interactive demo could improve conversion.</li>
+    <li><strong>No A/B testing infrastructure:</strong> Landing page copy and CTA placement are unvalidated. No experiment framework exists.</li>
+    <li><strong>Apple sign-in not enabled:</strong> Google is live, but Apple requires dashboard configuration. Not blocking but limits sign-in options.</li>
+    <li><strong>Lottie render QA missing:</strong> Users can receive structurally valid but visually broken animations. Acceptable for V1 internal, blocks paid surface.</li>
+  </ul>
+
+  <!-- ========== MAJOR RISKS ========== -->
+  <h2>Major Technical & Design Risks</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Risk</th>
+        <th>Severity</th>
+        <th>Mitigation</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Vertex AI outage blocks all generation — no fallback provider</td>
+        <td><span class="badge badge-high">High</span></td>
+        <td><p>Monitor Vertex status. Consider fallback provider post-beta.</p></td>
+      </tr>
+      <tr>
+        <td>Difference matting requires consistent dual-pass rendering — model inconsistency causes artifacts</td>
+        <td><span class="badge badge-medium">Medium</span></td>
+        <td><p>Deterministic QA catches most artifacts. Retry routes back to correct stage.</p></td>
+      </tr>
+      <tr>
+        <td>Credit Pack Purchase webhook migration could break fulfillment</td>
+        <td><span class="badge badge-medium">Medium</span></td>
+        <td><p>Run the existing lifecycle regression tests and extend them for any new Stage 3 webhook cutover branches.</p></td>
+      </tr>
+      <tr>
+        <td>Clerk dependency — outage blocks all sign-in</td>
+        <td><span class="badge badge-medium">Medium</span></td>
+        <td><p>Accept for beta. Clerk has high uptime. No fallback auth planned.</p></td>
+      </tr>
+      <tr>
+        <td>Transparent QA thresholds tuned from limited sample batch</td>
+        <td><span class="badge badge-low">Low</span></td>
+        <td><p>QA metrics persisted for tuning. Internal report query available.</p></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ========== OPEN FOUNDER DECISIONS ========== -->
+  <h2>Open Founder Decisions</h2>
+  <ul>
+    <li>Should a fallback image provider be configured for Vertex AI outages?</li>
+    <li>When should Apple sign-in be enabled in the Clerk dashboard?</li>
+    <li>When should Lottie generation transition from free to paid?</li>
+    <li>Should a live generation demo be added to the landing page?</li>
+    <li>Should the production confidence gate be blocking or advisory during early beta?</li>
+    <li>Should per-API-key rate limiting be added to the MCP server before beta?</li>
+    <li>Should credit pack pricing tiers be adjusted based on unit economics?</li>
+    <li>Is the Clerk "Secured by Clerk" badge acceptable for beta, or is headless OAuth needed?</li>
+  </ul>
+
+  <!-- ========== RECENTLY COMPLETED PROGRESS ========== -->
+  <h2>Recently Completed Meaningful Progress</h2>
+  <ul>
+    <li class="dim">Auth migrated from Better Auth → WorkOS → Clerk (stable since May 2026)</li>
+    <li class="dim">Image generation hardened into staged durable workflow with per-stage retries</li>
+    <li class="dim">Vertex AI migration completed (replacing Gemini Developer API)</li>
+    <li class="dim">Deterministic transparent QA stack implemented (recomposition, topology, shell analysis)</li>
+    <li class="dim">Credit Pack Purchase module Stage 1-2 completed (new lifecycle module exists)</li>
+    <li class="dim">MCP server shipped with 4 tools, bearer auth, and SvelteKit proxy</li>
+    <li class="dim">Production confidence system operational with deploy-triggered verification</li>
+    <li class="dim">Growth-ops CLI and ops investigation CLI shipped</li>
+    <li class="dim">Secrets management centralized on Doppler with sync to Convex/Vercel/GitHub</li>
+    <li class="dim">Lottie generation V1 scaffolding with safety validator, lottie-web preview, storage-failure handling, and idempotent refund guard</li>
+  </ul>
+
+  <!-- ========== DEFECTS SUMMARY ========== -->
+  <h2>Defects & Debt Summary</h2>
+  <div class="defect-summary">
+    <div class="defect-stat">
+      <span class="defect-stat-number" style="color: var(--red);">0</span>
+      <span class="defect-stat-label">High severity</span>
+    </div>
+    <div class="defect-stat">
+      <span class="defect-stat-number" style="color: var(--amber);">1</span>
+      <span class="defect-stat-label">Medium severity</span>
+    </div>
+    <div class="defect-stat">
+      <span class="defect-stat-number" style="color: var(--dim);">5</span>
+      <span class="defect-stat-label">Low severity</span>
+    </div>
+    <div class="defect-stat">
+      <span class="defect-stat-number">6</span>
+      <span class="defect-stat-label">Total open</span>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Type</th>
+        <th>Severity</th>
+        <th>Area</th>
+        <th>Summary</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>defect-003</td>
+        <td><span class="badge badge-low">Tech Debt</span></td>
+        <td><span class="badge badge-medium">Medium</span></td>
+        <td>Credits</td>
+        <td><p>Credit Pack Purchase module mid-migration (Stage 2 of 7)</p></td>
+      </tr>
+      <tr>
+        <td>defect-006</td>
+        <td><span class="badge badge-low">Tech Debt</span></td>
+        <td><span class="badge badge-low">Low</span></td>
+        <td>Lottie</td>
+        <td><p>No render QA stage — quality bar is "valid JSON" not visual quality</p></td>
+      </tr>
+      <tr>
+        <td>defect-007</td>
+        <td><span class="badge badge-low">Tech Debt</span></td>
+        <td><span class="badge badge-low">Low</span></td>
+        <td>Observability</td>
+        <td><p>PostHog ingest bot filter not configured</p></td>
+      </tr>
+      <tr>
+        <td>defect-008</td>
+        <td><span class="badge badge-low">Design Debt</span></td>
+        <td><span class="badge badge-low">Low</span></td>
+        <td>Auth</td>
+        <td><p>Clerk footer badge cannot be removed on free tier</p></td>
+      </tr>
+      <tr>
+        <td>defect-009</td>
+        <td><span class="badge badge-low">Tech Debt</span></td>
+        <td><span class="badge badge-low">Low</span></td>
+        <td>Prod Confidence</td>
+        <td><p>Vercel deployment protection rules not referencing verification status</p></td>
+      </tr>
+      <tr>
+        <td>defect-010</td>
+        <td><span class="badge badge-low">Tech Debt</span></td>
+        <td><span class="badge badge-low">Low</span></td>
+        <td>MCP</td>
+        <td><p>No per-API-key rate limiting</p></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="dim" style="font-size: 0.8rem; margin-top: 2rem;">
+    Full details in <code>docs/registers/defects.yaml</code>. Feature details in <code>docs/features/*.yaml</code>.
+  </p>
+
+</div>
+</body>
+</html>

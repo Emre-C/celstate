@@ -1,0 +1,181 @@
+id: authentication
+name: Authentication
+status: functional
+confidence: high
+
+purpose:
+  summary: >
+    Social-only authentication via Clerk with Convex custom JWT validation.
+    Protects app routes and establishes user identity for credit and generation
+    workflows.
+  vision_alignment:
+    - Keeps the account surface small — no password storage, no reset flows.
+    - Social sign-in (Google live, Apple when enabled) reduces friction for target users.
+    - One canonical public origin ensures OAuth callbacks work reliably.
+
+implemented:
+  summary: >
+    Clerk integration with SvelteKit server-side route guards, Convex JWT
+    template for backend auth, idempotent user upsert with duplicate merge,
+    canonical host redirects, auth error recovery, and auth alerting.
+  user_visible_behavior:
+    - Unauthenticated users hitting /app are redirected to /auth with a returnTo parameter.
+    - /auth page shows Clerk's <SignIn> component styled to match the Celstate design system.
+    - After sign-in, user returns to their intended destination.
+    - Sign-out redirects to marketing landing.
+    - OAuth errors are mapped to user-friendly messages on /auth.
+  internal_behavior:
+    - Server guard: requireClerkSession in (app)/+layout.server.ts is authoritative.
+    - Client layout: setupAuth bridges Clerk session to Convex; users.storeUser upserts app user.
+    - Protected-session UX: loading state, grace period during auth churn, retry on sync failure.
+    - User upsert resolves all matching rows (clerk subject, token, verified email), picks oldest as canonical, merges duplicates.
+    - Canonical host redirect via PUBLIC_SITE_URL in hooks.server.ts.
+    - Auth alerting: rate-limited Sentry + webhook alerts for proxy failures, 5xx endpoints, and request failures.
+    - Clerk JWT issuer domain configured in Convex auth.config.ts.
+
+business_decisions:
+  - decision: Clerk instead of Better Auth or WorkOS.
+    rationale: >
+      Prior auth fragility with Better Auth and WorkOS migrations led to
+      standardizing on Clerk's prebuilt <SignIn> component for zero auth-flow
+      risk. Clerk free tier (50k MAU) is sufficient.
+    encoded_in:
+      - src/hooks.server.ts
+      - src/routes/auth/+page.svelte
+      - src/convex/auth.config.ts
+  - decision: No email/password — social-only (Google live, Apple when enabled).
+    rationale: >
+      Avoids password storage, reset flows, and breach handling. Delegates to
+      Clerk + OIDC for a small trust surface.
+    encoded_in:
+      - src/routes/auth/+page.svelte
+  - decision: Keep Clerk's prebuilt <SignIn> component (Path A) rather than headless OAuth.
+    rationale: >
+      Zero auth-flow risk given prior fragility. No new /sso-callback route.
+      Headless (Path B) deferred to post-launch. Only downside is "Secured by
+      Clerk" footer badge (cannot be removed on free tier).
+    encoded_in:
+      - src/routes/auth/+page.svelte
+  - decision: One canonical public origin (PUBLIC_SITE_URL).
+    rationale: >
+      OAuth return URL and PUBLIC_SITE_URL must match deployment host. Hooks
+      redirect off-canonical hosts. Prevents apex/www CORS issues.
+    encoded_in:
+      - src/hooks.server.ts
+      - src/lib/server/canonical-site.ts
+
+implementation:
+  primary_files:
+    - src/hooks.server.ts
+    - src/routes/auth/+page.svelte
+    - src/routes/(app)/+layout.server.ts
+    - src/routes/(app)/+layout.svelte
+    - src/convex/auth.config.ts
+    - src/convex/users.ts
+  related_files:
+    - src/lib/server/clerk-guard.ts
+    - src/lib/auth/protected-session.ts
+    - src/lib/auth/redirect.ts
+    - src/lib/server/auth-alerts.ts
+    - src/lib/server/canonical-site.ts
+    - src/lib/server/response.ts
+    - src/routes/api/auth/initiate/+server.ts
+    - src/routes/api/auth/session/+server.ts
+    - src/routes/api/auth/convex-ready/+server.ts
+    - src/routes/sign-out/+server.ts
+    - src/routes/callback/+server.ts
+  notes: >
+    Auth has been through multiple migrations (Better Auth → WorkOS → Clerk).
+    The current Clerk implementation is stable. The "flush" appearance option
+    blends Clerk's <SignIn> into the page without headless OAuth complexity.
+
+operator_contracts:
+  clerk_jwt_template:
+    summary: >
+      Clerk must expose a JWT template named "convex" (issuer domain →
+      CLERK_JWT_ISSUER_DOMAIN on Convex). Clerk's "Connect with Convex" flow
+      pre-maps ONLY the "aud" claim. You MUST manually add "email" and
+      "email_verified" or Convex getUserIdentity() returns them as undefined.
+      Without them, account linking silently cannot run — every sign-in
+      resolves to a clerkUserId-only shell, stranding the user's real account,
+      credits, and generations.
+    required_claims:
+      aud: "convex"
+      email: "{{user.primary_email_address}}"
+      email_verified: "{{user.email_verified}}"
+    applies_to: every environment (dev + production instances each have their own template)
+  user_upsert_resolution:
+    stable_identity: >
+      Provisioning keys off sub (identity.subject → users.clerkUserId). A
+      verified email is the link key that adopts a pre-existing account and
+      consolidates a cutover shell; stored lowercased.
+    canonical_resolution: >
+      When one identity matches multiple rows (legacy account + shell), the
+      oldest row wins (holds established history); write path merges the rest
+      into it. Read (getMe) and write (storeUser) share this ordering so UI is
+      correct even before merge mutation runs.
+    email_verification: >
+      users.storeUser rejects only when Convex supplies explicit
+      emailVerified === false. Email-based adoption allowed when email_verified
+      is true or absent, never when false. Missing email claim is logged as
+      console.warn in Convex deployment (misconfiguration signal).
+    provider_hints: >
+      resolveAuthProviderFromIdentity uses email heuristics for analytics
+      (e.g. @privaterelay.appleid.com → Apple).
+  pre_merge_verification: >
+    CI exercises mocks and Vitest contracts; it does not speak to live Clerk
+    issuers. Before merging auth-boundary changes: (1) Sign in against dev or
+    staging with a real Clerk user; confirm Convex queries succeed and
+    users.storeUser completes. (2) Confirm the token carries email and
+    email_verified — either decode the convex template token (Clerk Dashboard
+    → JWT Templates → convex → Preview, or paste a live token into jwt.io) and
+    check the payload, or watch Convex deployment logs for the "has no email
+    claim" warning emitted by upsertCurrentUser.
+  clerk_domain_branding: >
+    Production should use a custom Clerk domain (e.g. accounts.celstate.com)
+    and Dashboard Appearance aligned with design-system.md: warm parchment
+    background (#F5F3ED), terracotta primary (#C2410C), DM Sans, light-only.
+    ClerkProvider appearance in src/routes/+layout.svelte mirrors the same
+    tokens for embedded components.
+  regression_coverage:
+    - src/lib/server/clerk-guard.test.ts
+    - src/lib/auth/protected-session.test.ts
+    - src/lib/server/auth-alerts.test.ts
+    - src/convex/users.provisioning.test.ts
+    - scripts/canary/auth-canary-probe.test.ts
+    - scripts/canary/auth-canary-clerk-fapi.test.ts
+  ci_commands: >
+    pnpm test:auth then pnpm verify. Scheduled canary: scripts/check-auth-health.mjs
+    (/auth + /api/auth/session). See docs/runbooks/CI-AND-CANARIES.md.
+  intentionally_out_of_scope:
+    - Email/password authentication
+    - Magic links
+    - Anonymous sessions
+
+remaining:
+  beta_blockers:
+    - None identified — auth flow is functional with Clerk.
+  planned:
+    - Enable Apple sign-in in Clerk dashboard (Google is live).
+    - Headless OAuth (Path B) deferred to post-launch.
+  post_beta:
+    - Consider headless OAuth for full brand control if the Clerk footer badge becomes a concern.
+
+risks:
+  - Clerk dependency — Clerk outage would block all sign-in.
+  - CLERK_JWT_ISSUER_DOMAIN must be correctly set on Convex; misconfiguration breaks auth silently.
+  - Missing email/email_verified claims in Clerk JWT template silently breaks account linking — every sign-in creates a shell account.
+  - Prior auth migrations left stale references in docs/runbooks — ensure no active code references legacy auth.
+
+open_questions:
+  - When should Apple sign-in be enabled?
+  - Is the Clerk free tier sufficient for projected beta user count?
+
+acceptance_criteria:
+  beta_ready:
+    - User can sign in with Google and access protected /app routes.
+    - Unauthenticated users are redirected to /auth with returnTo.
+    - Sign-out clears session and redirects to landing.
+    - Auth errors show user-friendly messages.
+
+last_reviewed: 2026-06-25

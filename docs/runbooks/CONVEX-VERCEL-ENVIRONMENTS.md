@@ -28,7 +28,7 @@ Every Convex **project** has separate **development** and **production** deploym
 - **Development** — what `pnpm exec convex dev` syncs to; default target for `convex env`, `convex run`, `convex logs` (without flags).
 - **Production** — what users rely on; only change when you intend to ship backend changes or prod-specific config.
 
-Stripe, Vertex, Clerk (`CLERK_JWT_ISSUER_DOMAIN` for JWT validation), and hosting metadata such as `SITE_URL` are **per deployment**. See also [STRIPE-CONVEX-ENVIRONMENTS.md](./STRIPE-CONVEX-ENVIRONMENTS.md) and [Authentication](../product/authentication.md) (local dev).
+Stripe, Vertex, Clerk (`CLERK_JWT_ISSUER_DOMAIN` for JWT validation), and hosting metadata such as `SITE_URL` are **per deployment**. See also [STRIPE-CONVEX-ENVIRONMENTS.md](./STRIPE-CONVEX-ENVIRONMENTS.md) and [Authentication](../features/authentication.yaml) (local dev).
 
 ---
 
@@ -74,4 +74,4 @@ Convex’s Vercel guide also describes an **integrated** workflow: build command
 ## Local development
 
 - Point `.env.local` at the **development** Convex URLs for `PUBLIC_CONVEX_*`.
-- Keep `SITE_URL` / `PUBLIC_SITE_URL` aligned on the **dev** Convex + Vite origins (see [Authentication](../product/authentication.md)); production keeps the real canonical URL.
+- Keep `SITE_URL` / `PUBLIC_SITE_URL` aligned on the **dev** Convex + Vite origins (see [Authentication](../features/authentication.yaml)); production keeps the real canonical URL.

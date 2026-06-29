@@ -8,7 +8,7 @@
  * purchase funnels show zero for server events while browser events may still work — or vice
  * versa if Vercel `PUBLIC_POSTHOG_KEY` points at a different project.
  *
- * See: docs/product/observability.md, docs/implementation/OBSERVABILITY-FOLLOWUPS.md §2.
+ * See: docs/features/observability.yaml, docs/implementation/OBSERVABILITY-FOLLOWUPS.md §2.
  */
 
 import { execSync } from "node:child_process";

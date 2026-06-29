@@ -367,8 +367,8 @@ Update:
 
 - `.cursor/rules/agent-execution.mdc`: ops/incident questions run `pnpm ops:investigate ...` first.
 - `AGENTS.md`: one-line pointer to the runbook.
-- `docs/product/observability.md`: replace the missing `getRecentGenerationOpsFeed` reference with the implemented read models.
-- `docs/product/production-confidence.md`: note that ops health surfaces latest verification run evidence.
+- `docs/features/observability.yaml`: replace the missing `getRecentGenerationOpsFeed` reference with the implemented read models.
+- `docs/features/production-confidence.yaml`: note that ops health surfaces latest verification run evidence.
 
 ### 7. Verification
 

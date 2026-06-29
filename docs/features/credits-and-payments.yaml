@@ -1,0 +1,148 @@
+id: credits-and-payments
+name: Credits & Payments
+status: functional
+confidence: high
+
+purpose:
+  summary: >
+    Credit-based monetization system. Users spend credits to generate images
+    and purchase credit packs via Stripe. No subscriptions — pay-per-pack.
+  vision_alignment:
+    - Enables simple, transparent pricing that respects user time.
+    - "Start free, buy credit packs when you need more. No subscriptions, no expiration."
+    - Free tier (3 credits + weekly drip) lets users try the product without commitment.
+
+implemented:
+  summary: >
+    Full credit lifecycle: sign-up bonus (3 credits), weekly drip (top up to 1
+    credit on Mondays), atomic spend (1 credit per generation), automatic refund
+    on failure, Stripe Checkout for one-time credit pack purchases ($5/15 or
+    $10/40), abuse prevention, and settlement/refund tracking.
+  user_visible_behavior:
+    - User sees credit balance in the generation workspace.
+    - Low-credit nudge appears after completed generations when credits <= 2.
+    - Credits page shows balance and Starter ($5/15) and Pro ($10/40) purchase options.
+    - Stripe Checkout redirect for purchase; return to /app with success/canceled status.
+    - Credits never expire.
+  internal_behavior:
+    - Credit spend is atomic within a single Convex mutation (check + deduct + insert generation row).
+    - Weekly drip uses paginated batch processing (100 users/batch) via self-scheduling action chain.
+    - Credit grants tracked in creditGrants table with reason (sign_up, weekly_drip, purchase).
+    - Stripe Checkout uses pendingCheckouts table with processing lease for concurrent-safety.
+    - Purchase settlements tracked in purchaseSettlements table with refund support.
+    - Abuse prevention: concurrent generation cap (3), prompt length cap (20k chars), upload URL throttle, credit gate on uploads.
+    - "Refund webhook ordering: refund.created can arrive before checkout settlement; refund is persisted in pendingPurchaseRefunds by payment intent and consumed when settlement is later recorded."
+    - Quarterly secret rotation reminder cron posts to ops webhook.
+  intentional_boundaries:
+    summary: >
+      The abuse-prevention system is implemented but its scope is intentionally
+      narrow. These are deliberate non-features, not missing pieces.
+    not_included:
+      - Auth-layer protections against throwaway account farming (CAPTCHA, signup rate limiting).
+      - Sequential per-user velocity limits beyond the concurrent-generation cap.
+      - An append-only deduction ledger for every credit spend.
+
+business_decisions:
+  - decision: No subscriptions — one-time credit pack purchases only.
+    rationale: >
+      Aligns with "pay for what you use" promise. Credits never expire.
+      Reduces billing complexity and user anxiety.
+    encoded_in:
+      - src/convex/creditPackPurchase.ts
+      - src/convex/lib/creditPackPurchase/catalog.ts
+  - decision: Weekly drip is a cap reset, not a stackable bonus.
+    rationale: >
+      Users at or above the cap (1 credit) are unchanged. Prevents unlimited
+      free accumulation while maintaining a safety net.
+    encoded_in:
+      - src/convex/users.ts
+      - src/convex/lib/config.ts
+  - decision: Stripe Checkout mode "payment", not "subscription".
+    rationale: One-time payment for credit packs; no recurring billing.
+    encoded_in:
+      - src/convex/creditPackPurchaseActions.ts
+      - src/convex/lib/creditPackPurchase/productionStripeAdapter.ts
+  - decision: Processing lease on pendingCheckouts prevents duplicate Stripe Session creation.
+    rationale: >
+      Concurrent processCheckout replays are skipped via lease ownership.
+      Terminal transitions require matching lease owner.
+    encoded_in:
+      - src/convex/creditPackPurchase.ts
+      - src/convex/lib/creditPackPurchase/lifecycle.ts
+  - decision: Credit pack purchase module deepening at Stage 2.
+    rationale: >
+      New lifecycle module (catalog, stripePort, lifecycle, adapters) exists
+      but webhooks have not yet been cut from legacy http.ts handlers.
+      pendingCheckouts shim bridges the old and new surfaces.
+    encoded_in:
+      - src/convex/creditPackPurchase.ts
+      - src/convex/creditPackPurchaseActions.ts
+      - src/convex/lib/creditPackPurchase/
+  - decision: Intentional abuse-prevention boundaries — what is NOT part of the abuse layer.
+    rationale: >
+      No CAPTCHA or signup rate limiting (social-only auth via Clerk handles
+      bot signups). No sequential per-user velocity limits beyond the concurrent
+      generation cap (3). No append-only deduction ledger (credit balance is
+      mutable, tracked via creditGrants and generation rows). These are
+      deliberate non-features, not gaps — future agents should not add them
+      without understanding they were intentional design choices.
+    encoded_in:
+      - src/convex/generations.ts
+      - src/convex/lib/config.ts
+  - decision: Out-of-order Stripe webhook handling for refunds.
+    rationale: >
+      refund.created events can arrive before checkout settlement is recorded.
+      Pending refunds are persisted in pendingPurchaseRefunds by payment intent
+      and consumed when settlement is later recorded. This prevents lost refunds
+      when webhook ordering is non-sequential.
+    encoded_in:
+      - src/convex/creditPackPurchase.ts
+      - src/convex/lib/creditPackPurchase/lifecycle.ts
+
+implementation:
+  primary_files:
+    - src/convex/creditPackPurchase.ts
+    - src/convex/creditPackPurchaseActions.ts
+    - src/convex/lib/creditPackPurchase/lifecycle.ts
+    - src/convex/lib/creditPackPurchase/catalog.ts
+    - src/convex/users.ts
+    - src/convex/lib/config.ts
+  related_files:
+    - src/convex/lib/creditPackPurchase/stripePort.ts
+    - src/convex/lib/creditPackPurchase/productionStripeAdapter.ts
+    - src/convex/lib/creditPackPurchase/inMemoryStripeAdapter.ts
+    - src/convex/http.ts
+    - src/convex/schema.ts
+    - src/convex/crons.ts
+    - src/routes/(app)/app/credits/+page.svelte
+  notes: >
+    Credit Pack Purchase module is mid-migration (Stage 2 of 7). The new
+    lifecycle module exists and is wired for requestCheckout/getCheckoutStatus,
+    but Stripe webhooks still route through legacy http.ts handlers. Stages 3-7
+    (webhook cutover, canary routes, QA reset, legacy cleanup) are pending.
+
+remaining:
+  beta_blockers:
+    - Credit Pack Purchase Stage 3: Cut Stripe settlement/refund webhooks from legacy http.ts to internal.creditPackPurchase.* handlers.
+  planned:
+    - Credit Pack Purchase Stages 4-7: switch requestCheckout/processCheckout, canary routes, QA reset purge, legacy cleanup.
+    - Extend existing lifecycle regression tests if Stage 3 introduces additional webhook cutover branches.
+  post_beta:
+    - Usage-based pricing or volume discounts if warranted by usage patterns.
+
+risks:
+  - Stripe webhook handler migration (Stage 3) could break purchase fulfillment if not tested carefully.
+  - Legacy and new purchase codepaths coexist — risk of confusion or bugs during migration.
+
+open_questions:
+  - Should Apple Pay / Google Pay be explicitly enabled in Stripe Checkout?
+  - Should credit pack pricing tiers be adjusted based on unit economics?
+
+acceptance_criteria:
+  beta_ready:
+    - User can purchase credit packs via Stripe Checkout and receive credits.
+    - Credits are correctly deducted per generation and refunded on failure.
+    - Weekly drip runs reliably and tops up eligible users.
+    - No duplicate credit grants from webhook replays.
+
+last_reviewed: 2026-06-25

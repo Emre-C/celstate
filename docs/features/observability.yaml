@@ -1,0 +1,251 @@
+id: observability
+name: Observability & Ops
+status: functional
+confidence: high
+
+purpose:
+  summary: >
+    Multi-channel observability stack: PostHog for product analytics (client +
+    server), Sentry for exception capture, ops webhooks for human alerts, and
+    growth-ops tooling for autonomous analysis.
+  vision_alignment:
+    - Provides the signal layer for product decisions and incident response.
+    - Free-tier, low-complexity, AI-manageable tooling prioritized over paid observability products.
+    - Channel partition is non-negotiable: webhooks for human alerts, PostHog for analytics, Sentry for exceptions.
+
+implemented:
+  summary: >
+    PostHog client-side (posthog-js) and server-side (@posthog/convex) analytics
+    with first-party ingest proxy. Sentry for SvelteKit exception capture.
+    Ops webhooks (Discord/Slack) for signup, purchase, generation failure,
+    stalled generation, auth failures, and quarterly secret rotation reminders.
+    Growth-ops CLI for PostHog query and annotation. Ops investigation CLI.
+  user_visible_behavior:
+    - No direct user-visible surface — operates as infrastructure.
+  internal_behavior:
+    - PostHog events: landing_viewed, landing_cta_clicked, generation_started, generation_completed, generation_failed, credits_purchase_initiated, credits_checkout_returned, signed_up.
+    - Convex generationOpsEvents table tracks per-generation ops events with severity and timing.
+    - Ops alert events table tracks webhook delivery (sent/failed).
+    - Sentry boundary: Convex mutations/actions/http handlers do NOT import Sentry.
+    - "PostHog env var semantics: PUBLIC_POSTHOG_HOST = managed proxy for browser (posthog-js api_host); POSTHOG_HOST = direct ingest API for Convex backend (must stay us.i.posthog.com, NOT the proxy); POSTHOG_API_KEY = PUBLIC_POSTHOG_KEY (same project key); POSTHOG_PERSONAL_API_KEY (phx_*) is for MCP/API reads only, forbidden for event ingestion."
+    - "Generation failure classification: classifyGenerationFailureKind in src/lib/analytics/generation.ts classifies failures as timeout, provider_error, processing_error, or unknown. PostHog events exclude raw error strings — only generation_id, failure_kind, failure_stage, retry_count are sent."
+    - Auth alerting: rate-limited Sentry + webhook for proxy failures, 5xx endpoints, request failures.
+    - Growth-ops CLI: pnpm growth:list/scaffold/snapshot/annotate with PostHog Query API.
+    - Ops investigation CLI: pnpm ops:investigate for login/generation/download incidents.
+    - Quarterly secret rotation reminder cron (January, April, July, October).
+
+invariants:
+  - name: no_prompts_in_analytics
+    description: >
+      PostHog events AND ops webhooks EXCLUDE raw user prompts and image bytes.
+      Only metadata (generation_id, failure_kind, failure_stage, retry_count) is sent.
+    encoded_in:
+      - src/lib/analytics/generation.ts
+      - src/convex/lib/ops.ts
+  - name: no_raw_errors_in_posthog
+    description: >
+      generation_failed PostHog properties exclude free-text error strings.
+      Only structured fields (generation_id, failure_kind, failure_stage, retry_count).
+    encoded_in:
+      - src/lib/analytics/generation.ts
+  - name: client_events_are_lossy
+    description: >
+      Browser captures may be blocked by ad blockers or network issues.
+      Client-side events are NOT authoritative for revenue or funnel completion.
+      Server-side PostHog (Convex) is authoritative for revenue events.
+    encoded_in:
+      - src/lib/analytics/client-posthog.ts
+  - name: proxy_host_split
+    description: >
+      PUBLIC_POSTHOG_HOST is the managed proxy (browser-facing, first-party ingest).
+      POSTHOG_HOST is the direct ingest API (Convex backend, must stay us.i.posthog.com).
+      Do NOT mix these — the proxy is for client delivery; the direct API is for server-side.
+    encoded_in:
+      - src/lib/analytics/client-posthog.ts
+      - src/convex/posthog.ts
+  - name: phc_vs_phx_key_separation
+    description: >
+      phc_* keys are ingest keys (PUBLIC_POSTHOG_KEY, used for event capture).
+      phx_* keys are personal API keys (POSTHOG_PERSONAL_API_KEY, read-only for Query API / MCP).
+      phx_* keys are FORBIDDEN for event ingestion.
+    encoded_in:
+      - scripts/lib/posthog-api.ts
+      - src/lib/analytics/client-posthog.ts
+
+growth_lessons:
+  - id: K1
+    type: predicate
+    statement: Revenue events (signed_up, credits_purchase_completed) are server-authoritative; client-side purchase events are confirmation-only.
+  - id: K2
+    type: predicate
+    statement: Client-side events are not guaranteed delivery — ad blockers, network issues, and tab-close races cause gaps.
+  - id: K3
+    type: predicate
+    statement: First-party PostHog ingest proxy increases client-side delivery probability and reduces bot noise.
+  - id: K4
+    type: predicate
+    statement: PostHog ingest transformation bot filter reduces noise in landing analytics (not yet configured — see defect-007).
+  - id: K5
+    type: predicate
+    statement: Interaction events (CTA clicks, generation submissions) are more robust than page-view-only events because they require user engagement.
+  - id: K6
+    type: predicate
+    statement: Identified-only person profiles (no anonymous aliasing) reduce spurious anonymous person row creation in PostHog.
+  - id: K7
+    type: predicate
+    statement: PII identification (email, name) creates a data governance obligation — jurisdiction matrix and consent gate require legal review.
+  - id: L1
+    type: lesson
+    statement: Client-only funnel counts undercount vs ground truth — server-side confirmation is the reconciliation source.
+  - id: L2
+    type: lesson
+    statement: Landing page mount event count ≠ session-human count — bots and pre-render inflate views.
+  - id: L3
+    type: lesson
+    statement: PostHog autocapture creates spurious noise from DOM elements — disabled in favor of explicit event capture.
+  - id: L4
+    type: lesson
+    statement: OAuth sign-in start count ≠ success count — server-side signed_up event is the authoritative conversion signal.
+
+business_decisions:
+  - decision: Free-tier, low-complexity observability tooling.
+    rationale: >
+      Prioritizes AI-manageable operational tooling over paid observability
+      products. PostHog free tier + Sentry free tier + Discord/Slack webhooks.
+    encoded_in:
+      - src/lib/analytics/client-posthog.ts
+      - src/convex/posthog.ts
+      - src/convex/lib/ops.ts
+  - decision: Channel partition is non-negotiable.
+    rationale: >
+      HUMAN_OPS_WEBHOOK for human alerts, LLM_ANALYTICS (PostHog) for product
+      analysis, SENTRY for exceptions. Prevents signal mixing and cost
+      surprises.
+    encoded_in:
+      - src/convex/lib/ops.ts
+  - decision: Convex does NOT import Sentry.
+    rationale: >
+      generationOpsEvents and PostHog are separate from Sentry traces.
+      Keeps Convex server-side clean and avoids Sentry SDK in Convex runtime.
+    encoded_in:
+      - src/convex/lib/ops.ts
+  - decision: First-party PostHog ingest proxy.
+    rationale: Increases client-side delivery probability and reduces bot noise.
+    encoded_in:
+      - src/lib/analytics/
+
+implementation:
+  primary_files:
+    - src/lib/analytics/client-posthog.ts
+    - src/convex/posthog.ts
+    - src/convex/lib/ops.ts
+    - src/convex/lib/opsInvestigation.ts
+    - src/lib/sentry-environment.ts
+  related_files:
+    - src/lib/analytics/growth-events.ts
+    - src/lib/analytics/generation.ts
+    - src/convex/schema.ts
+    - src/convex/crons.ts
+    - scripts/ops/growth-ops.ts
+    - scripts/ops/investigate.ts
+    - scripts/lib/posthog-api.ts
+    - scripts/lib/growth-runbook.ts
+    - scripts/lib/growth-query-presets.ts
+    - src/instrumentation.server.ts
+    - src/hooks.server.ts
+  notes: >
+    PostHog person profiles are identified-only to reduce anonymous person row
+    creation. Bot filter configuration is a planned next step.
+
+event_truth_classes:
+  authoritative:
+    events:
+      - signed_up
+      - credits_purchase_completed
+    note: Server-side captured. These are the ground truth for revenue and user creation.
+  directional:
+    events:
+      - landing_viewed
+      - landing_cta_clicked
+      - generation_started
+      - generation_completed
+      - generation_failed
+      - credits_purchase_initiated
+      - credits_checkout_returned
+      - session_attribution_registered
+    note: Client-side captured via posthog-js. Lossy — may be blocked by ad blockers or network issues.
+
+env_var_semantics:
+  PUBLIC_POSTHOG_KEY:
+    pattern: phc_*
+    used_by: posthog-js and Convex POSTHOG_API_KEY (same project key)
+  PUBLIC_POSTHOG_HOST:
+    semantics: posthog-js api_host — MUST be set on Vercel Production or client never inits
+    managed_proxy: >
+      PostHog Cloud managed reverse proxy. Neutral subdomain CNAME →
+      *.proxy-us.posthog.com. Avoid analytics|tracking|telemetry|posthog|ph
+      in the subdomain — use a generic label (e.g. wel).
+    dev_fallback: https://us.i.posthog.com
+  POSTHOG_API_KEY:
+    equals: PUBLIC_POSTHOG_KEY
+    used_by: "@posthog/convex server capture"
+    prerequisite: Unset → server-side PostHog capture does not fire (no runtime fallback)
+  POSTHOG_HOST:
+    value: https://us.i.posthog.com
+    used_by: "@posthog/convex server capture only"
+    warning: Do NOT set to managed-proxy subdomain
+  POSTHOG_PERSONAL_API_KEY:
+    pattern: phx_*
+    forbidden_for: event ingestion, client bundle, Convex env for capture
+  OPS_ALERT_WEBHOOK_URL:
+    semantics: trimmed; empty → no outbound ops HTTP
+  OPS_ALERT_WEBHOOK_KIND:
+    type: slack | discord | generic | undefined
+    inference: if unset, derive from URL hostname
+
+change_checklist:
+  managed_proxy_change: >
+    DNS CNAME live in registrar; PostHog proxy status live; Vercel
+    PUBLIC_POSTHOG_HOST + redeploy; do not change Convex POSTHOG_HOST to proxy URL.
+  new_posthog_event: >
+    Add to event inventory; implement client OR server; validate env for server.
+    If revenue-critical: MUST be server-side with idempotency gate.
+  new_generationOps_eventType: >
+    schema + GENERATION_OPS_EVENT_TYPES + insert sites + rollup row in
+    summarizeGenerationOpsEvents.
+  new_ops_alert_field: >
+    GenerationAlertContext + buildAlertFacts + recordAlertEvent args.
+  new_auth_alert_field: >
+    AuthAlertContext + buildAuthAlertFacts + auth-alerts.ts thresholding constants.
+  feed_scale: >
+    Keep incident feeds on bounded indexed queries; do not reintroduce
+    full-table ops scans.
+
+remaining:
+  beta_blockers:
+    - None identified — observability stack is operational.
+  planned:
+    - Configure PostHog ingest transformation bot filter.
+    - Define metric tier: directional vs authoritative per event class.
+    - Legal review of consent gate and jurisdiction matrix.
+    - Define internal user exclusion predicate for staging and production.
+  post_beta:
+    - Upgrade to paid observability tier if volume warrants.
+
+risks:
+  - Client-side analytics have delivery gaps (ad blockers, network issues) — server-side PostHog is authoritative for revenue events.
+  - Bot noise in landing analytics if ingest filter is not configured.
+  - Webhook delivery failures could miss critical alerts.
+
+open_questions:
+  - Should the ops webhook be supplemented with email alerts for critical failures?
+  - What is the right bot filter configuration for PostHog ingest?
+
+acceptance_criteria:
+  beta_ready:
+    - PostHog captures key funnel events (landing, sign-up, generation, purchase).
+    - Ops webhooks fire on critical events (signup, purchase, generation failure, auth failure).
+    - Sentry captures unhandled exceptions in SvelteKit.
+    - Growth-ops CLI can query PostHog and annotate releases.
+
+last_reviewed: 2026-06-25

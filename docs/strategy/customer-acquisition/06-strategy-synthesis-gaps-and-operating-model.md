@@ -381,7 +381,7 @@ Rules should be **written before** the experiment launches to avoid hindsight bi
 | **This memo (06)** | Synthesis, **gap register**, **cold-start** and **metric-phase** operating model |
 | [07-ai-native-discovery-and-agent-leverage.md](./07-ai-native-discovery-and-agent-leverage.md) | Assistant/GEO layer, MCP leverage, AI-accelerated artifact production, social automation governance |
 | [docs/runbooks/GROWTH-OPERATIONS.md](../../../docs/runbooks/GROWTH-OPERATIONS.md) | Operational analytics workflow |
-| [docs/product/observability.md](../../../docs/product/observability.md) | Broader observability context |
+| [docs/features/observability.yaml](../../../docs/features/observability.yaml) | Broader observability context |
 
 ---
 

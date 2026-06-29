@@ -3,7 +3,7 @@
 > Status: design-locked, not yet implemented.
 > Owner: TBD (this doc was produced by the `improve-codebase-architecture` skill, grilling-loop output).
 > Risk: medium. Money path. Stripe webhooks tolerate idempotent replays during cutover.
-> Companion docs: [docs/product/payments-system.md](../product/payments-system.md), [docs/conventions/convex.md](../conventions/convex.md).
+> Companion docs: [docs/features/credits-and-payments.yaml](../features/credits-and-payments.yaml), [docs/conventions/convex.md](../conventions/convex.md).
 
 ---
 

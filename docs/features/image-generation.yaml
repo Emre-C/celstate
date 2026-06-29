@@ -1,0 +1,146 @@
+id: image-generation
+name: Image Generation
+status: functional
+confidence: high
+
+purpose:
+  summary: >
+    Generate transparent-background PNG images from text prompts using
+    difference matting — a mathematically exact alpha recovery technique
+    that eliminates the need for background removal or ML-based matting.
+  vision_alignment:
+    - Core product capability and primary technical differentiation.
+    - Enables the promise: "describe it, get it, already transparent."
+    - Supports logos, characters, product shots, icons, stickers — any subject.
+
+implemented:
+  summary: >
+    Staged durable generation pipeline using Vertex AI (gemini-3.1-flash-image-preview)
+    with white-background and black-background passes, difference matting for alpha
+    recovery, deterministic transparent QA, web optimization, and artifact retention.
+  user_visible_behavior:
+    - User enters a text prompt, optionally uploads reference images, selects aspect ratio.
+    - Generation runs asynchronously; UI shows progress and history reactively via Convex subscriptions.
+    - Completed generations display as cards with transparent preview on checkerboard.
+    - Failed generations show error messages; credits are refunded automatically.
+    - Users can download optimized RGBA PNGs.
+    - Dual-resolution download: Standard (≤1024px, 50–200KB, palette-quantized) and Hi-Res (original 1024×1024, 2–8MB) buttons.
+    - Filename convention: Standard = `celstate-{slug}.png`, Hi-Res = `celstate-{slug}-hires.png`.
+    - Legacy generations (pre-optimization) show a single Download button for the original.
+  internal_behavior:
+    - Three-stage pipeline: white_background → black_background → finalizing (difference matte + QA + optimize).
+    - Each stage is a separate Convex action scheduled atomically from mutations.
+    - Stage-level retry counters with tight retry policy (maxRetriesPerPass=1, maxRetriesTotal=0).
+    - Stale generation cleanup cron runs every 1 minute; fails generations stuck >15 min and refunds credits.
+    - Deterministic transparent QA: dual-pass recomposition residuals, multithreshold topology persistence, shell-based halo/spill analysis.
+    - Generation artifacts retained for 30 days then purged daily at 06:00 UTC.
+    - Reference uploads rate-limited per user via referenceUploadUrlIssues table.
+  qa_decision_model:
+    pass: Finalize and store the generation.
+    retry_black: Regenerate the black-background pass with targeted repair instructions.
+    retry_white_and_black: Regenerate the white pass and carry a downstream repair instruction into the black pass.
+    review: Block finalization and fail safely until a future review path exists.
+  qa_failure_modes:
+    missing_transparency: Image exported without meaningful alpha channel; fully opaque background despite transparent promise.
+    incomplete_background_removal: Background remains in corners or around silhouette edges; soft haze remains around subject.
+    internal_hole_failure: Center of donut is filled; holes in cheese are filled; hollow objects become solid; small cutouts collapse.
+    edge_quality_failure: White or dark halo around edges; jagged alpha boundaries; semi-transparent contamination where fully transparent pixels are expected.
+  dual_resolution_downloads:
+    summary: >
+      Every generated image is stored in two resolutions. Higher Resolution
+      is the original matte output (1024x1024, 2-8MB). Standard Resolution is
+      optimized for web (<=1024px, 50-200KB) using sharp with palette
+      quantization, Floyd-Steinberg dithering, and alpha preservation.
+    filenames: celstate-{slug}.png (standard) and celstate-{slug}-hires.png (hi-res).
+    alpha_preservation: >
+      Optimization must not degrade transparency quality. Palette quantization
+      handles semi-transparent pixels correctly — this is the product promise.
+
+business_decisions:
+  - decision: Difference matting instead of ML-based background removal.
+    rationale: >
+      Mathematically exact alpha recovery without ML post-processing artifacts.
+      Generates the same subject on white and black backgrounds, then solves
+      for alpha and foreground analytically.
+    encoded_in:
+      - src/convex/lib/generation/matte.ts
+      - src/convex/generation.ts
+  - decision: Vertex AI instead of Gemini Developer API.
+    rationale: >
+      Gemini Developer API returned HTTP 503 (capacity/demand). Vertex AI
+      provides higher rate limits, security/compliance controls, and
+      service-account auth.
+    encoded_in:
+      - src/convex/lib/gemini.ts
+      - src/convex/generation.ts
+  - decision: ThinkingLevel.LOW for image generation calls.
+    rationale: Reduces latency compared to prior HIGH setting without quality loss for image tasks.
+    encoded_in:
+      - src/convex/lib/gemini.ts
+  - decision: 1 credit per generation, max 3 concurrent generations per user.
+    rationale: Bounds cost and prevents single-user load spikes on the Gemini pipeline.
+    encoded_in:
+      - src/convex/lib/config.ts
+      - src/convex/generations.ts
+  - decision: Reference image upload capped at 7 MB and 14 images.
+    rationale: Aligns with Vertex inline image payload limits and bounds input cost.
+    encoded_in:
+      - src/convex/lib/config.ts
+
+implementation:
+  primary_files:
+    - src/convex/generation.ts
+    - src/convex/generations.ts
+    - src/convex/lib/generation/matte.ts
+    - src/convex/lib/gemini.ts
+    - src/convex/lib/config.ts
+  related_files:
+    - src/convex/lib/qa/transparentQa.ts
+    - src/convex/lib/validation/validation.ts
+    - src/convex/lib/generation/optimize.ts
+    - src/convex/lib/generation/prompts.ts
+    - src/convex/generationArtifactRetention.ts
+    - src/convex/generationReports.ts
+    - src/convex/crons.ts
+    - src/lib/components/PromptInput.svelte
+    - src/lib/components/GenerationCard.svelte
+    - src/lib/components/AspectRatioSelector.svelte
+    - src/lib/components/CheckerboardPreview.svelte
+    - src/lib/components/ZoomInspector.svelte
+    - src/routes/(app)/app/+page.svelte
+  notes: >
+    The generation pipeline is the most complex subsystem. Stage orchestration,
+    retry logic, and QA gating are split across generation.ts (actions) and
+    generations.ts (mutations/queries). The matte module is the mathematical core.
+    Image optimization uses sharp (libvips) for resize + palette quantization with
+    Floyd-Steinberg dithering; alpha channel preservation is critical — the palette
+    quantization must correctly handle semi-transparent pixels (this is the product
+    promise). Optimization adds ~200-400ms per image, negligible vs Vertex inference
+    latency (7-17s).
+
+remaining:
+  beta_blockers:
+    - None identified — core generation flow is functional.
+  planned:
+    - Broaden semantic validation for transparent QA cutout preservation beyond the current prompt-keyword + topology heuristic.
+    - Manual-review queue for edge-case QA failures.
+  post_beta:
+    - Assisted Mode (prompt refinement via designer LLM before generation) — spec exists but not implemented.
+
+risks:
+  - Vertex AI capacity or outage could block all generation — no fallback provider configured.
+  - Difference matting requires both passes to render the same subject; model inconsistency between passes can cause artifacts.
+  - Transparent QA thresholds are tuned from a limited sample batch; may need adjustment at scale.
+
+open_questions:
+  - Should a fallback image provider be configured for Vertex AI outages?
+  - Are current transparent QA thresholds appropriate across all subject types (logos vs characters vs product shots)?
+
+acceptance_criteria:
+  beta_ready:
+    - User can generate a transparent PNG from a text prompt and download it.
+    - Credits are correctly deducted and refunded on failure.
+    - Stale generations are cleaned up and credits refunded within 15 minutes.
+    - Transparent QA prevents obviously broken outputs from reaching the user.
+
+last_reviewed: 2026-06-25

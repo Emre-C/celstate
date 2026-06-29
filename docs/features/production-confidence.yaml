@@ -1,0 +1,201 @@
+id: production-confidence
+name: Production Confidence
+status: functional
+confidence: medium
+
+purpose:
+  summary: >
+    Automated deploy verification system that proves production safety across
+    core feature domains (auth, generation, checkout, settlement) using
+    machine-evaluable evidence and release gating.
+  vision_alignment:
+    - Ensures deploys don't break core user flows without manual checking.
+    - Replaces human-only post-deploy verification with machine-evaluable contracts.
+    - Separates non-destructive deploy canaries from destructive settlement canaries.
+
+implemented:
+  summary: >
+    End-to-end verification system with contract library, gate evaluation,
+    JSON Schema, unit tests, webhook settlement ledger, Convex persistence
+    (verificationRuns, verificationEvidence, canaryPrincipals), production
+    runner, auth/generation/checkout/settlement canaries, and deploy-triggered
+    verification via GitHub deployment_status events.
+  user_visible_behavior:
+    - No direct user-visible surface — operates as CI/CD infrastructure.
+  internal_behavior:
+    - Four feature domains: AUTH, GENERATION, CHECKOUT_SESSION, LIVE_SETTLEMENT.
+    - Requirement partition: REQUIRED_ON_DEPLOY = { AUTH, GENERATION, CHECKOUT_SESSION }; REQUIRED_ON_SCHEDULE = { AUTH, GENERATION, CHECKOUT_SESSION, LIVE_SETTLEMENT }; OPTIONAL = ∅.
+    - Release decision function aggregates domain verdicts (ALLOW/DENY).
+    - Deploy gate fires automatically on Vercel production deployments.
+    - Protected-route auth proof required by default for POST_DEPLOY and SCHEDULED triggers.
+    - Canary principal provisioning automated.
+    - Stripe refund automation for settlement canaries.
+    - Evidence persisted to Convex for audit trail.
+
+business_decisions:
+  - decision: Machine-evaluable evidence, not screenshot matching or HTML content comparison.
+    rationale: >
+      Abstracts away payload text, rendered HTML, image artifacts. Focuses on
+      observable behavioral contracts (auth success, generation completion,
+      checkout creation, settlement ledger).
+    encoded_in:
+      - src/convex/verification.ts
+      - src/convex/verificationRuns.ts
+      - src/lib/production-confidence/
+  - decision: Separate non-destructive deploy canaries from destructive settlement canaries.
+    rationale: >
+      Deploy canaries (auth, generation, checkout) are safe to run on every
+      deploy. Settlement canaries create and refund real Stripe charges —
+      run on a separate schedule.
+    encoded_in:
+      - scripts/ops/production-verification.ts
+      - src/convex/creditPackPurchaseActions.ts
+  - decision: Deploy gate exits non-zero on DENY.
+    rationale: Blocks release if any required domain fails verification.
+    encoded_in:
+      - scripts/ops/production-verification.ts
+
+enduring_knowledge:
+  - id: EK1
+    statement: >
+      Auth endpoint availability is necessary but not sufficient — protected-route
+      reachability (authenticated proof) is required for deploy confidence.
+  - id: EK2
+    statement: >
+      Checkout-session creation and settlement are separate obligations — a hosted
+      checkout URL proves session creation, not payment completion.
+  - id: EK3
+    statement: >
+      Credits are granted only from webhook-confirmed paid sessions, not from
+      browser redirect parameters.
+  - id: EK4
+    statement: >
+      Generation failure handling includes a compensating credit action (refund).
+      No artifact AND refund is a safety invariant.
+  - id: EK5
+    statement: >
+      Client-observed signals are inadmissible for authoritative deploy verdicts —
+      only server-side state transitions and probe outcomes qualify.
+  - id: EK6
+    statement: >
+      Deploy confidence is a composition over domain verdicts, not a scalar —
+      each domain independently produces PASSED/FAILED/TIMEOUT/SKIPPED.
+  - id: EK7
+    statement: >
+      Settlement canaries are destructive (real Stripe charges) and require
+      explicit compensation policy (automated refund). Non-destructive canaries
+      (auth, generation, checkout) are safe to run on every deploy.
+  - id: EK8
+    statement: >
+      Duplicate webhook delivery must be handled idempotently at the data layer
+      (dedup by payment intent) — canary coverage for this is partial.
+  - id: EK9
+    statement: >
+      Gate evaluation is only as good as domain contract coverage — gaps in
+      canary probes could allow broken deploys to pass.
+  - id: EK10
+    statement: >
+      Evidence persistence (verificationRuns + verificationEvidence) provides
+      audit trail for every runner invocation — one run row per deployment/trigger.
+  - id: EK11
+    statement: >
+      Final 401 from /api/auth/session is an admissible healthy unauthenticated
+      result — not a failure signal.
+  - id: EK12
+    statement: >
+      Canonical-origin correctness is part of auth correctness because redirect
+      and cookie semantics depend on origin consistency.
+  - id: EK13
+    statement: >
+      Checkout-session creation can be proven without spending money; live
+      settlement cannot be proven conclusively by preview, sandbox, or
+      test-mode-only execution.
+  - id: EK14
+    statement: >
+      A production generation canary can avoid live payments by using a
+      dedicated pre-funded principal.
+  - id: EK15
+    statement: >
+      If live-settlement proof depends on persisted local evidence, a first-class
+      settlement ledger must exist on the authoritative path.
+
+safety_invariants:
+  - >
+    Release open implies all required-on-deploy domain verdicts are PASSED.
+  - >
+    At most one credit grant per payment intent (dedup at data layer via
+    recordPurchaseSettlementHelper).
+  - >
+    At most one authoritative revenue event per payment intent.
+  - >
+    Authoritative revenue event implies credit grant was recorded.
+  - >
+    No artifact present AND refund issued — mutual exclusion (generation
+    either produces an artifact OR refunds credits, never both).
+  - >
+    Refund requires failure or timeout — no refund on successful generation.
+  - >
+    LIVE_SETTLEMENT PASSED implies grant_count=1 AND revenue_count=1.
+  - >
+    Client-signal-only evidence cannot produce an authoritative deploy verdict.
+
+requirement_partition:
+  required_on_deploy:
+    - AUTH
+    - GENERATION
+    - CHECKOUT_SESSION
+  required_on_schedule:
+    - AUTH
+    - GENERATION
+    - CHECKOUT_SESSION
+    - LIVE_SETTLEMENT
+  optional: []
+
+implementation:
+  primary_files:
+    - src/convex/verification.ts
+    - src/convex/verificationRuns.ts
+    - src/lib/production-confidence/
+    - scripts/ops/production-verification.ts
+  related_files:
+    - src/convex/schema.ts
+    - src/convex/creditPackPurchaseActions.ts
+    - .github/workflows/production-verification.yml
+    - .github/workflows/auth-canary.yml
+    - scripts/canary/
+    - scripts/checks/
+  notes: >
+    Remaining external configuration (not in-repo):
+    EC1 — Vercel deployment protection rules referencing the verification check
+    status (makes gate blocking instead of advisory).
+    EC2 — Canary Clerk user accounts + app user rows must exist before first
+    provisioning succeeds (one-time manual bootstrap).
+    EC3 — GitHub secrets required: VERIFICATION_RUNNER_SECRET, CONVEX_URL,
+    AUTH_CANARY_BASE_URL, AUTH_CANARY_STORAGE_JSON.
+
+remaining:
+  beta_blockers:
+    - None identified — system is operational.
+  planned:
+    - Vercel deployment protection rules referencing verification check status.
+    - Expand canary coverage beyond shallow anonymous probes for auth.
+  post_beta:
+    - Additional feature domains as product expands.
+
+risks:
+  - Settlement canaries use real Stripe charges — could fail if Stripe is in test mode or env is misconfigured.
+  - Canary principal provisioning depends on env vars being correctly synced.
+  - Gate evaluation is only as good as the domain contracts — gaps in coverage could allow broken deploys.
+
+open_questions:
+  - Should the gate be blocking or advisory during early beta?
+  - Are there additional feature domains that need canary coverage?
+
+acceptance_criteria:
+  beta_ready:
+    - Deploy-triggered verification runs automatically on Vercel production deploys.
+    - Auth, generation, and checkout canaries pass on a clean deploy.
+    - Gate evaluation produces a clear ALLOW/DENY decision.
+    - Evidence is persisted for audit.
+
+last_reviewed: 2026-06-25

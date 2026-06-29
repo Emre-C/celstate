@@ -54,7 +54,7 @@ Before or when going live with real charges:
    the expected names (use `pnpm secrets:diff` from a terminal — never
    `convex env list`).
 
-Related: [Payments System](../product/payments-system.md), [Vercel Deployment](./VERCEL-DEPLOYMENT.md).
+Related: [Credits & Payments](../features/credits-and-payments.yaml), [Vercel Deployment](./VERCEL-DEPLOYMENT.md).
 
 ---
 

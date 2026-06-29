@@ -75,7 +75,7 @@ The MatAnyone2 step (seed mask -> inference -> `pha/` frames) currently lives ou
 
 ## Phase 4 - Promote, document, then generalize
 
-- Promote the winning v6 output to `tmp/transparent-animation-spike/review/` and update [docs/product/TRANSPARENT-ANIMATION-RD-SPIKE.md](docs/product/TRANSPARENT-ANIMATION-RD-SPIKE.md): v5 results, the fgr negative finding, v6 design/results, refreshed failure taxonomy and next steps.
+- Promote the winning v6 output to `tmp/transparent-animation-spike/review/` and update [docs/archive/TRANSPARENT-ANIMATION-RD-SPIKE.md](docs/archive/TRANSPARENT-ANIMATION-RD-SPIKE.md): v5 results, the fgr negative finding, v6 design/results, refreshed failure taxonomy and next steps.
 - Generalization probes (the real "full vision" test, justified per the doc's own escalation rule since one clip can't answer generalization): generate 1-2 new probe sources with different content stress — e.g. a dark-palette subject, and semi-transparent/glow content (smoke, particles), ideally one on a non-green key to prove key-agnosticism. Run the identical v6 pipeline; only mechanism-level (never clip-specific) fixes allowed.
 
 ```mermaid

@@ -1,0 +1,120 @@
+id: mcp-server
+name: MCP Server
+status: functional
+confidence: high
+
+purpose:
+  summary: >
+    Remote MCP (Model Context Protocol) endpoint for agentic clients such as
+    Claude Code and Cursor. Exposes Celstate's image generation and management
+    capabilities as tools accessible to AI agents.
+  vision_alignment:
+    - Positions Celstate as an AI-native tool accessible to other AI agents.
+    - Enables programmatic image generation, listing, and API key management via standard protocol.
+    - Follows context-rot prevention principles (minimal tool count, concise descriptions, token-efficient responses).
+
+implemented:
+  summary: >
+    Stateless Streamable HTTP MCP server proxied through SvelteKit → Convex.
+    Bearer token auth via user-generated API keys. Four tools: generate image,
+    list images, get image details, manage API keys. Origin policy and
+    JSON-RPC 2.0 transport.
+  user_visible_behavior:
+    - Users can generate API keys from the app UI (ApiKeyDialog component).
+    - API keys can be used with MCP clients via Authorization: Bearer header.
+    - MCP clients can call celstate_generate_image, celstate_list_images, celstate_get_image, celstate_manage_api_keys.
+  internal_behavior:
+    - SvelteKit /mcp route proxies to Convex HTTP action.
+    - Convex handler creates fresh MCP server instance per request (stateless, no session bleeding).
+    - POST /mcp handles JSON-RPC; GET returns 405; DELETE returns 405; OPTIONS returns 204.
+    - Auth: key hash lookup, revoked/unknown key rejection, lastUsedAt update in single mutation.
+    - Origin policy: no Origin header accepted (normal for agents); present Origin must match app origin or MCP_ALLOWED_ORIGINS.
+    - Local proxy in packages/mcp-server/src/proxy.ts with header scrubbing, request-id propagation, retry for safe methods only.
+
+business_decisions:
+  - decision: Stateless HTTP transport (no SSE, no sessions).
+    rationale: >
+      Matches MCP spec expectations for stateless HTTP server. Avoids unused
+      session/SSE complexity. Every POST creates fresh server + transport.
+    encoded_in:
+      - src/convex/mcp/handler.ts
+      - src/routes/mcp/+server.ts
+  - decision: Four tools only, ~1,500 tokens total for all definitions.
+    rationale: >
+      Follows Anthropic's 2026 context-rot prevention guidance. Minimal tool
+      count, concise descriptions, token-efficient responses, pagination by
+      default.
+    encoded_in:
+      - src/convex/mcp/tools/
+      - src/convex/mcp/constants.ts
+  - decision: Bearer token auth via user-generated API keys, not OAuth.
+    rationale: >
+      Simpler for agentic clients. API keys stored as hashes in Convex.
+      Case-insensitive prefix parsing for flexibility.
+    encoded_in:
+      - src/convex/mcp/keys.ts
+  - decision: SvelteKit proxy layer instead of direct Convex HTTP endpoint.
+    rationale: >
+      App-domain endpoint (PUBLIC_SITE_URL origin) is the user-facing surface.
+      Convex remains an upstream implementation detail. Proxy handles header
+      scrubbing and request-id propagation.
+    encoded_in:
+      - src/routes/mcp/+server.ts
+      - src/lib/server/mcp-proxy.ts
+      - packages/mcp-server/src/proxy.ts
+  - decision: Intentionally do NOT expose list_all_images, delete_image, buy_credits, or upload_reference_image.
+    rationale: >
+      list_all_images is unbounded and context-destroying. delete_image is
+      destructive and rarely needed via agent. buy_credits is a financial
+      action that should stay in the browser. upload_reference_image involves
+      binary data over MCP which is complex. These are deliberate constraints,
+      not missing features.
+    encoded_in:
+      - src/convex/mcp/tools/
+
+implementation:
+  primary_files:
+    - src/convex/mcp/handler.ts
+    - src/convex/mcp/keys.ts
+    - src/convex/mcp/tools/
+    - src/routes/mcp/+server.ts
+    - src/lib/server/mcp-proxy.ts
+  related_files:
+    - src/convex/mcp/constants.ts
+    - src/convex/mcp/context.ts
+    - src/convex/mcp/toolResults.ts
+    - src/convex/http.ts
+    - src/convex/schema.ts
+    - packages/mcp-server/src/proxy.ts
+    - src/lib/components/ApiKeyDialog.svelte
+  notes: >
+    MCP handler accepts case-insensitive Bearer prefix; verification routes in
+    http.ts use case-sensitive Bearer. This divergence is intentional.
+
+remaining:
+  beta_blockers:
+    - None identified — MCP server is functional.
+  planned:
+    - Additional tools as product capabilities expand.
+    - Rate limiting per API key.
+  post_beta:
+    - SSE transport if session-based use cases emerge.
+    - OAuth flow for agent clients that prefer it.
+
+risks:
+  - API key leakage by users could allow unauthorized generation.
+  - No per-key rate limiting currently — relies on user-level credit/concurrent caps.
+  - MCP spec evolution could require transport changes.
+
+open_questions:
+  - Should per-API-key rate limiting be added before beta?
+  - Are there additional tools agents would benefit from (e.g., delete image, get credit balance)?
+
+acceptance_criteria:
+  beta_ready:
+    - MCP client can authenticate with a valid API key and call all four tools.
+    - Invalid or revoked keys are rejected with 401.
+    - Generation via MCP consumes credits like the web UI.
+    - Stateless transport handles concurrent requests without cross-user bleeding.
+
+last_reviewed: 2026-06-25

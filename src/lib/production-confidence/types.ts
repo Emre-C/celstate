@@ -1,6 +1,6 @@
 /**
  * Production confidence — types, constants, and canary principal definitions.
- * @see docs/product/production-confidence.md
+ * @see docs/features/production-confidence.yaml
  */
 
 // --- Bounded model constants (§2.3)

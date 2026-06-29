@@ -60,10 +60,10 @@ Treat remaining hits as **evidence to read**, not automatic debt: some markers d
 
 `src/convex/lib/httpResponses.ts` was removed in favor of **inlining** small JSON/Bearer helpers in `src/convex/http.ts` for `/verification/*` routes. **Do not reintroduce a shared `httpResponses` module** for cosmetic DRY without revisiting the typing and error-classifier tradeoff.
 
-**Bearer parsing** intentionally differs between verification routes and MCP; see [`docs/conventions/convex.md`](../conventions/convex.md) and [`docs/product/mcp-server.md`](../product/mcp-server.md).
+**Bearer parsing** intentionally differs between verification routes and MCP; see [`docs/conventions/convex.md`](../conventions/convex.md) and [`docs/features/mcp-server.yaml`](../features/mcp-server.yaml).
 
 ## Related docs
 
 - [`docs/runbooks/CI-AND-CANARIES.md`](./CI-AND-CANARIES.md) — CI workflows and production verification
-- [`docs/product/mcp-server.md`](../product/mcp-server.md) — MCP surface, auth, tool contract
+- [`docs/features/mcp-server.yaml`](../features/mcp-server.yaml) — MCP surface, auth, tool contract
 - [`docs/conventions/convex.md`](../conventions/convex.md) — Convex patterns and HTTP auth boundaries

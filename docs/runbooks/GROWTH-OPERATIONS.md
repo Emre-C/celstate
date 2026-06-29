@@ -5,9 +5,9 @@ document_id: "growth-operations-runbook"
 audience: ["llm", "autonomous_coding_agent"]
 human_readability: "not_required"
 canonical_deps:
-  - "docs/product/observability.md"
-  - "docs/product/payments-system.md"
-  - "docs/product/image-generation.md"
+  - "docs/features/observability.yaml"
+  - "docs/features/credits-and-payments.yaml"
+  - "docs/features/image-generation.yaml"
 scope:
   in: ["growth strategy", "tool access", "funnel analysis", "execution tracking"]
   out: ["UI copy", "visual design", "infrastructure ops"]
@@ -852,9 +852,9 @@ const CHECKLIST: ChecklistItem[] = [
 
 ```yaml
 this_document: "docs/runbooks/GROWTH-OPERATIONS.md"
-observability_spec: "docs/product/observability.md"
-payments_spec: "docs/product/payments-system.md"
-image_generation_spec: "docs/product/image-generation.md"
+observability_spec: "docs/features/observability.yaml"
+payments_spec: "docs/features/credits-and-payments.yaml"
+image_generation_spec: "docs/features/image-generation.yaml"
 design_system: "docs/product/design-system.md"
 growth_workflow: ".windsurf/workflows/growth-operations.md"
 growth_cli: "scripts/growth-ops.ts"

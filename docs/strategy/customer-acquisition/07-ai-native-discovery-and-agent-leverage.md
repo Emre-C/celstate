@@ -55,7 +55,7 @@ This memo defines an **AI-native layer** that sits **on top of** the existing st
 
 ### Layer 2 — Agent-Invocable Product (MCP And Beyond)
 
-Celstate already ships a hosted MCP surface documented in **[docs/product/mcp-server.md](../../product/mcp-server.md)** — this is **AI-first product strategy**, not only marketing. The hosted tool registry is covered by automated **`tools/list`** regression tests (`src/convex/mcp/http.test.ts`) so refactors cannot silently drop or reorder agent-facing tools.
+Celstate already ships a hosted MCP surface documented in **[docs/features/mcp-server.yaml](../../features/mcp-server.yaml)** — this is **AI-first product strategy**, not only marketing. The hosted tool registry is covered by automated **`tools/list`** regression tests (`src/convex/mcp/http.test.ts`) so refactors cannot silently drop or reorder agent-facing tools.
 
 **Strategic meaning:**
 

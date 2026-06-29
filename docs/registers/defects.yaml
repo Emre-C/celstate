@@ -1,0 +1,248 @@
+items:
+  - id: defect-001
+    type: bug
+    severity: high
+    status: resolved
+    area: lottie-generation
+    summary: >
+      ctx.storage.store throw inside completeGeneration previously left Lottie
+      generation rows stuck in "generating" status.
+    evidence: >
+      Resolved in src/convex/lottieGeneration.ts: completeGeneration now wraps
+      storeLottieJson in try/catch and calls failGeneration on storage failure.
+    impact: >
+      Before the fix, stuck "generating" rows could block users at
+      maxActiveGenerations=3 until stale cleanup reclaimed them.
+    proposed_resolution: >
+      No further action for this defect. Keep covered by Lottie generation
+      durability tests when this path changes.
+    related_files:
+      - src/convex/lottieGeneration.ts
+    created: 2026-06-25
+    resolved: 2026-06-26
+
+  - id: defect-002
+    type: tech_debt
+    severity: medium
+    status: resolved
+    area: lottie-generation
+    summary: >
+      failLottieGeneration previously lacked idempotent credit refund logic.
+    evidence: >
+      Resolved in src/convex/lottieGenerations.ts: refundLottieCreditsIfNeeded
+      checks creditsCost and creditRefundedAt before refunding and records the
+      refund timestamp on failure.
+    impact: >
+      Before the fix, future paid Lottie failures would have caused user
+      balance drift.
+    proposed_resolution: >
+      No further action for this defect. Revisit before enabling nonzero
+      Lottie generation pricing.
+    related_files:
+      - src/convex/lottieGenerations.ts
+    created: 2026-06-25
+    resolved: 2026-06-26
+
+  - id: defect-003
+    type: tech_debt
+    severity: medium
+    status: open
+    area: credits-and-payments
+    summary: >
+      Credit Pack Purchase module is mid-migration at Stage 2 of 7.
+      Stripe webhooks still route through legacy http.ts handlers instead of
+      the new internal.creditPackPurchase.* handlers.
+    evidence: >
+      src/convex/creditPackPurchase.ts and src/convex/lib/creditPackPurchase/
+      exist with the new lifecycle module, but http.ts still contains the
+      legacy Stripe webhook handlers. pendingCheckouts shim bridges old and
+      new surfaces.
+    impact: >
+      Two codepaths coexist for purchase handling. Risk of confusion, bugs,
+      and double-grant or missed settlement if webhook routing is inconsistent.
+    proposed_resolution: >
+      Complete Stage 3: cut http.ts settlement/refund webhooks to
+      internal.creditPackPurchase.* handlers. Then proceed through Stages 4-7
+      (switch requestCheckout/processCheckout, canary routes, QA reset purge,
+      legacy cleanup).
+    related_files:
+      - src/convex/http.ts
+      - src/convex/creditPackPurchase.ts
+      - src/convex/creditPackPurchaseActions.ts
+      - src/convex/lib/creditPackPurchase/lifecycle.ts
+    created: 2026-06-25
+    resolved: null
+
+  - id: defect-004
+    type: test_gap
+    severity: medium
+    status: resolved
+    area: credits-and-payments
+    summary: >
+      The new credit pack purchase module previously lacked lifecycle
+      regression tests.
+    evidence: >
+      Resolved in src/convex/lib/creditPackPurchase/lifecycle.test.ts, which
+      covers webhook payload normalization, pure settlement helpers,
+      runProcessCheckout, and runRefundCheckoutForCanary with the in-memory
+      Stripe port.
+    impact: >
+      Before the tests, Stage 3 webhook cutover carried unnecessary regression
+      risk.
+    proposed_resolution: >
+      Keep the lifecycle tests green and extend them if Stage 3 introduces
+      additional webhook cutover branches.
+    related_files:
+      - src/convex/lib/creditPackPurchase/lifecycle.ts
+      - src/convex/lib/creditPackPurchase/inMemoryStripeAdapter.ts
+      - src/convex/lib/creditPackPurchase/lifecycle.test.ts
+    created: 2026-06-25
+    resolved: 2026-06-26
+
+  - id: defect-005
+    type: product_gap
+    severity: low
+    status: resolved
+    area: image-generation
+    summary: >
+      The transparent QA layer previously lacked a prompt-aware cutout
+      preservation heuristic.
+    evidence: >
+      Resolved in src/convex/lib/qa/transparentQa.ts and src/convex/lib/config.ts:
+      transparentQaHoleKeywords are matched against prompts and combined with
+      topology metrics to emit expected_hole_missing and targeted repair
+      instructions.
+    impact: >
+      Before the heuristic, generated images could fill expected transparent
+      areas such as donut centers without being flagged by QA.
+    proposed_resolution: >
+      No further action for this defect. Future work should broaden semantic
+      validation beyond prompt-keyword matching.
+    related_files:
+      - src/convex/lib/qa/transparentQa.ts
+      - src/convex/lib/config.ts
+    created: 2026-06-25
+    resolved: 2026-06-26
+
+  - id: defect-006
+    type: tech_debt
+    severity: low
+    status: open
+    area: lottie-generation
+    summary: >
+      No render QA stage for Lottie generation — quality bar is "valid JSON"
+      rather than "render-verified motion quality."
+    evidence: >
+      The Lottie pipeline validates JSON structure and safety constraints
+      (layer count, byte size) but does not render frames to verify visual
+      quality. Blank, jittery, or malformed animations can pass validation.
+    impact: >
+      Users can receive low-quality animations that are structurally valid
+      but visually broken. This is acceptable for V1 internal control plane
+      but blocks the transition to a paid product surface.
+    proposed_resolution: >
+      Add a render QA stage using lottie-web and/or Skottie headless
+      rendering: automated frame capture, visual diffing, blank-frame
+      detection, FPS/node-count/performance budgets. Likely requires an
+      external worker since Convex actions cannot run a headless browser.
+    related_files:
+      - src/convex/lottieGeneration.ts
+      - src/convex/lib/lottie/lottieValidation.ts
+    created: 2026-06-25
+    resolved: null
+
+  - id: defect-007
+    type: tech_debt
+    severity: low
+    status: open
+    area: observability
+    summary: >
+      PostHog ingest transformation bot filter is not yet configured.
+    evidence: >
+      docs/features/observability.yaml lists "Configure PostHog ingest
+      transformation bot filter" as planned work. Landing page analytics
+      may contain bot noise.
+    impact: >
+      Landing page view and CTA metrics may be inflated by bot traffic,
+      reducing directional reliability of top-of-funnel analysis.
+    proposed_resolution: >
+      Configure PostHog ingest transformation with a bot filter template
+      or equivalent to reduce noise ratio in landing analytics.
+    related_files:
+      - src/lib/analytics/client-posthog.ts
+      - docs/features/observability.yaml
+    created: 2026-06-25
+    resolved: null
+
+  - id: defect-008
+    type: design_debt
+    severity: low
+    status: open
+    area: authentication
+    summary: >
+      Clerk's "Secured by Clerk" footer badge cannot be removed on the free
+      tier, slightly breaking the seamless editorial design.
+    evidence: >
+      src/routes/auth/+page.svelte uses Clerk's prebuilt <SignIn> component
+      with appearance overrides, but the footer badge is not removable
+      without a paid Clerk plan.
+    impact: >
+      Minor visual blemish on the sign-in page. Does not affect functionality
+      or conversion significantly.
+    proposed_resolution: >
+      Accept for beta. Post-beta, either upgrade to a paid Clerk plan for
+      badge removal, or migrate to headless OAuth (Path B) for full brand
+      control.
+    related_files:
+      - src/routes/auth/+page.svelte
+    created: 2026-06-25
+    resolved: null
+
+  - id: defect-009
+    type: tech_debt
+    severity: low
+    status: open
+    area: production-confidence
+    summary: >
+      Vercel deployment protection rules do not yet reference the verification
+      check status.
+    evidence: >
+      docs/features/production-confidence.yaml notes that Vercel deployment
+      protection rules referencing the verification check status is
+      remaining external configuration (not in-repo).
+    impact: >
+      Deploy gate evaluation runs and produces a verdict, but Vercel does
+      not automatically block rollout on a DENY verdict. The gate is
+      advisory until this is configured.
+    proposed_resolution: >
+      Configure Vercel deployment protection rules to reference the
+      verification check status, making the gate blocking.
+    related_files:
+      - .github/workflows/production-verification.yml
+      - scripts/ops/production-verification.ts
+    created: 2026-06-25
+    resolved: null
+
+  - id: defect-010
+    type: tech_debt
+    severity: low
+    status: open
+    area: mcp-server
+    summary: >
+      No per-API-key rate limiting — relies on user-level credit and
+      concurrent generation caps.
+    evidence: >
+      src/convex/mcp/keys.ts authenticates requests but does not enforce
+      per-key rate limits. Abuse prevention is handled at the generation
+      layer (credits, concurrent caps).
+    impact: >
+      A compromised or heavily used API key could exhaust a user's credits
+      rapidly. Not a security risk but a resource exhaustion concern.
+    proposed_resolution: >
+      Add per-API-key rate limiting (e.g., requests per minute) in the MCP
+      handler or at the Convex mutation layer.
+    related_files:
+      - src/convex/mcp/keys.ts
+      - src/convex/mcp/handler.ts
+    created: 2026-06-25
+    resolved: null

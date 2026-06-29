@@ -134,7 +134,7 @@ Celstate already has meaningful growth instrumentation foundations:
 
 - growth events in [src/lib/analytics/growth-events.ts](file:///C:/Users/emrec/codebase/active-projects/celstate/src/lib/analytics/growth-events.ts#L1-L17)
 - a growth-analysis workflow in [docs/runbooks/GROWTH-OPERATIONS.md](file:///C:/Users/emrec/codebase/active-projects/celstate/docs/runbooks/GROWTH-OPERATIONS.md#L18-L59)
-- client and server analytics plumbing described in [docs/product/observability.md](file:///C:/Users/emrec/codebase/active-projects/celstate/docs/product/observability.md)
+- client and server analytics plumbing described in [docs/features/observability.yaml](file:///C:/Users/emrec/codebase/active-projects/celstate/docs/features/observability.yaml)
 
 The next step is to make those events more segment-aware.
 

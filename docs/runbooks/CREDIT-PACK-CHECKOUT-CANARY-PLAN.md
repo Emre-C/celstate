@@ -28,7 +28,7 @@ Compatibility adapter:
 
 ### 1.2 Behavior we must preserve
 
-From [docs/product/payments-system.md](file:///c%3A/Users/emrec/codebase/active-projects/celstate/docs/product/payments-system.md):
+From [docs/features/credits-and-payments.yaml](file:///c%3A/Users/emrec/codebase/active-projects/celstate/docs/features/credits-and-payments.yaml):
 
 - One-time credit-pack purchases only — **no subscriptions**. `mode === "payment"` is enforced in `canGrantCreditsForCheckoutSession`.
 - Starter $5 → 15 credits; Pro $10 → 40 credits. Credits granted only after webhook settlement.
@@ -174,7 +174,7 @@ For each phase, save:
 - The Convex `purchaseSettlements` row for Phase 2 with `refundedAt` populated.
 - Stripe payment intent ID and refund ID for Phase 2 (in the `LIVE_SETTLEMENT` evidence row).
 
-These are the artifacts referenced by [docs/product/production-confidence.md](file:///c%3A/Users/emrec/codebase/active-projects/celstate/docs/product/production-confidence.md) for the deploy-gate audit trail.
+These are the artifacts referenced by [docs/features/production-confidence.yaml](file:///c%3A/Users/emrec/codebase/active-projects/celstate/docs/features/production-confidence.yaml) for the deploy-gate audit trail.
 
 ---
 

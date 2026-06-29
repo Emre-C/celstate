@@ -1,0 +1,97 @@
+id: lottie-generation
+name: Lottie Animation Generation
+status: partial
+confidence: medium
+
+purpose:
+  summary: >
+    Generate Lottie JSON animations from text prompts using Gemini structured
+    output. V1 is an internal control plane for proving motion quality, not the
+    final paid product surface.
+  vision_alignment:
+    - Extends Celstate's transparent-asset thesis from static images to motion.
+    - Targets transparent vector animations with clean loops and production-ready quality.
+    - Product-quality bar is "render-verified motion quality," not "valid JSON."
+
+implemented:
+  summary: >
+    Gemini structured-output pipeline generates Lottie JSON, validated by a
+    strict safety validator. lottie-web preview in browser. JSON download.
+    Convex storage for artifacts. Stale cleanup cron. Rate limiting and
+    concurrent generation caps.
+  user_visible_behavior:
+    - /app/animations page with prompt textarea, optional grounding (SVG/reference), aspect ratio and duration selectors.
+    - Generation history with lottie-web preview and JSON download.
+    - Active request count displayed.
+  internal_behavior:
+    - Gemini model (gemini-3.5-flash default) with structured output schema (LOTTIE_RESPONSE_SCHEMA).
+    - Strict safety validator: layer count, byte size, structure checks (lottieValidation.ts).
+    - Stale cleanup cron every 5 minutes (staleGenerationTimeoutMs = 10 min).
+    - Max 3 active generations, max 2 attempts, 20 requests per 24h window.
+    - Credits per Lottie generation: 0 (V1 proves quality before charging).
+
+business_decisions:
+  - decision: V1 is an internal control plane, NOT the final paid product surface.
+    rationale: >
+      Quality bar is "render-verified motion quality." Valid JSON is pass 1,
+      not success. Need render QA stage (frame capture, visual diffing, blank
+      detection, performance budgets) before charging users.
+    encoded_in:
+      - src/convex/lottieGeneration.ts
+      - src/convex/lib/config.ts
+  - decision: lottie-web is the browser compatibility target.
+    rationale: loadAnimation + animationData is the standard Lottie rendering path.
+    encoded_in:
+      - src/lib/components/LottiePreview.svelte
+  - decision: Credits per Lottie generation = 0 (free during V1).
+    rationale: Prove quality before charging. Charging is planned post-V1.
+    encoded_in:
+      - src/convex/lib/config.ts
+
+implementation:
+  primary_files:
+    - src/convex/lottieGeneration.ts
+    - src/convex/lottieGenerations.ts
+    - src/convex/lib/lottie/lottiePrompt.ts
+    - src/convex/lib/lottie/lottieValidation.ts
+    - src/convex/lib/config.ts
+  related_files:
+    - src/convex/crons.ts
+    - src/convex/schema.ts
+    - src/lib/components/LottieGenerationCard.svelte
+    - src/lib/components/LottiePreview.svelte
+    - src/routes/(app)/app/animations/+page.svelte
+  notes: >
+    Durability hardening now wraps storage failures into failLottieGeneration
+    and failLottieGeneration includes an idempotent credit-refund guard for the
+    future paid surface. Convex actions cannot run headless browser/native Skia,
+    so render QA likely needs an external worker.
+
+remaining:
+  beta_blockers:
+    - None identified for the current internal-control-plane V1.
+  planned:
+    - Render QA stage: automated frame capture, visual diffing, blank-frame detection, FPS/node-count/performance budgets.
+    - Generate multiple candidates → render frames → reject blank/ugly/slow → repair for visual quality → select best.
+    - Build Celstate-specific motion craft: reusable primitives, house style, easing recipes, curated examples.
+  post_beta:
+    - External render QA worker/service (cannot run headless browser in Convex actions).
+    - Paid Lottie generation product surface.
+
+risks:
+  - Gemini structured output may produce valid but visually broken Lottie JSON (blank, jittery, or malformed animations).
+  - No render QA means users can receive low-quality animations.
+
+open_questions:
+  - Should render QA run in an external worker, or can a lightweight in-process check suffice for V1?
+  - What motion primitives and easing recipes define Celstate's house style?
+  - When should Lottie generation transition from free to paid?
+
+acceptance_criteria:
+  beta_ready:
+    - User can generate a Lottie JSON from a text prompt and preview it in-browser.
+    - Generated JSON passes the strict safety validator.
+    - Stale generations are cleaned up and do not permanently block users.
+    - Storage failures do not leave rows stuck in "generating."
+
+last_reviewed: 2026-06-25

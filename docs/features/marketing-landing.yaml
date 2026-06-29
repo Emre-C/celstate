@@ -1,0 +1,98 @@
+id: marketing-landing
+name: Marketing Landing
+status: functional
+confidence: high
+
+purpose:
+  summary: >
+    Public marketing page at / that communicates the product value proposition,
+    showcases transparent image quality, displays pricing, and drives sign-up.
+  vision_alignment:
+    - First impression for prospective users — must communicate "transparent images, nothing else."
+    - Editorial design quality reflects the product's craft standard.
+    - Pricing transparency sets expectations before sign-up.
+
+implemented:
+  summary: >
+    Single-page marketing site with hero section, edge-quality zoom inspector,
+    feature grid, pricing tiers (Free/Starter/Pro), footer, SEO meta tags,
+    JSON-LD structured data, and PostHog analytics.
+  user_visible_behavior:
+    - Hero with "Describe it. Generate it. Already transparent." headline and CTA.
+    - Interactive zoom inspector showing edge quality on sample images.
+    - Feature grid with six value propositions.
+    - Pricing section with three tiers matching the credits page.
+    - Start Generating CTA links to /app (authenticated) or /auth (unauthenticated).
+    - Responsive layout with hero stagger animation.
+  internal_behavior:
+    - Clerk context determines CTA destination (authenticated → /app, unauthenticated → /auth).
+    - PostHog captures landing_viewed and landing_cta_clicked events.
+    - JSON-LD structured data for SoftwareApplication with Offer.
+    - Canonical URL, Open Graph, and Twitter Card meta tags.
+    - Hero image preloaded for performance.
+
+business_decisions:
+  - decision: Light-mode only, warm parchment palette.
+    rationale: >
+      Editorial/studio-quality aesthetic. Differentiates from sterile SaaS
+      and AI-lab visuals. Brand personality: warm, confident, editorial.
+    encoded_in:
+      - src/app.css
+      - docs/product/design-system.md
+  - decision: Three pricing tiers displayed (Free $0, Starter $5, Pro $10).
+    rationale: >
+      Transparent pricing. Free tier for trial, Starter for casual, Pro for
+      value. Matches credits page exactly.
+    encoded_in:
+      - src/routes/(marketing)/+page.svelte
+  - decision: Zoom inspector on landing page.
+    rationale: >
+      Demonstrates edge quality — the core differentiation — interactively.
+      Users can verify transparency themselves before signing up.
+    encoded_in:
+      - src/lib/components/ZoomInspector.svelte
+      - src/lib/components/HeroShowcase.svelte
+
+implementation:
+  primary_files:
+    - src/routes/(marketing)/+page.svelte
+    - src/lib/components/HeroShowcase.svelte
+    - src/lib/components/ZoomInspector.svelte
+  related_files:
+    - src/lib/components/ui/NavBar.svelte
+    - src/lib/components/ui/Button.svelte
+    - src/lib/components/ui/PageContainer.svelte
+    - src/lib/components/ui/SectionLabel.svelte
+    - src/lib/analytics/growth-events.ts
+    - src/lib/analytics/client-posthog.ts
+    - src/app.css
+  notes: >
+    Landing page is self-contained in one route. Design system tokens are
+    defined in src/app.css and documented in docs/product/design-system.md.
+
+remaining:
+  beta_blockers:
+    - None identified.
+  planned:
+    - A/B test hero copy and CTA placement.
+    - Add customer testimonials or gallery as social proof.
+    - Programmatic SEO pages (strategy docs exist in docs/strategy/customer-acquisition/).
+  post_beta:
+    - Blog or content marketing surface.
+
+risks:
+  - Landing page conversion rate is unvalidated — no A/B testing infrastructure yet.
+  - Sample images are static; no live generation demo on landing.
+
+open_questions:
+  - Should a live generation demo be added to the landing page?
+  - What is the target conversion rate from landing to sign-up?
+
+acceptance_criteria:
+  beta_ready:
+    - Landing page loads fast and renders correctly on mobile and desktop.
+    - CTA correctly routes authenticated vs unauthenticated users.
+    - Pricing tiers match the in-app credits page.
+    - SEO meta tags and JSON-LD are valid.
+
+last_reviewed: 2026-06-25

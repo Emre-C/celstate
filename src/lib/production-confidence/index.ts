@@ -1,6 +1,6 @@
 /**
  * Production confidence — formal contract types, gate evaluation, and state machines.
- * @see docs/product/production-confidence.md
+ * @see docs/features/production-confidence.yaml
  */
 
 export * from "./types.js";

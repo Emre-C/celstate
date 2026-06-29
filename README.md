@@ -2,17 +2,17 @@
 
 A focused tool for **transparent-background PNGs** from a text prompt—no background-removal step after the fact. The app is a **SvelteKit** frontend on **Convex** (realtime data, storage, scheduled work) with **Stripe** credit packs and product analytics.
 
-Primary product docs live in [`docs/product/`](docs/product/); deployment and operations runbooks live in [`docs/runbooks/`](docs/runbooks/). Documentation retention rules live in [`docs/README.md`](docs/README.md).
+Feature documentation lives in [`docs/features/`](docs/features/) (structured YAML); the founder-readable vision is [`docs/product/vision.html`](docs/product/vision.html); deployment and operations runbooks live in [`docs/runbooks/`](docs/runbooks/). Documentation retention rules live in [`docs/README.md`](docs/README.md).
 
 ## What it does today
 
-- **Transparent images** — Dual-pass generation on white/black backgrounds, then **difference matting** for exact alpha (see [`docs/product/image-generation.md`](docs/product/image-generation.md)). Inference uses **Vertex AI** (Generative AI on Vertex), not the Gemini Developer API key flow.
+- **Transparent images** — Dual-pass generation on white/black backgrounds, then **difference matting** for exact alpha (see [`docs/features/image-generation.yaml`](docs/features/image-generation.yaml)). Inference uses **Vertex AI** (Generative AI on Vertex), not the Gemini Developer API key flow.
 - **Style references** — Optional reference image(s) steer palette and look; text-only mode when none are attached.
-- **Credits** — Balance shown in-app; generations deduct credits; failures refund. **Sign-up bonus**, **weekly free drip**, and **one-time Stripe packs** (no subscriptions). Details: [`docs/product/payments-system.md`](docs/product/payments-system.md).
-- **Auth** — **Clerk** (SvelteKit) + Convex JWT; **Google** (and **Apple** when enabled in Clerk); **no email/password**. Details: [`docs/product/authentication.md`](docs/product/authentication.md).
-- **Agent access** — Celstate ships a hosted **remote MCP server** plus an optional local proxy package for enterprise networking or local URL needs. Details: [`docs/product/mcp-server.md`](docs/product/mcp-server.md).
-- **Observability** — **PostHog** (client + Convex server capture), **Sentry** on the SvelteKit app, optional **ops webhooks** (e.g. Slack/Discord) for purchases and generation alerts. Convex workers do not use Sentry. Overview: [`docs/product/observability.md`](docs/product/observability.md).
-- **Production verification** — Deploy-scoped production canaries prove auth, generation, checkout-session creation, and scheduled live settlement. Details: [`docs/product/production-confidence.md`](docs/product/production-confidence.md).
+- **Credits** — Balance shown in-app; generations deduct credits; failures refund. **Sign-up bonus**, **weekly free drip**, and **one-time Stripe packs** (no subscriptions). Details: [`docs/features/credits-and-payments.yaml`](docs/features/credits-and-payments.yaml).
+- **Auth** — **Clerk** (SvelteKit) + Convex JWT; **Google** (and **Apple** when enabled in Clerk); **no email/password**. Details: [`docs/features/authentication.yaml`](docs/features/authentication.yaml).
+- **Agent access** — Celstate ships a hosted **remote MCP server** plus an optional local proxy package for enterprise networking or local URL needs. Details: [`docs/features/mcp-server.yaml`](docs/features/mcp-server.yaml).
+- **Observability** — **PostHog** (client + Convex server capture), **Sentry** on the SvelteKit app, optional **ops webhooks** (e.g. Slack/Discord) for purchases and generation alerts. Convex workers do not use Sentry. Overview: [`docs/features/observability.yaml`](docs/features/observability.yaml).
+- **Production verification** — Deploy-scoped production canaries prove auth, generation, checkout-session creation, and scheduled live settlement. Details: [`docs/features/production-confidence.yaml`](docs/features/production-confidence.yaml).
 
 ## Tech stack
 
@@ -59,9 +59,11 @@ pnpm check
 - `src/lib/` — Components, auth client, PostHog, analytics helpers
 - `src/routes/` — SvelteKit routes (marketing, `/auth`, `/app/*`)
 - `scripts/` — Utility scripts
-- `docs/product/` — Shipped product behavior and architecture
+- `docs/features/` — Structured feature state (YAML): purpose, implementation, decisions, remaining work
+- `docs/product/` — Founder-readable vision (HTML) and canonical design system reference
 - `docs/runbooks/` — Setup, deployment, verification, and operator workflows
-- `docs/implementation/` — Time-bound implementation specs (prefer promoting durable material into product/runbooks/conventions)
+- `docs/implementation/` — Time-bound implementation specs (prefer promoting durable material into features/runbooks/conventions)
+- `docs/archive/` — Superseded docs retained for historical reference
 
 ## Useful Commands
 
@@ -80,15 +82,17 @@ pnpm reset-qa
 | Doc | Purpose |
 |-----|---------|
 | [`docs/README.md`](docs/README.md) | Documentation retention rules and folder roles |
-| [`docs/product/authentication.md`](docs/product/authentication.md) | Sign-in, sessions, protected routes |
-| [`docs/product/image-generation.md`](docs/product/image-generation.md) | Pipeline, Vertex, matting, history |
-| [`docs/product/payments-system.md`](docs/product/payments-system.md) | Credits, Stripe, pricing tiers |
-| [`docs/product/weekly-credit-drip.md`](docs/product/weekly-credit-drip.md) | Weekly free-credit replenishment behavior |
-| [`docs/product/credit-system-abuse-prevention.md`](docs/product/credit-system-abuse-prevention.md) | Credit-spend and checkout abuse controls |
-| [`docs/product/observability.md`](docs/product/observability.md) | PostHog, ops events, Sentry scope |
-| [`docs/product/growth-observability.md`](docs/product/growth-observability.md) | Growth-event truth classes and analytics contracts |
-| [`docs/product/mcp-server.md`](docs/product/mcp-server.md) | Hosted MCP surface and optional proxy package |
-| [`docs/product/production-confidence.md`](docs/product/production-confidence.md) | Deploy gate, canaries, and verification evidence |
+| [`docs/product/vision.html`](docs/product/vision.html) | Founder-readable product vision and status overview |
+| [`docs/product/design-system.md`](docs/product/design-system.md) | Canonical design system tokens and component rules |
+| [`docs/features/authentication.yaml`](docs/features/authentication.yaml) | Auth: Clerk, sessions, protected routes |
+| [`docs/features/image-generation.yaml`](docs/features/image-generation.yaml) | Generation pipeline, Vertex, matting, QA |
+| [`docs/features/credits-and-payments.yaml`](docs/features/credits-and-payments.yaml) | Credits, Stripe, pricing, abuse prevention |
+| [`docs/features/observability.yaml`](docs/features/observability.yaml) | PostHog, ops events, Sentry scope, growth tooling |
+| [`docs/features/mcp-server.yaml`](docs/features/mcp-server.yaml) | Hosted MCP surface and optional proxy package |
+| [`docs/features/production-confidence.yaml`](docs/features/production-confidence.yaml) | Deploy gate, canaries, and verification evidence |
+| [`docs/features/lottie-generation.yaml`](docs/features/lottie-generation.yaml) | Lottie animation generation V1 |
+| [`docs/features/marketing-landing.yaml`](docs/features/marketing-landing.yaml) | Marketing landing page |
+| [`docs/registers/defects.yaml`](docs/registers/defects.yaml) | Known bugs, defects, tech debt, and product gaps |
 | [`docs/runbooks/VERCEL-DEPLOYMENT.md`](docs/runbooks/VERCEL-DEPLOYMENT.md) | Frontend deployment checklist |
 | [`docs/runbooks/SECRETS-MANAGEMENT.md`](docs/runbooks/SECRETS-MANAGEMENT.md) | Doppler-first source of truth, scripts, and rotation cadence |
 | [`docs/runbooks/MANUAL-SECRET-ROTATION-GUIDE.md`](docs/runbooks/MANUAL-SECRET-ROTATION-GUIDE.md) | Click-paths for vendor-only rotations (Stripe, Google OAuth, Discord) |
