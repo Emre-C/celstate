@@ -160,7 +160,7 @@ export const LOTTIE_GENERATION_CONFIG = {
   defaultAspectRatio: "1:1" as LottieAspectRatioKey,
   defaultDurationSeconds: 4 as LottieDurationSeconds,
   defaultFps: 60,
-  defaultModel: "gemini-3.1-pro-preview",
+  defaultModel: "gemini-3.5-flash",
   maxActiveGenerations: 3,
   maxAttempts: 2,
   maxJsonBytes: 400_000,

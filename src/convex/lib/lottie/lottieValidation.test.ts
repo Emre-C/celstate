@@ -109,4 +109,99 @@ describe("lottieValidation", () => {
     expect(result.errors.some((error) => error.includes("expression string"))).toBe(true);
     expect(normalizeLottieJsonForStorage(validLottie()).endsWith("\n")).toBe(true);
   });
+
+  it("rejects flat shapes not wrapped in groups and groups missing trailing transforms", () => {
+    const lottie = {
+      ...validLottie(),
+      layers: [
+        {
+          ty: 4,
+          nm: "bad-layer",
+          ip: 0,
+          op: 240,
+          st: 0,
+          ks: {
+            o: { a: 0, k: 100 },
+            p: { a: 0, k: [256, 256, 0] },
+          },
+          shapes: [
+            { ty: "el", p: { a: 0, k: [0, 0] }, s: { a: 0, k: [100, 100] } },
+            {
+              ty: "gr",
+              nm: "group-no-tr",
+              it: [
+                { ty: "el", p: { a: 0, k: [0, 0] }, s: { a: 0, k: [50, 50] } },
+                { ty: "fl", c: { a: 0, k: [1, 0, 0, 1] }, o: { a: 0, k: 100 } },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = validateLottieDocument({
+      aspectRatio: "1:1",
+      durationSeconds: 4,
+      fps: 60,
+      lottie,
+    });
+
+    expect(result.decision).toBe("fail");
+    expect(result.errors.some((e) => e.includes('not wrapped in a group (ty: "gr")'))).toBe(true);
+    expect(result.errors.some((e) => e.includes('must end with a transform (ty: "tr")'))).toBe(true);
+  });
+
+  it("rejects nested groups missing trailing transforms", () => {
+    const lottie = {
+      ...validLottie(),
+      layers: [
+        {
+          ty: 4,
+          nm: "nested-group-layer",
+          ip: 0,
+          op: 240,
+          st: 0,
+          ks: {
+            o: { a: 0, k: 100 },
+            p: { a: 0, k: [256, 256, 0] },
+          },
+          shapes: [
+            {
+              ty: "gr",
+              nm: "outer-group",
+              it: [
+                {
+                  ty: "gr",
+                  nm: "inner-group-no-tr",
+                  it: [
+                    { ty: "el", p: { a: 0, k: [0, 0] }, s: { a: 0, k: [50, 50] } },
+                    { ty: "fl", c: { a: 0, k: [1, 0, 0, 1] }, o: { a: 0, k: 100 } },
+                  ],
+                },
+                { ty: "fl", c: { a: 0, k: [0.76, 0.25, 0.05, 1] }, o: { a: 0, k: 100 } },
+                {
+                  ty: "tr",
+                  p: { a: 0, k: [0, 0] },
+                  a: { a: 0, k: [0, 0] },
+                  s: { a: 0, k: [100, 100] },
+                  r: { a: 0, k: 0 },
+                  o: { a: 0, k: 100 },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = validateLottieDocument({
+      aspectRatio: "1:1",
+      durationSeconds: 4,
+      fps: 60,
+      lottie,
+    });
+
+    expect(result.decision).toBe("fail");
+    expect(result.errors.some((e) => e.includes("nested group 0") && e.includes('must end with a transform (ty: "tr")'))).toBe(true);
+  });
 });

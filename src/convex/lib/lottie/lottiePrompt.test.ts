@@ -18,8 +18,10 @@ describe("lottiePrompt", () => {
 
     expect(prompt).toContain("Canvas: 960x540");
     expect(prompt).toContain("op 240");
-    expect(prompt).toContain("Set assets to an empty array");
+    expect(prompt).toContain("assets (empty array)");
     expect(prompt).toContain("transparent-background");
+    expect(prompt).toContain('wrapped in a group (ty: "gr")');
+    expect(prompt).toContain("three motion layers");
     expect(LOTTIE_RESPONSE_SCHEMA.properties.lottie_json.type).toBe("string");
   });
 

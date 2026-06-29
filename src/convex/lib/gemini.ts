@@ -1,4 +1,5 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
+export { ThinkingLevel };
 import { GENERATION_CONFIG } from "./config.js";
 
 type GeminiImageMimeType =
@@ -44,7 +45,7 @@ export interface GeminiStructuredTextArgs {
   prompt: string;
   responseSchema: Record<string, unknown>;
   systemInstruction?: string;
-  thinkingLevel?: "low" | "medium" | "high";
+  thinkingLevel?: ThinkingLevel;
 }
 
 const GEMINI_IMAGE_MIME_TYPES = new Set<GeminiImageMimeType>([
@@ -174,47 +175,28 @@ export function createGeminiClient(runtimeConfig: GeminiRuntimeConfig): GoogleGe
   });
 }
 
-export function createGeminiEnterpriseClient(runtimeConfig: GeminiRuntimeConfig): GoogleGenAI {
-  return new GoogleGenAI({
-    ...(runtimeConfig.googleAuthOptions
-      ? { googleAuthOptions: runtimeConfig.googleAuthOptions }
-      : {}),
-    enterprise: true,
-    location: runtimeConfig.location,
-    project: runtimeConfig.project,
-  });
-}
-
 export async function generateStructuredText(
   runtimeConfig: GeminiRuntimeConfig,
   args: GeminiStructuredTextArgs,
   client?: GoogleGenAI,
 ): Promise<string> {
-  const ai = client ?? createGeminiEnterpriseClient(runtimeConfig);
-  const interaction = await ai.interactions.create({
-    api_version: "v1beta",
-    generation_config: {
-      max_output_tokens: 60_000,
-      temperature: 0.2,
-      thinking_level: args.thinkingLevel ?? "low",
-    },
-    input: args.prompt,
+  const ai = client ?? createGeminiClient(runtimeConfig);
+  const response = await ai.models.generateContent({
     model: args.model,
-    response_format: {
-      mime_type: "application/json",
-      schema: args.responseSchema,
-      type: "text",
+    contents: args.prompt,
+    config: {
+      maxOutputTokens: 60_000,
+      responseMimeType: "application/json",
+      responseSchema: args.responseSchema,
+      systemInstruction: args.systemInstruction,
+      temperature: 0.2,
+      thinkingConfig: {
+        thinkingLevel: args.thinkingLevel ?? ThinkingLevel.MEDIUM,
+      },
     },
-    response_modalities: ["text"],
-    store: false,
-    system_instruction: args.systemInstruction,
   });
 
-  if (interaction.status !== "completed") {
-    throw new Error(`Gemini interaction did not complete: ${interaction.status}`);
-  }
-
-  const text = interaction.output_text?.trim();
+  const text = response.text?.trim();
   if (!text) {
     throw new Error("Gemini returned an empty structured text response");
   }

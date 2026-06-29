@@ -181,6 +181,74 @@ function validateLayers(root: JsonRecord, errors: string[]): void {
   });
 }
 
+const VALID_SHAPE_TYPES = new Set(["gr", "el", "rc", "sr", "sh", "fl", "st", "tr", "tm", "rd", "rp", "mm", "pb"]);
+
+function validateGroupItems(
+  items: unknown[],
+  pathPrefix: string,
+  errors: string[],
+): void {
+  const lastItem = items[items.length - 1];
+  if (!isRecord(lastItem) || lastItem.ty !== "tr") {
+    errors.push(
+      `${pathPrefix} must end with a transform (ty: "tr") as the last item in its it array`,
+    );
+  }
+
+  items.forEach((item, index) => {
+    if (!isRecord(item)) return;
+
+    const ty = item.ty;
+    if (typeof ty === "string" && !VALID_SHAPE_TYPES.has(ty)) {
+      errors.push(`${pathPrefix} item ${index} uses unsupported type "${ty}"`);
+    }
+
+    if (ty === "gr" && Array.isArray(item.it)) {
+      validateGroupItems(item.it as unknown[], `${pathPrefix} nested group ${index}`, errors);
+    }
+  });
+}
+
+function validateShapesArray(
+  shapes: unknown[],
+  pathPrefix: string,
+  errors: string[],
+): void {
+  shapes.forEach((shape, shapeIndex) => {
+    if (!isRecord(shape)) {
+      errors.push(`${pathPrefix} shape ${shapeIndex} must be an object`);
+      return;
+    }
+
+    const ty = shape.ty;
+    if (typeof ty === "string" && !VALID_SHAPE_TYPES.has(ty)) {
+      errors.push(`${pathPrefix} shape ${shapeIndex} uses unsupported type "${ty}"`);
+    }
+
+    if (ty !== "gr") {
+      errors.push(
+        `${pathPrefix} shape ${shapeIndex} is not wrapped in a group (ty: "gr"). ` +
+        'Flat shapes in a layer render blank. Wrap all geometry, fills, and strokes inside a group.',
+      );
+    }
+
+    if (ty === "gr" && Array.isArray(shape.it)) {
+      validateGroupItems(shape.it as unknown[], `${pathPrefix} group ${shapeIndex}`, errors);
+    }
+  });
+}
+
+function validateGroupWrapping(root: JsonRecord, errors: string[]): void {
+  const layers = root.layers;
+  if (!Array.isArray(layers)) return;
+
+  layers.forEach((layer, index) => {
+    if (!isRecord(layer) || layer.ty !== 4 || !Array.isArray(layer.shapes)) return;
+
+    validateShapesArray(layer.shapes as unknown[], `Layer ${index}`, errors);
+  });
+}
+
 export function validateLottieDocument(input: LottieValidationInput): LottieValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -231,6 +299,7 @@ export function validateLottieDocument(input: LottieValidationInput): LottieVali
   }
 
   validateLayers(root, errors);
+  validateGroupWrapping(root, errors);
   collectSidFallbackErrors(root, "$", errors);
   collectExpressionErrors(root, "$", errors);
 

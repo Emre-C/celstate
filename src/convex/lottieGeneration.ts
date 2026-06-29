@@ -13,6 +13,7 @@ import {
 import {
   generateStructuredText,
   readGeminiRuntimeConfigFromEnv,
+  ThinkingLevel,
 } from "./lib/gemini.js";
 import {
   buildLottieGenerationPrompt,
@@ -185,6 +186,7 @@ export const generateLottie = internalAction({
         }),
         responseSchema: LOTTIE_RESPONSE_SCHEMA,
         systemInstruction: buildLottieSystemInstruction(),
+        thinkingLevel: ThinkingLevel.MEDIUM,
       });
     } catch (error) {
       await failGeneration(
@@ -226,6 +228,7 @@ export const generateLottie = internalAction({
         }),
         responseSchema: LOTTIE_RESPONSE_SCHEMA,
         systemInstruction: buildLottieSystemInstruction(),
+        thinkingLevel: ThinkingLevel.MEDIUM,
       });
     } catch (error) {
       await failGeneration(
