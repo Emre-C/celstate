@@ -12,16 +12,18 @@
 	let {
 		onsubmit,
 		disabled = false,
-		credits
+		credits,
+		initialPrompt = ''
 	}: {
 		onsubmit: (prompt: string, referenceStorageIds?: string[], aspectRatio?: string) => void;
 		disabled?: boolean;
 		credits?: number;
+		initialPrompt?: string;
 	} = $props();
 
 	const client = useConvexClient();
 
-	let value = $state('');
+	let value = $state(initialPrompt);
 	let focused = $state(false);
 	let referenceFiles = $state<File[]>([]);
 	let referencePreviewUrls = $state<string[]>([]);

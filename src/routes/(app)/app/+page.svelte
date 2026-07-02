@@ -23,6 +23,8 @@
 	let creditNudge = $state(false);
 	let creditNudgeTimer: ReturnType<typeof setTimeout> | undefined;
 	let purchaseSuccessCaptured = $state(false);
+	let seededPrompt = $state('');
+	let seededPromptCaptured = $state(false);
 
 	/** Avoids reactive feedback loops when syncing Convex subscription → PostHog. */
 	const generationStatusPrev = new Map<string, 'generating' | 'complete' | 'failed'>();
@@ -39,6 +41,22 @@
 			goto('/app', { replaceState: true });
 		} else if (params.get('canceled') === 'true') {
 			errorMessage = 'Payment canceled. No charges were made.';
+			goto('/app', { replaceState: true });
+		}
+	});
+
+	$effect(() => {
+		if (!browser) return;
+		const params = $page.url.searchParams;
+		const prompt = params.get('prompt')?.trim();
+		const source = params.get('source')?.trim();
+		if (prompt && !seededPromptCaptured) {
+			seededPromptCaptured = true;
+			seededPrompt = prompt;
+			initPostHog();
+			posthog.capture('prompt_seeded_from_url', {
+				source: source ?? 'unknown',
+			});
 			goto('/app', { replaceState: true });
 		}
 	});
@@ -155,6 +173,7 @@
 				onsubmit={handleGenerate}
 				disabled={generating}
 				{credits}
+				initialPrompt={seededPrompt}
 			/>
 		</div>
 

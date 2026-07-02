@@ -1169,3 +1169,114 @@ export const getCreditsForMcp = internalQuery({
     return user?.credits ?? 0;
   },
 });
+
+export const submitFeedback = mutation({
+  args: {
+    generationId: v.id("generations"),
+    rating: v.union(v.literal("up"), v.literal("down")),
+  },
+  returns: v.object({
+    ok: v.boolean(),
+    alreadySubmitted: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    const appUser = await getCurrentAppUser(ctx);
+    if (!appUser) {
+      throw new ConvexError("Unauthorized");
+    }
+
+    const generation = await ctx.db.get(args.generationId);
+    if (!generation) {
+      throw new ConvexError("Generation not found");
+    }
+    if (generation.userId !== appUser._id) {
+      throw new ConvexError("Generation not found");
+    }
+
+    const existing = await ctx.db
+      .query("generationFeedback")
+      .withIndex("by_generation", (q) => q.eq("generationId", args.generationId))
+      .first();
+
+    if (existing) {
+      if (existing.rating === args.rating) {
+        return { ok: true, alreadySubmitted: true };
+      }
+      await ctx.db.patch(existing._id, { rating: args.rating });
+      return { ok: true, alreadySubmitted: false };
+    }
+
+    await ctx.db.insert("generationFeedback", {
+      userId: appUser._id,
+      generationId: args.generationId,
+      rating: args.rating,
+      createdAt: Date.now(),
+    });
+
+    return { ok: true, alreadySubmitted: false };
+  },
+});
+
+export const getFeedbackForGeneration = query({
+  args: {
+    generationId: v.id("generations"),
+  },
+  returns: v.union(
+    v.object({
+      rating: v.union(v.literal("up"), v.literal("down")),
+      createdAt: v.number(),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const appUser = await getCurrentAppUser(ctx);
+    if (!appUser) {
+      return null;
+    }
+
+    const generation = await ctx.db.get(args.generationId);
+    if (!generation || generation.userId !== appUser._id) {
+      return null;
+    }
+
+    const existing = await ctx.db
+      .query("generationFeedback")
+      .withIndex("by_generation", (q) => q.eq("generationId", args.generationId))
+      .first();
+
+    if (!existing) {
+      return null;
+    }
+
+    return { rating: existing.rating, createdAt: existing.createdAt };
+  },
+});
+
+export const recordDownload = mutation({
+  args: {
+    generationId: v.id("generations"),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const appUser = await getCurrentAppUser(ctx);
+    if (!appUser) {
+      throw new Error("Not authenticated");
+    }
+
+    const generation = await ctx.db.get(args.generationId);
+    if (!generation) {
+      throw new Error("Generation not found");
+    }
+    if (generation.userId !== appUser._id) {
+      throw new Error("Not authorized");
+    }
+
+    if (!generation.downloadedAt) {
+      await ctx.db.patch(args.generationId, {
+        downloadedAt: Date.now(),
+      });
+    }
+
+    return null;
+  },
+});
