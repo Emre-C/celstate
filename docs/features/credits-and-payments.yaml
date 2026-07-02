@@ -69,15 +69,6 @@ business_decisions:
     encoded_in:
       - src/convex/creditPackPurchase.ts
       - src/convex/lib/creditPackPurchase/lifecycle.ts
-  - decision: Credit pack purchase module deepening at Stage 2.
-    rationale: >
-      New lifecycle module (catalog, stripePort, lifecycle, adapters) exists
-      but webhooks have not yet been cut from legacy http.ts handlers.
-      pendingCheckouts shim bridges the old and new surfaces.
-    encoded_in:
-      - src/convex/creditPackPurchase.ts
-      - src/convex/creditPackPurchaseActions.ts
-      - src/convex/lib/creditPackPurchase/
   - decision: Intentional abuse-prevention boundaries — what is NOT part of the abuse layer.
     rationale: >
       No CAPTCHA or signup rate limiting (social-only auth via Clerk handles
@@ -116,23 +107,14 @@ implementation:
     - src/convex/crons.ts
     - src/routes/(app)/app/credits/+page.svelte
   notes: >
-    Credit Pack Purchase module is mid-migration (Stage 2 of 7). The new
-    lifecycle module exists and is wired for requestCheckout/getCheckoutStatus,
-    but Stripe webhooks still route through legacy http.ts handlers. Stages 3-7
-    (webhook cutover, canary routes, QA reset, legacy cleanup) are pending.
+    Purchase lifecycle (request, Stripe Checkout, settlement, refund) is fully
+    routed through the creditPackPurchase module. Webhooks, canary runner
+    endpoints, and QA reset all call internal.creditPackPurchase.* handlers.
 
 remaining:
-  beta_blockers:
-    - Credit Pack Purchase Stage 3: Cut Stripe settlement/refund webhooks from legacy http.ts to internal.creditPackPurchase.* handlers.
-  planned:
-    - Credit Pack Purchase Stages 4-7: switch requestCheckout/processCheckout, canary routes, QA reset purge, legacy cleanup.
-    - Extend existing lifecycle regression tests if Stage 3 introduces additional webhook cutover branches.
   post_beta:
     - Usage-based pricing or volume discounts if warranted by usage patterns.
 
-risks:
-  - Stripe webhook handler migration (Stage 3) could break purchase fulfillment if not tested carefully.
-  - Legacy and new purchase codepaths coexist — risk of confusion or bugs during migration.
 
 open_questions:
   - Should Apple Pay / Google Pay be explicitly enabled in Stripe Checkout?

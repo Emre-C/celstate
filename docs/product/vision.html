@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Celstate — Product Vision & Status</title>
+<title>Celstate — Making Software Alive</title>
 <style>
   :root {
     --bg: #F5F3ED;
@@ -302,6 +302,119 @@
     color: var(--dim);
   }
 
+  /* Thesis block */
+  .thesis {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-style: italic;
+    font-size: 1.3rem;
+    line-height: 1.5;
+    color: var(--text);
+    max-width: 640px;
+    margin-bottom: 2rem;
+  }
+
+  /* Horizon cards */
+  .horizon-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .horizon-card .horizon-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    margin-bottom: 0.75rem;
+  }
+
+  .horizon-card h3 {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-style: italic;
+    font-size: 1.3rem;
+    font-weight: 400;
+    margin-bottom: 0.75rem;
+  }
+
+  .horizon-card p {
+    font-size: 0.9rem;
+    color: var(--dim);
+    margin-bottom: 0.5rem;
+  }
+
+  /* Capability ladder */
+  .ladder {
+    position: relative;
+    padding-left: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .ladder::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.5rem;
+    bottom: 0.5rem;
+    width: 2px;
+    background: var(--border);
+  }
+
+  .ladder-step {
+    position: relative;
+    padding: 0.75rem 0 0.75rem 1.5rem;
+  }
+
+  .ladder-step::before {
+    content: "";
+    position: absolute;
+    left: -0.5rem;
+    top: 1.1rem;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--bg);
+    border: 2px solid var(--accent);
+  }
+
+  .ladder-step.current::before {
+    background: var(--accent);
+  }
+
+  .ladder-step .ladder-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 0.15rem;
+  }
+
+  .ladder-step .ladder-desc {
+    font-size: 0.825rem;
+    color: var(--dim);
+  }
+
+  .ladder-step .ladder-status {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+    margin-left: 0.5rem;
+  }
+
+  /* Manifesto quote */
+  .manifesto-quote {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-style: italic;
+    font-size: 1.15rem;
+    line-height: 1.5;
+    color: var(--text);
+    border-left: 3px solid var(--accent);
+    padding: 0.75rem 1.25rem;
+    margin: 1.5rem 0;
+    background: rgba(194, 65, 12, 0.04);
+  }
+
   /* Defects summary */
   .defect-summary {
     display: flex;
@@ -332,61 +445,357 @@
 
   <!-- ========== HEADER ========== -->
   <div class="header">
-    <div class="section-label">Product Vision & Status</div>
+    <div class="section-label">Product Vision</div>
     <h1>Celstate</h1>
     <p>
-      AI transparent-background image generator. Describe anything — a logo, a character,
-      a product shot — and get it back already transparent. No background removal, no halos,
-      no edge degradation. Just your vision, clean and ready to use.
+      The living-asset layer for software. We give AI assistants the tools to make
+      the digital world feel alive — the way games always have.
     </p>
-    <div class="last-updated">Last updated: June 25, 2026</div>
+    <div class="last-updated">Last updated: July 1, 2026</div>
   </div>
 
-  <!-- ========== NORTH STAR VISION ========== -->
-  <h2>North Star</h2>
+  <!-- ========== THE STALE-SOFTWARE PROBLEM ========== -->
+  <h2>The Problem: Software Forgot How to Feel Alive</h2>
   <p>
-    Celstate is the fastest path from imagination to a production-ready transparent image.
-    The core technical differentiation is <strong>difference matting</strong> — a mathematically
-    exact alpha recovery technique that generates the same subject on white and black backgrounds,
-    then solves for perfect transparency. No ML-based background removal, no edge artifacts.
+    I grew up playing Japanese RPGs. Even on old hardware — pixelated, low-resolution,
+    technologically primitive — those worlds felt <em>alive</em>. Trees swayed in the
+    wind. Loot shimmered as you walked past so you wouldn't miss it. A chest slammed
+    shut with visual weight. Two swords clashing carried impact. The atmosphere shifted
+    as you moved through it. None of it was the focal point. The aliveness was in the
+    <strong>details around the focal point</strong> — the ambient periphery that made
+    the world feel like a world, not a menu.
   </p>
   <p>
-    The product extends from static images to transparent vector animations (Lottie JSON),
-    positioning Celstate as the transparent-asset layer for creatives, designers, and AI agents.
+    Everything outside of gaming lost that magic. Web development settled into a
+    vocabulary of stale components — flat cards, static headers, lifeless transitions —
+    not because they're engaging but because they're easy to make work. "Best practices"
+    optimized for reliability, not for delight. The result is a digital landscape where
+    every app, every presentation, every page feels like a form to fill out. Functional.
+    Dead.
+  </p>
+  <div class="manifesto-quote">
+    Games proved that even low-fidelity technology can create worlds that feel alive.
+    We have vastly more powerful tools now. Why does everything else feel so stale?
+  </div>
+
+  <!-- ========== THE VISION ========== -->
+  <h2>The Vision: Alive Software, Composed by AI</h2>
+  <p class="thesis">
+    Celstate is the living-asset layer for software. We use AI image and video
+    generation models to create the ambient, atmospheric, reactive details that make
+    digital surfaces feel alive — and we expose those capabilities as tools for AI
+    assistants to wield on behalf of their humans.
+  </p>
+  <p>
+    The protagonist is the AI assistant. No one is writing software by hand anymore —
+    AI writes all software on behalf of creators. Celstate is built for that world.
+    Assistants call our tools to enrich the apps, presentations, and pages they're
+    composing. They generate the transparent ornament that softens a header. The
+    animated element that gives a click its weight. The ambient detail that makes a
+    page feel like a place, not a document.
+  </p>
+  <p>
+    "Alive" is not the focal point. It's the tree swaying in the background. The
+    shimmer that catches your eye. The impact when something happens. It's the
+    periphery, the atmosphere, the detail that you feel before you notice — the
+    difference between a world you're inside of and a page you scan and leave.
   </p>
 
-  <!-- ========== PRODUCT THESIS ========== -->
-  <h2>Product Thesis</h2>
-  <div class="callout">
+  <!-- ========== WHY IT'S HARD ========== -->
+  <h2>Why It's Hard (And Why That's the Moat)</h2>
+  <p>
+    Making software feel alive requires runtime motion and reactivity — layers that
+    breathe, respond, and change as the user moves through them. This is not a
+    prompt-engineering problem. It's a deep systems problem at the intersection of
+    generative AI, real-time rendering, and software architecture.
+  </p>
+  <p>
+    We spent a year trying to get there and failed. Transparent video alpha extraction
+    produced ghosting and fringe artifacts. Full-screen generated UI broke layout and
+    accessibility. Runtime motion bundles were too heavy, too brittle, too disconnected
+    from the code that owns the page. Every path we tried — and we tried many — hit the
+    same wall: generated visual richness and deterministic software composition don't
+    naturally compose.
+  </p>
+  <div class="callout callout-warning">
     <p>
-      <strong>Transparent images. Nothing else.</strong>
-      Professionals in focused productivity mode arrive with intent, not to browse.
-      They need transparent-background images and want to describe what they need and get it fast.
-      The app should respect their time and reward their focus.
+      <strong>That failure is the moat.</strong> If alive software were easy, it would
+      already be everywhere. The problem is deep, defensible, and worth solving. The
+      question is not <em>whether</em> but <em>how</em> — and how to fund the deep
+      research and engineering needed to get there.
     </p>
   </div>
+
+  <!-- ========== THE STRATEGY: TWO HORIZONS ========== -->
+  <h2>The Strategy: Two Horizons</h2>
   <p>
-    The business model is equally simple: start free (3 credits + weekly drip), buy credit packs
-    when you need more ($5 or $10 one-time). No subscriptions, no expiration, no complexity.
+    The vision requires motion and reactivity we haven't cracked yet. Rather than
+    starve on the moonshot, we ship what works today to build the runway that funds
+    the deep research. Two horizons, one trajectory.
   </p>
 
-  <!-- ========== TARGET USER ========== -->
-  <h2>Target User & Core Promise</h2>
+  <div class="horizon-card">
+    <div class="horizon-label">Horizon 1 — The Runway Engine</div>
+    <h3>Ship alpha-native visual craft that works today</h3>
+    <p>
+      Transparent images, illustrated ornaments, vector animations — assets with real
+      alpha channels that AI assistants can drop into real software without breaking
+      layout. Code owns the page; Celstate owns the transparent art layers that make
+      it feel handcrafted instead of sterile.
+    </p>
+    <p>
+      This is not a compromise. It's the disciplined beachhead: prove that
+      AI-generated visual craft can elevate real software, build a user base, generate
+      revenue, and learn what creators and assistants actually need.
+    </p>
+  </div>
+
+  <div class="horizon-card">
+    <div class="horizon-label">Horizon 2 — The Moonshot</div>
+    <h3>Genuinely alive software</h3>
+    <p>
+      The deep research: runtime motion, ambient reactivity, atmospheric layers that
+      respond to presence and time. The JRPG feeling — a world that shifts around you
+      as you move through it. Generated visual richness that composes cleanly with
+      deterministic software architecture.
+    </p>
+    <p>
+      We don't know exactly how to get there yet. We know it requires sustained
+      research beyond prompt engineering — likely combining segmentation/matting
+      priors, temporal stabilization, render QA, and a composition layer that doesn't
+      exist today. Horizon 1 funds the runway to figure it out.
+    </p>
+  </div>
+
+  <!-- ========== WHAT WE HAVE TODAY ========== -->
+  <h2>What We Have Today</h2>
+  <p>
+    Shipped, working capabilities that form the foundation of Horizon 1.
+  </p>
   <ul>
-    <li><strong>Who:</strong> Creatives, designers, marketers, and AI agents who need transparent PNGs — logos, characters, product shots, icons, stickers.</li>
-    <li><strong>Promise:</strong> Describe it. Generate it. Already transparent.</li>
-    <li><strong>Quality bar:</strong> 32-bit RGBA PNGs with a proper alpha channel. Edges that hold up on any background. No halos, no color bleed, no fringing.</li>
-    <li><strong>Speed bar:</strong> Type a prompt, get your image. No queues, no multi-step workflows.</li>
+    <li><strong>Difference-matting transparent images</strong> — mathematically exact alpha recovery via dual-pass generation. The core product. Production pipeline with deterministic QA, retry logic, and artifact retention.</li>
+    <li><strong>Reference image uploads</strong> — users can attach up to 14 style reference images per generation. References are passed to Gemini alongside the prompt using reference-aware prompt builders, giving the model visual grounding for the desired aesthetic.</li>
+    <li><strong>Credits &amp; payments</strong> — Stripe one-time credit pack purchases, weekly free credit drip, abuse prevention, settlement tracking.</li>
+    <li><strong>Authentication</strong> — Clerk social sign-in (Google live, Apple pending) with Convex JWT. Stable after multiple migrations.</li>
+    <li><strong>MCP server</strong> — remote MCP endpoint for AI assistants (Claude Code, Cursor). Bearer auth, four tools, SvelteKit proxy to Convex. This is the seam where assistants compose living assets on behalf of humans.</li>
+    <li><strong>Marketing landing</strong> — public landing page with hero, edge-quality zoom inspector, pricing, SEO/JSON-LD.</li>
+    <li><strong>Production confidence</strong> — automated deploy verification across auth, generation, checkout, and settlement domains.</li>
+    <li><strong>Observability</strong> — PostHog analytics, Sentry exceptions, ops webhooks, growth-ops CLI, ops investigation CLI.</li>
+    <li><strong>Lottie generation (V1 internal)</strong> — structured-output pipeline with safety validator and lottie-web preview. Not yet a paid surface — quality bar is "valid JSON," needs render QA before promotion.</li>
+    <li><strong>Transactional email (Resend)</strong> — behavior-driven welcome email system: 24h after signup, users are classified into 5 scenarios based on generation/download/credit behavior and sent a tailored email. Download tracking via <code>generations.downloadedAt</code>, daily cron at 8am ET, HMAC-token unsubscribe mechanism, PostHog event tracking per scenario. Resend integrated via Convex component with webhook event tracking (bounce/complaint/delivery), environment-aware test mode, and ops alerting on delivery failures. Post-generation thumbs up/down feedback capture.</li>
   </ul>
 
-  <!-- ========== CURRENT APP SHAPE ========== -->
-  <h2>Current App Shape</h2>
+  <!-- ========== IMMEDIATE PRIORITIES ========== -->
+  <h2>Immediate Priorities</h2>
   <p>
-    The app is a SvelteKit frontend with a Convex backend, deployed on Vercel. Authentication
-    uses Clerk with Convex custom JWT validation. Image generation runs through Vertex AI
-    (gemini-3.1-flash-image-preview) in a staged durable pipeline. Credits and payments are
-    handled via Stripe. A remote MCP server exposes tools for agentic clients.
+    Prioritized by impact and dependency. Earlier items multiply the value of
+    later ones — every failed first generation is a user who never sees the rest
+    of the product. The ordering is not aspirational; it is the sequence
+    that maximizes learning per unit of effort.
   </p>
+
+  <h3>1. Prompt Interpretation Layer</h3>
+  <div class="callout callout-danger">
+    <p>
+      <strong>The multiplier:</strong> Every acquisition channel — SEO, cold-start
+      outreach, agent distribution — routes users into their first generation. If
+      that generation fails, the user leaves and never returns. Even a modest
+      failure rate silently degrades every downstream channel — a hypothetical 60%
+      first-gen success rate would halve the value of all acquisition work. This is
+      the highest-ROI growth feature we have.
+    </p>
+  </div>
+  <ul>
+    <li><strong>AI-native prompt massaging before Gemini</strong> — an AI layer between the user's input and the Gemini image generation call that rewrites prompts to be compatible with our difference-matting technique. Observed failure: a user asked for an image "with no color" and our black/white difference matting failed. It succeeded when the prompt was "black and white pencil drawing." Instead of building brittle, hard-coded orchestration rules, throw more AI compute at the problem: let an AI model figure out the best prompt phrasing for any given user request.</li>
+    <li><strong>Subsumes the border-transparency fix</strong> — when the generated subject fills the canvas edge-to-edge, <code>borderTransparencyRatio</code> drops below the 0.90 threshold even though the matte is clean. This is the most common QA failure mode for portrait/character prompts. If the interpretation layer adds framing qualifiers, the border issue may resolve itself. One observed case: a first-time user's generation ("Emo girl with smile face drawing no color") failed on this false positive and they did not retry — but this is one failure mode among many successful generations, not the typical experience.</li>
+  </ul>
+
+  <h3>2. Sprint-Zero Plumbing</h3>
+  <div class="callout callout-warning">
+    <p>
+      <strong>Blocking, not optional.</strong> Without attribution and
+      marketing-to-app handoff, every acquisition channel produces
+      uninterpretable traffic. The kill/continue question is literally
+      unanswerable without these.
+    </p>
+  </div>
+  <ul>
+    <li><strong>Sitemap</strong> — no sitemap exists. Search engines cannot discover and index programmatic landing pages without one. Required before SEO Wave 1 ships.</li>
+    <li><strong>Seeded-prompt URL handoff</strong> — <code>?prompt=&amp;subject=&amp;source=</code> query parameters that deep-link from landing pages into the app with a pre-seeded prompt. Without this, landing-page CTAs land in a blank product state and every visitor starts from zero.</li>
+    <li><strong>"How did you hear about us?" survey</strong> — one question on signup. Without it, we cannot attribute signups to channels or distinguish which acquisition efforts are working.</li>
+  </ul>
+
+  <h3>3. Cold-Start Playbook</h3>
+  <p>
+    SEO takes quarters on a greenfield domain. The only channel that produces
+    users <em>this month</em> is human-scale: direct contact with real
+    practitioners. The goal is 10–20 real users we can watch, not traffic.
+  </p>
+  <ul>
+    <li><strong>Community participation</strong> — 2–3 communities (r/graphic_design, POD/Etsy seller communities, indie game dev Discords). Value-first: share process and proof (native transparency), not link dumps. Conversations, not broadcasts.</li>
+    <li><strong>Direct outreach</strong> — 20–50 practitioners (indie brands, small shops, streamers) with a specific ask: try one workflow, 15-min feedback call.</li>
+    <li><strong>Launch / listing surfaces</strong> — Product Hunt, relevant directories, "awesome" lists — one at a time with prepared proof.</li>
+    <li><strong>Every outbound link uses <code>source</code> + UTM</strong> so attribution stays honest.</li>
+  </ul>
+
+  <h3>4. SEO Wave 1 (Compounding Bet)</h3>
+  <p class="dim">
+    A full acquisition strategy exists in <code>docs/strategy/customer-acquisition/</code>.
+  </p>
+  <ul>
+    <li><strong>Hub + 8–12 spoke pages</strong> — hub at <code>/transparent-png-generator</code> with spokes for high-intent subjects (logo, sticker, character, mascot, etc.). Each spoke has tailored copy, proof images, and a pre-seeded prompt CTA that deep-links into the app.</li>
+    <li><strong>Expect nothing for a quarter.</strong> SEO on a greenfield domain has latency — indexing, ranking, and authority all take time. Do not build Wave 2 until Google Search Console shows indexing + impressions.</li>
+  </ul>
+
+  <h3>5. Agent Distribution</h3>
+  <div class="callout">
+    <p>
+      <strong>The genuinely differentiated channel.</strong> We are probably the
+      only transparent-asset generator that's MCP-native, and that channel has
+      near-zero competition right now. This tests the vision's central thesis
+      directly: do assistants, when composing software, reach for this tool?
+    </p>
+  </div>
+  <ul>
+    <li><strong>"Connect your assistant" onboarding</strong> — one-click flow that generates a personal API key and shows copy-paste instructions for Claude, Cursor, and other agentic clients. The MCP server exists but is invisible to users.</li>
+    <li><strong>MCP registry / directory listings</strong> — list the MCP server in registries and directories where agents and developers discover tools.</li>
+    <li><strong><code>llms.txt</code> / GEO</strong> — optimize for being recommended by ChatGPT, Perplexity, Claude when users ask "best transparent PNG generator." Clear quotable facts, consistent naming. Parallel to SEO, not replacing it.</li>
+    <li><strong>Agent-facing prompt packs</strong> — curated prompt templates designed for assistants to use via MCP. "Generate a transparent logo for a veterinary clinic" → assistant calls the tool with the right parameters.</li>
+  </ul>
+
+  <h3>6. Retention &amp; Re-engagement</h3>
+  <div class="callout callout-danger">
+    <p>
+      <strong>The bleeding:</strong> Most users who sign up successfully generate
+      images — the product works. But they do a few generations and don't come
+      back. There is no re-engagement loop and limited visibility into whether
+      they found the tool valuable enough to return. We are acquiring users but
+      not retaining them, and learning too little from the churn.
+    </p>
+  </div>
+  <p class="dim"><strong>Shipped (sufficient for now):</strong></p>
+  <ul>
+    <li><strong>Behavior-driven welcome email</strong> — 24h after signup, users are classified into 5 scenarios (credits remaining + downloaded, credits remaining + no download, credits exhausted + downloaded, credits exhausted + no download, no credits used) and sent a tailored email with scenario-specific copy and CTA. Download tracking, daily cron, HMAC-token unsubscribe. Scenarios 1–5 shipped. Scenario 4 includes 3 bonus credits as a diagnostic instrument — if users don't return even with free credits, that's a stronger "no value" signal for the kill framework. Scenario 5 sub-segments "never tried" vs "tried and failed" and uses seeded-prompt deep links (?prompt=...&source=...) so the email CTA pre-fills the generation input, removing the blank-state friction that likely caused the bounce. <em>Shipped (scenarios 1–5).</em></li>
+    <li><strong>Post-generation feedback</strong> — thumbs up/down rating after each generation. <em>Shipped.</em></li>
+  </ul>
+  <p class="dim"><strong>Deferred until hundreds of users — nurturing an empty database automates nothing:</strong></p>
+  <ul>
+    <li class="dim"><strong>AI nurturing engine</strong> — an AI agent that looks at each user's generation history and decides whether and when to send a re-engagement email. Not hardcoded rules — the AI figures out the right message, timing, and audience. Worthwhile at scale; automates nothing at zero.</li>
+    <li class="dim"><strong>Autonomous social agent</strong> — an AI agent that posts on social media, Reddit, forums, and tracks engagement. If we had a full-time growth marketer, they'd do this. But we don't have enough users to learn from the engagement data yet.</li>
+    <li class="dim"><strong>Email agent for inbound/outbound</strong> — an AI agent that handles all inbound email to @celstate.com, triages and drafts replies. Useful at volume; premature at current scale.</li>
+    <li class="dim"><strong>Generation history with re-prompting</strong> — let users see past generations and fork with a tweaked prompt. Reduces repeat-use friction.</li>
+    <li class="dim"><strong>Credit depletion nudge with context</strong> — contextual "you just made something great, here's what else you could do" instead of a generic paywall.</li>
+  </ul>
+
+  <h3>Lower Priority</h3>
+  <ul>
+    <li><strong>First-time onboarding (deferred)</strong> — post-sign-up guided tour of the UI. Not urgent: every signed-up user has successfully generated an image. The UI is simple enough that a hand-holding flow is a polish item, not a blocker. Defer until we have enough users that drop-off at first generation is actually observed.</li>
+    <li><strong>Live generation demo on landing</strong> — let prospective users see the product work without signing up. A single constrained demo generation (watermarked, low-res) could dramatically improve landing-to-signup conversion.</li>
+    <li><strong>Public showcase / gallery (opt-in)</strong> — let users share generations to a public gallery. Creates social proof, inspiration for new users, and SEO content.</li>
+    <li><strong>One-click social sharing</strong> — every generation gets a shareable public URL. "Made with Celstate" watermark. Users share their creations → their network discovers the tool.</li>
+    <li><strong>Referral-for-credits</strong> — "invite a friend, you both get 3 credits." Near-zero CAC, leverages existing users. The growth runbook identifies this (GH-006) but it's not built.</li>
+  </ul>
+
+  <!-- ========== THE HORIZON ========== -->
+  <h2>The Horizon</h2>
+  <p>
+    What comes after the runway engine is running. These are not next-sprint items —
+    they are the deep research and capability building that Horizon 1 revenue funds.
+  </p>
+  <ul>
+    <li><strong>Alpha animation</strong> — extending difference matting to video. Transparent animated subjects with real alpha. Heuristic approaches hit ghosting and fringe artifacts; next step is off-the-shelf segmentation/matting priors combined with Celstate refinement and export QA.</li>
+    <li><strong>Lottie render QA</strong> — automated frame capture, visual diffing, blank-frame detection, performance budgets. The gap between "valid JSON" and "render-verified motion quality." Likely needs an external worker since Convex actions can't run headless browsers.</li>
+    <li><strong>Illustrated UI ornaments</strong> — transparent art layers for declared slots in real applications. Vignettes, scroll-revealed foliage, hand-drawn semantic icons. The bridge from isolated assets to integrated aliveness in real software.</li>
+    <li><strong>Alive software</strong> — the destination. Runtime motion, ambient reactivity, atmospheric layers that respond to presence and time. The JRPG feeling. Not started — funded by Horizon 1 revenue. The open problem: generated visual richness that composes cleanly with deterministic software architecture.</li>
+  </ul>
+
+  <!-- ========== KILL FRAMEWORK ========== -->
+  <h2>How We Decide It Has No Value</h2>
+  <p>
+    Most users who sign up successfully generate images. The product works for the
+    majority. But a subset hit QA false-positives on their first attempt, and even
+    those who succeed tend to do a few generations and not return. The signal is
+    partially confounded: we can't fully distinguish "product unwanted" from
+    "product broken for some users" until the prompt interpretation layer reduces
+    the failure rate. The kill framework must condition on a working product.
+    These gates are pre-registered: the numbers are written down before we look at
+    the data.
+  </p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Gate</th>
+        <th>Question</th>
+        <th>Falsification Signal</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Quality</strong></td>
+        <td>Does the product work?</td>
+        <td>First-gen success rate &lt;85% after the interpretation layer ships → keep fixing, no verdict yet</td>
+      </tr>
+      <tr>
+        <td><strong>Pull</strong></td>
+        <td>Do people who got a successful result come back?</td>
+        <td>Among users whose first 1–3 generations succeeded, &lt;10–15% return within 7 days or do a 2nd session — sustained over ~50+ such users → weak demand</td>
+      </tr>
+      <tr>
+        <td><strong>Money</strong></td>
+        <td>Will anyone pay?</td>
+        <td>Of users who deplete free credits, ~0% buy a pack across ~50–100 depletions → economic fail (could be pricing, but at literal zero it's value)</td>
+      </tr>
+      <tr>
+        <td><strong>Channel</strong></td>
+        <td>Can you reach buyers repeatably?</td>
+        <td>After 90 days of cold-start + SEO Wave 1: no channel produces a growing weekly signup trickle, and GSC shows impressions but no clicks → positioning fail; no impressions → market too thin</td>
+      </tr>
+      <tr>
+        <td><strong>Agent thesis</strong></td>
+        <td>Do assistants use it?</td>
+        <td>6 months of MCP being discoverable with zero organic agent-driven generations → the "assistant as protagonist" wedge isn't real yet</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>
+    <strong>Time-box:</strong> two quarters of honest execution — shipping and
+    distributing, not writing more strategy docs — measured against the gates
+    above. If Quality passes but Pull and Money both fail, that's the clean "no
+    value" verdict: people tried a working product and shrugged.
+  </p>
+
+  <div class="callout callout-danger">
+    <p>
+      <strong>Exogenous kill trigger:</strong> if frontier image models (Gemini,
+      OpenAI) ship native alpha-channel output as a first-class API parameter,
+      the difference-matting moat evaporates overnight. This should trigger an
+      immediate pivot review regardless of where the gates stand.
+    </p>
+  </div>
+
+  <div class="callout callout-warning">
+    <p>
+      <strong>Scope of "abandon":</strong> Horizon 1 (the transparent-PNG
+      utility) is the funding vehicle, not the vision. If Horizon 1 fails its
+      gates, the rational move may be to kill the utility business while
+      continuing the Horizon 2 research on a cheaper footing. Those are
+      separate decisions. Conflating them is how a failed beachhead takes down
+      a still-viable moonshot.
+    </p>
+  </div>
+
+  <!-- ========== STATUS APPENDIX ========== -->
+  <h2>Status Appendix</h2>
+  <p class="dim">
+    The vision is the point of this document. What follows is a condensed snapshot of
+    where the product stands today in service of Horizon 1. Full defect, risk, and
+    decision tracking lives in <code>docs/registers/defects.yaml</code> and
+    <code>docs/features/*.yaml</code>.
+  </p>
+
+  <h3>App Shape</h3>
   <ul>
     <li><strong>Frontend:</strong> SvelteKit 5, TailwindCSS 4, light-mode only, warm parchment palette</li>
     <li><strong>Backend:</strong> Convex (real-time sync, mutations, actions, cron jobs, HTTP actions)</li>
@@ -395,88 +804,63 @@
     <li><strong>Payments:</strong> Stripe Checkout (one-time credit pack purchases)</li>
     <li><strong>Deploy:</strong> Vercel (frontend) + Convex (backend), with automated deploy verification</li>
     <li><strong>Observability:</strong> PostHog (analytics), Sentry (exceptions), Discord/Slack webhooks (ops alerts)</li>
+    <li><strong>Agent surface:</strong> Remote MCP server, bearer auth, four tools, SvelteKit proxy to Convex</li>
   </ul>
 
-  <!-- ========== FEATURE STATUS OVERVIEW ========== -->
-  <h2>Feature Status Overview</h2>
+  <h3>Feature Status</h3>
   <div class="feature-grid">
 
     <div class="feature-card">
       <div class="badge badge-functional">Functional</div>
       <h3>Image Generation</h3>
       <p>Transparent PNG generation via difference matting. Three-stage Vertex AI pipeline with deterministic QA, retry logic, and artifact retention. The core product capability.</p>
-      <div class="card-meta">
-        <span class="badge badge-low">Confidence: High</span>
-      </div>
     </div>
 
     <div class="feature-card">
       <div class="badge badge-functional">Functional</div>
       <h3>Credits & Payments</h3>
-      <p>Credit system with Stripe one-time purchases, weekly drip, abuse prevention, and settlement tracking. Credit pack purchase module mid-migration (Stage 2 of 7).</p>
-      <div class="card-meta">
-        <span class="badge badge-low">Confidence: High</span>
-      </div>
+      <p>Credit system with Stripe one-time purchases, weekly drip, abuse prevention, and settlement tracking.</p>
     </div>
 
     <div class="feature-card">
       <div class="badge badge-functional">Functional</div>
       <h3>Authentication</h3>
       <p>Clerk social sign-in (Google live, Apple pending) with Convex JWT. Server-side route guards, canonical host redirects, auth alerting. Stable after multiple migrations.</p>
-      <div class="card-meta">
-        <span class="badge badge-low">Confidence: High</span>
-      </div>
     </div>
 
     <div class="feature-card">
       <div class="badge badge-partial">Partial</div>
       <h3>Lottie Animation Generation</h3>
       <p>V1 internal control plane for Lottie JSON generation. Strict safety validator and lottie-web preview, but no render QA stage. Quality bar is "valid JSON" not "render-verified motion."</p>
-      <div class="card-meta">
-        <span class="badge badge-medium">Confidence: Medium</span>
-      </div>
     </div>
 
     <div class="feature-card">
       <div class="badge badge-functional">Functional</div>
       <h3>MCP Server</h3>
       <p>Remote MCP endpoint for agentic clients (Claude Code, Cursor). Stateless HTTP transport, bearer token auth, four tools. SvelteKit proxy to Convex HTTP action.</p>
-      <div class="card-meta">
-        <span class="badge badge-low">Confidence: High</span>
-      </div>
     </div>
 
     <div class="feature-card">
       <div class="badge badge-functional">Functional</div>
       <h3>Marketing Landing</h3>
       <p>Public landing page with hero, edge-quality zoom inspector, feature grid, pricing tiers, SEO/JSON-LD. Editorial design matching the warm parchment brand.</p>
-      <div class="card-meta">
-        <span class="badge badge-low">Confidence: High</span>
-      </div>
     </div>
 
     <div class="feature-card">
       <div class="badge badge-functional">Functional</div>
       <h3>Production Confidence</h3>
       <p>Automated deploy verification across auth, generation, checkout, and settlement domains. Canary principals, gate evaluation, Stripe refund automation. Deploy-triggered via GitHub.</p>
-      <div class="card-meta">
-        <span class="badge badge-medium">Confidence: Medium</span>
-      </div>
     </div>
 
     <div class="feature-card">
       <div class="badge badge-functional">Functional</div>
       <h3>Observability & Ops</h3>
       <p>PostHog analytics, Sentry exceptions, ops webhooks, growth-ops CLI, ops investigation CLI. Channel partition: webhooks for humans, PostHog for analytics, Sentry for errors.</p>
-      <div class="card-meta">
-        <span class="badge badge-low">Confidence: High</span>
-      </div>
     </div>
 
   </div>
 
-  <!-- ========== BETA READINESS SNAPSHOT ========== -->
-  <h2>Beta Readiness Snapshot</h2>
+  <h3>Beta Readiness</h3>
   <div class="snapshot-grid">
     <div class="snapshot-card">
       <span class="snapshot-number">7</span>
@@ -487,93 +871,21 @@
       <span class="snapshot-label">Feature Partial</span>
     </div>
     <div class="snapshot-card">
-      <span class="snapshot-number">1</span>
+      <span class="snapshot-number">0</span>
       <span class="snapshot-label">Beta Blockers</span>
     </div>
     <div class="snapshot-card">
-      <span class="snapshot-number">6</span>
+      <span class="snapshot-number">5</span>
       <span class="snapshot-label">Open Defects</span>
     </div>
   </div>
 
-  <div class="callout callout-warning">
-    <p>
-      <strong>Beta blockers (must fix):</strong>
-      Credit Pack Purchase Stage 3 webhook cutover pending. The prior Lottie
-      storage-failure and idempotent-refund blockers are resolved in code.
-    </p>
-  </div>
-
-  <!-- ========== MAJOR PRODUCT GAPS ========== -->
-  <h2>Major Product Gaps</h2>
-  <ul>
-    <li><strong>Assisted Mode not implemented:</strong> Spec exists for a designer LLM layer that refines prompts before generation, but no code has been written. Not beta-blocking.</li>
-    <li><strong>No live generation demo on landing:</strong> Prospective users cannot try the product without signing up. A interactive demo could improve conversion.</li>
-    <li><strong>No A/B testing infrastructure:</strong> Landing page copy and CTA placement are unvalidated. No experiment framework exists.</li>
-    <li><strong>Apple sign-in not enabled:</strong> Google is live, but Apple requires dashboard configuration. Not blocking but limits sign-in options.</li>
-    <li><strong>Lottie render QA missing:</strong> Users can receive structurally valid but visually broken animations. Acceptable for V1 internal, blocks paid surface.</li>
-  </ul>
-
-  <!-- ========== MAJOR RISKS ========== -->
-  <h2>Major Technical & Design Risks</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>Risk</th>
-        <th>Severity</th>
-        <th>Mitigation</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>Vertex AI outage blocks all generation — no fallback provider</td>
-        <td><span class="badge badge-high">High</span></td>
-        <td><p>Monitor Vertex status. Consider fallback provider post-beta.</p></td>
-      </tr>
-      <tr>
-        <td>Difference matting requires consistent dual-pass rendering — model inconsistency causes artifacts</td>
-        <td><span class="badge badge-medium">Medium</span></td>
-        <td><p>Deterministic QA catches most artifacts. Retry routes back to correct stage.</p></td>
-      </tr>
-      <tr>
-        <td>Credit Pack Purchase webhook migration could break fulfillment</td>
-        <td><span class="badge badge-medium">Medium</span></td>
-        <td><p>Run the existing lifecycle regression tests and extend them for any new Stage 3 webhook cutover branches.</p></td>
-      </tr>
-      <tr>
-        <td>Clerk dependency — outage blocks all sign-in</td>
-        <td><span class="badge badge-medium">Medium</span></td>
-        <td><p>Accept for beta. Clerk has high uptime. No fallback auth planned.</p></td>
-      </tr>
-      <tr>
-        <td>Transparent QA thresholds tuned from limited sample batch</td>
-        <td><span class="badge badge-low">Low</span></td>
-        <td><p>QA metrics persisted for tuning. Internal report query available.</p></td>
-      </tr>
-    </tbody>
-  </table>
-
-  <!-- ========== OPEN FOUNDER DECISIONS ========== -->
-  <h2>Open Founder Decisions</h2>
-  <ul>
-    <li>Should a fallback image provider be configured for Vertex AI outages?</li>
-    <li>When should Apple sign-in be enabled in the Clerk dashboard?</li>
-    <li>When should Lottie generation transition from free to paid?</li>
-    <li>Should a live generation demo be added to the landing page?</li>
-    <li>Should the production confidence gate be blocking or advisory during early beta?</li>
-    <li>Should per-API-key rate limiting be added to the MCP server before beta?</li>
-    <li>Should credit pack pricing tiers be adjusted based on unit economics?</li>
-    <li>Is the Clerk "Secured by Clerk" badge acceptable for beta, or is headless OAuth needed?</li>
-  </ul>
-
-  <!-- ========== RECENTLY COMPLETED PROGRESS ========== -->
-  <h2>Recently Completed Meaningful Progress</h2>
+  <h3>Recently Completed</h3>
   <ul>
     <li class="dim">Auth migrated from Better Auth → WorkOS → Clerk (stable since May 2026)</li>
     <li class="dim">Image generation hardened into staged durable workflow with per-stage retries</li>
     <li class="dim">Vertex AI migration completed (replacing Gemini Developer API)</li>
     <li class="dim">Deterministic transparent QA stack implemented (recomposition, topology, shell analysis)</li>
-    <li class="dim">Credit Pack Purchase module Stage 1-2 completed (new lifecycle module exists)</li>
     <li class="dim">MCP server shipped with 4 tools, bearer auth, and SvelteKit proxy</li>
     <li class="dim">Production confidence system operational with deploy-triggered verification</li>
     <li class="dim">Growth-ops CLI and ops investigation CLI shipped</li>
@@ -581,86 +893,10 @@
     <li class="dim">Lottie generation V1 scaffolding with safety validator, lottie-web preview, storage-failure handling, and idempotent refund guard</li>
   </ul>
 
-  <!-- ========== DEFECTS SUMMARY ========== -->
-  <h2>Defects & Debt Summary</h2>
-  <div class="defect-summary">
-    <div class="defect-stat">
-      <span class="defect-stat-number" style="color: var(--red);">0</span>
-      <span class="defect-stat-label">High severity</span>
-    </div>
-    <div class="defect-stat">
-      <span class="defect-stat-number" style="color: var(--amber);">1</span>
-      <span class="defect-stat-label">Medium severity</span>
-    </div>
-    <div class="defect-stat">
-      <span class="defect-stat-number" style="color: var(--dim);">5</span>
-      <span class="defect-stat-label">Low severity</span>
-    </div>
-    <div class="defect-stat">
-      <span class="defect-stat-number">6</span>
-      <span class="defect-stat-label">Total open</span>
-    </div>
-  </div>
-
-  <table>
-    <thead>
-      <tr>
-        <th>ID</th>
-        <th>Type</th>
-        <th>Severity</th>
-        <th>Area</th>
-        <th>Summary</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>defect-003</td>
-        <td><span class="badge badge-low">Tech Debt</span></td>
-        <td><span class="badge badge-medium">Medium</span></td>
-        <td>Credits</td>
-        <td><p>Credit Pack Purchase module mid-migration (Stage 2 of 7)</p></td>
-      </tr>
-      <tr>
-        <td>defect-006</td>
-        <td><span class="badge badge-low">Tech Debt</span></td>
-        <td><span class="badge badge-low">Low</span></td>
-        <td>Lottie</td>
-        <td><p>No render QA stage — quality bar is "valid JSON" not visual quality</p></td>
-      </tr>
-      <tr>
-        <td>defect-007</td>
-        <td><span class="badge badge-low">Tech Debt</span></td>
-        <td><span class="badge badge-low">Low</span></td>
-        <td>Observability</td>
-        <td><p>PostHog ingest bot filter not configured</p></td>
-      </tr>
-      <tr>
-        <td>defect-008</td>
-        <td><span class="badge badge-low">Design Debt</span></td>
-        <td><span class="badge badge-low">Low</span></td>
-        <td>Auth</td>
-        <td><p>Clerk footer badge cannot be removed on free tier</p></td>
-      </tr>
-      <tr>
-        <td>defect-009</td>
-        <td><span class="badge badge-low">Tech Debt</span></td>
-        <td><span class="badge badge-low">Low</span></td>
-        <td>Prod Confidence</td>
-        <td><p>Vercel deployment protection rules not referencing verification status</p></td>
-      </tr>
-      <tr>
-        <td>defect-010</td>
-        <td><span class="badge badge-low">Tech Debt</span></td>
-        <td><span class="badge badge-low">Low</span></td>
-        <td>MCP</td>
-        <td><p>No per-API-key rate limiting</p></td>
-      </tr>
-    </tbody>
-  </table>
-
-  <p class="dim" style="font-size: 0.8rem; margin-top: 2rem;">
-    Full details in <code>docs/registers/defects.yaml</code>. Feature details in <code>docs/features/*.yaml</code>.
-  </p>
+  <h3>Known Gaps & Defects</h3>
+  <ul>
+    <li class="dim">See open defects in <code>docs/registers/defects.yaml</code> (all currently low severity).</li>
+  </ul>
 
 </div>
 </body>

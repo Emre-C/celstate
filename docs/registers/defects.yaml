@@ -46,32 +46,28 @@ items:
   - id: defect-003
     type: tech_debt
     severity: medium
-    status: open
+    status: resolved
     area: credits-and-payments
     summary: >
-      Credit Pack Purchase module is mid-migration at Stage 2 of 7.
-      Stripe webhooks still route through legacy http.ts handlers instead of
-      the new internal.creditPackPurchase.* handlers.
+      Credit Pack Purchase module migration was completed. Stripe webhooks
+      now route through internal.creditPackPurchase.* handlers.
     evidence: >
-      src/convex/creditPackPurchase.ts and src/convex/lib/creditPackPurchase/
-      exist with the new lifecycle module, but http.ts still contains the
-      legacy Stripe webhook handlers. pendingCheckouts shim bridges old and
-      new surfaces.
+      src/convex/http.ts routes checkout.session.completed and refund.created
+      to internal.creditPackPurchase.onStripeCheckoutCompleted and
+      onStripeRefundCreated. Canary runner endpoints and QA reset also call
+      the module directly.
     impact: >
-      Two codepaths coexist for purchase handling. Risk of confusion, bugs,
-      and double-grant or missed settlement if webhook routing is inconsistent.
+      No longer relevant — the migration is complete.
     proposed_resolution: >
-      Complete Stage 3: cut http.ts settlement/refund webhooks to
-      internal.creditPackPurchase.* handlers. Then proceed through Stages 4-7
-      (switch requestCheckout/processCheckout, canary routes, QA reset purge,
-      legacy cleanup).
+      No further action. See docs/features/credits-and-payments.yaml for
+      current state.
     related_files:
       - src/convex/http.ts
       - src/convex/creditPackPurchase.ts
       - src/convex/creditPackPurchaseActions.ts
       - src/convex/lib/creditPackPurchase/lifecycle.ts
     created: 2026-06-25
-    resolved: null
+    resolved: 2026-06-29
 
   - id: defect-004
     type: test_gap
@@ -87,11 +83,9 @@ items:
       runProcessCheckout, and runRefundCheckoutForCanary with the in-memory
       Stripe port.
     impact: >
-      Before the tests, Stage 3 webhook cutover carried unnecessary regression
-      risk.
+      No longer relevant — tests exist and the migration is complete.
     proposed_resolution: >
-      Keep the lifecycle tests green and extend them if Stage 3 introduces
-      additional webhook cutover branches.
+      Keep the lifecycle tests green.
     related_files:
       - src/convex/lib/creditPackPurchase/lifecycle.ts
       - src/convex/lib/creditPackPurchase/inMemoryStripeAdapter.ts

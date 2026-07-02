@@ -1,6 +1,6 @@
 # Credit Pack Purchase Module
 
-This directory contains pure helpers and Stripe port adapters for the credit-pack purchase lifecycle deepening plan in `docs/implementation/CREDIT-PACK-PURCHASE-DEEPENING.md`.
+This directory contains pure helpers and Stripe port adapters for the credit-pack purchase lifecycle (request, Stripe Checkout, settlement, refund).
 
 ## Module boundary
 
