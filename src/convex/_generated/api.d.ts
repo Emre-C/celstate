@@ -11,6 +11,7 @@
 import type * as creditPackPurchase from "../creditPackPurchase.js";
 import type * as creditPackPurchaseActions from "../creditPackPurchaseActions.js";
 import type * as crons from "../crons.js";
+import type * as emails from "../emails.js";
 import type * as generation from "../generation.js";
 import type * as generationArtifactRetention from "../generationArtifactRetention.js";
 import type * as generationReports from "../generationReports.js";
@@ -71,6 +72,7 @@ declare const fullApi: ApiFromModules<{
   creditPackPurchase: typeof creditPackPurchase;
   creditPackPurchaseActions: typeof creditPackPurchaseActions;
   crons: typeof crons;
+  emails: typeof emails;
   generation: typeof generation;
   generationArtifactRetention: typeof generationArtifactRetention;
   generationReports: typeof generationReports;
@@ -151,4 +153,5 @@ export declare const internal: FilterApi<
 export declare const components: {
   stripe: import("@convex-dev/stripe/_generated/component.js").ComponentApi<"stripe">;
   posthog: import("@posthog/convex/_generated/component.js").ComponentApi<"posthog">;
+  resend: import("@convex-dev/resend/_generated/component.js").ComponentApi<"resend">;
 };

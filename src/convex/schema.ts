@@ -37,10 +37,21 @@ export default defineSchema({
     emailVerificationTime: v.optional(v.number()),
     credits: v.optional(v.number()),
     stripeCustomerId: v.optional(v.string()),
+    welcomeEmailStatus: v.optional(v.union(
+      v.literal("pending"),
+      v.literal("sent"),
+      v.literal("failed"),
+      v.literal("skipped"),
+    )),
+    welcomeEmailAttempts: v.optional(v.number()),
+    welcomeEmailSentAt: v.optional(v.number()),
+    emailUnsubscribed: v.optional(v.boolean()),
+    welcomeEmailBonusCreditsGranted: v.optional(v.boolean()),
   })
     .index("email", ["email"])
     .index("by_token", ["tokenIdentifier"])
-    .index("by_clerk_user", ["clerkUserId"]),
+    .index("by_clerk_user", ["clerkUserId"])
+    .index("by_welcome_email_status", ["welcomeEmailStatus"]),
 
   generations: defineTable({
     userId: v.id("users"),
@@ -73,6 +84,7 @@ export default defineSchema({
     dimensionMismatch: v.optional(v.boolean()),
     stalledAlertedAt: v.optional(v.number()),
     creditRefundedAt: v.optional(v.number()),
+    downloadedAt: v.optional(v.number()),
   })
     .index("by_user", ["userId", "createdAt"])
     .index("by_user_status", ["userId", "status"])
@@ -132,6 +144,7 @@ export default defineSchema({
       v.literal("signup_alert"),
       v.literal("purchase_alert"),
       v.literal("secret_rotation_reminder"),
+      v.literal("email_delivery_alert"),
     ),
     outcome: v.union(v.literal("sent"), v.literal("failed")),
     error: v.optional(v.string()),
@@ -234,5 +247,28 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_user_createdAt", ["userId", "createdAt"])
+    .index("by_createdAt", ["createdAt"]),
+
+  generationFeedback: defineTable({
+    userId: v.id("users"),
+    generationId: v.id("generations"),
+    rating: v.union(v.literal("up"), v.literal("down")),
+    createdAt: v.number(),
+  })
+    .index("by_generation", ["generationId"])
+    .index("by_user", ["userId", "createdAt"]),
+
+  emailEvents: defineTable({
+    userId: v.id("users"),
+    emailType: v.literal("welcome"),
+    scenario: v.optional(v.string()),
+    recipientEmail: v.string(),
+    componentEmailId: v.optional(v.string()),
+    outcome: v.union(v.literal("sent"), v.literal("failed")),
+    error: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId", "createdAt"])
+    .index("by_component_email_id", ["componentEmailId"])
     .index("by_createdAt", ["createdAt"]),
 });

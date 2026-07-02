@@ -112,6 +112,7 @@ export const creditGrantReasonValidator = v.union(
   v.literal("weekly_drip"),
   v.literal("purchase"),
   v.literal("admin_grant"),
+  v.literal("reengagement_bonus"),
 );
 
 export const featureDomainValidator = v.union(

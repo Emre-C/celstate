@@ -54,4 +54,14 @@ crons.cron(
   {},
 );
 
+// Daily behavior-driven welcome email check at 8am ET (12:00 UTC during EDT).
+// Finds users who signed up 3-24 hours ago and haven't received a welcome email,
+// classifies their behavior, and sends the appropriate scenario email.
+crons.cron(
+  "process welcome emails",
+  "0 12 * * *", // 12:00 UTC = 8:00 EDT / 7:00 EST
+  internal.emails.processWelcomeEmails,
+  {},
+);
+
 export default crons;

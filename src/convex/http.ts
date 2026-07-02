@@ -15,6 +15,7 @@ import {
   sendOpsWebhook,
 } from "./lib/ops.js";
 import { handleMcpRequest } from "./mcp/handler.js";
+import { resend } from "./emails.js";
 import type { Infer } from "convex/values";
 import type {
   domainVerdictRecordValidator,
@@ -376,6 +377,14 @@ registerRoutes(http, components.stripe, {
     "checkout.session.completed": handleCreditPackCheckout,
     "refund.created": handleCreditPackRefundCreated,
   },
+});
+
+http.route({
+  path: "/resend-webhook",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    return await resend.handleResendEventWebhook(ctx, request);
+  }),
 });
 
 export default http;

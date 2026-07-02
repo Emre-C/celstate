@@ -13,6 +13,9 @@ importers:
 
   .:
     dependencies:
+      '@convex-dev/resend':
+        specifier: ^0.2.5
+        version: 0.2.5(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.39.1(react@19.2.6))(hono@4.12.22)(react@19.2.6)(typescript@5.9.3)(zod@3.25.76))(convex@1.39.1(react@19.2.6))(react@19.2.6)
       '@convex-dev/stripe':
         specifier: ^0.1.3
         version: 0.1.4(@types/node@22.19.19)(convex@1.39.1(react@19.2.6))(react@19.2.6)
@@ -248,11 +251,32 @@ packages:
     resolution: {integrity: sha512-ooWCrlZP11i8GImSjTHYHLkvFDP48nS4+204nGb1RiX/WXYHmJA2III9/e2DWVabCESdW7hBAEzHRqUn9OUVvQ==}
     engines: {node: '>=0.1.90'}
 
+  '@convex-dev/rate-limiter@0.3.2':
+    resolution: {integrity: sha512-+oBPsBfFbzdxiF/9XaaTQmVnvDlvEfg/c69/v8LxTbw4VLuiflIKlfnPQL8OS0azXQQ11hcPWHmU8ytFmHKDXA==}
+    peerDependencies:
+      convex: ^1.24.8
+      react: ^18.2.0 || ^19.0.0
+    peerDependenciesMeta:
+      react:
+        optional: true
+
+  '@convex-dev/resend@0.2.5':
+    resolution: {integrity: sha512-WDB1Q8Kz7bVQVlftmpfj5OXuNRjUGHbEAAscP6RqbxP0q/IydZeSRfPcYVLcJPn9GEjUiEv7+/gkkOYUSjutxA==}
+    peerDependencies:
+      convex: ^1.31.7
+      convex-helpers: ^0.1.106
+
   '@convex-dev/stripe@0.1.4':
     resolution: {integrity: sha512-HnINm3K2QHGvP0X4YV7KruCjQ1Ni0HE1qpJ5rZYjfdUbMcqJsX4ZYTmOo7tL83qtokS3EahKVkhXLCH/9Ms/og==}
     peerDependencies:
       convex: ^1.29.3
       react: ^18.3.1 || ^19.0.0
+
+  '@convex-dev/workpool@0.4.7':
+    resolution: {integrity: sha512-4O3VKcJXqYZ9icDgKdVPxjDGUAFK3oG0hbUwLcyYMYgsvVKlZDhvZRmczqSBZHLyrCGPpf925byh0dBigCfAGA==}
+    peerDependencies:
+      convex: ^1.31.7
+      convex-helpers: ^0.1.94
 
   '@dependents/detective-less@5.0.3':
     resolution: {integrity: sha512-v6oD9Ukp+N7V4n6p5I/+mM5fIohSfkrDSGlFm5w/pYmchvbk+sMIHsLxrFJ5Lnujewj1BzWL0K84d88lwZAMQA==}
@@ -3186,6 +3210,28 @@ packages:
   convert-source-map@2.0.0:
     resolution: {integrity: sha512-Kvp459HrV2FEJ1CAsi1Ku+MY3kasH19TFykTz2xWmMeq6bk2NU3XXvfJ+Q61m0xktWwt+1HSYf3JZsTms3aRJg==}
 
+  convex-helpers@0.1.120:
+    resolution: {integrity: sha512-FPqtmN/10uoxmmhVq0ViNi08AnmHKT/eU1R8+ohmPZoHfg8noZEZCltApY/ASDdhq92o0kLZETggzBvMfHJDLQ==}
+    hasBin: true
+    peerDependencies:
+      '@standard-schema/spec': ^1.0.0
+      convex: ^1.32.0
+      hono: ^4.0.5
+      react: ^17.0.2 || ^18.0.0 || ^19.0.0
+      typescript: ^5.5 || ^6.0.0
+      zod: ^3.25.0 || ^4.0.0
+    peerDependenciesMeta:
+      '@standard-schema/spec':
+        optional: true
+      hono:
+        optional: true
+      react:
+        optional: true
+      typescript:
+        optional: true
+      zod:
+        optional: true
+
   convex-test@0.0.50:
     resolution: {integrity: sha512-rMNfrgcKJGToYDqNns2n1AO9KUP1NyC/AF9ldYEuWwTfRbgC9RQiHjlZsZQ/sOjLIVPUyKKIjoI/fNJUzy1urw==}
     peerDependencies:
@@ -4568,6 +4614,9 @@ packages:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
     engines: {node: '>=4'}
 
+  postal-mime@2.7.4:
+    resolution: {integrity: sha512-0WdnFQYUrPGGTFu1uOqD2s7omwua8xaeYGdO6rb88oD5yJ/4pPHDA4sdWqfD8wQVfCny563n/HQS7zTFft+f/g==}
+
   postcss-values-parser@6.0.2:
     resolution: {integrity: sha512-YLJpK0N1brcNJrs9WatuJFtHaV9q5aAOj+S4DI5S7jgHlRfm0PIbDCAFRYMQD5SHq7Fy6xsDhyutgS0QOAs0qw==}
     engines: {node: '>=10'}
@@ -4736,6 +4785,10 @@ packages:
     resolution: {integrity: sha512-GDhwkLfywWL2s6vEjyhri+eXmfH6j1L7JE27WhqLeYzoh/A3DBaYGEj2H/HFZCn/kMfim73FXxEJTw06WtxQwg==}
     engines: {node: '>= 14.18.0'}
 
+  remeda@2.39.0:
+    resolution: {integrity: sha512-3Ki8dU1o3OVu4dwIQ2Pj+yiuP7OnEbmWAGmJ3yDRqopily5jsj8NWzPvbS89H85d6UdONKEcUnrfuHY6jN9vyw==}
+    engines: {node: '>=18.0.0'}
+
   repeat-string@1.6.1:
     resolution: {integrity: sha512-PV0dzCYDNfRi1jCDbJzpW7jNNDRuCOG/jI5ctQcGKt/clZD+YcPS3yIlWuTJMmESC8aevCFmWJy5wjAFgNqN6w==}
     engines: {node: '>=0.10'}
@@ -4760,6 +4813,15 @@ packages:
     resolution: {integrity: sha512-7/cTSLOdYkNBNJcDMWf+luFvMriVm7eYxp4BcFCsAX0wF421Vyce5SXP17c+Jd5otXKGNehIonFlyQXSowL6Mw==}
     engines: {node: '>=0.4.0'}
     hasBin: true
+
+  resend@6.16.0:
+    resolution: {integrity: sha512-SaKISwHtxvAxneF84Njgnzg+zdngUu1vOT/paRU1De9QF+zXQR3GnwJHSh+mpJPjUhsGD4WxYi5CfKkXMkDqwg==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@react-email/render': '*'
+    peerDependenciesMeta:
+      '@react-email/render':
+        optional: true
 
   resolve-dependency-path@4.0.1:
     resolution: {integrity: sha512-YQftIIC4vzO9UMhO/sCgXukNyiwVRCVaxiWskCBy7Zpqkplm8kTAISZ8O1MoKW1ca6xzgLUBjZTcDgypXvXxiQ==}
@@ -5081,6 +5143,9 @@ packages:
   svelte@5.55.9:
     resolution: {integrity: sha512-fTjjT8cHLDwigcu2j3pv7Jq04LklXevPB8uBgyHNiTXv+RMNvVnrjS4UEYrLMkhuq1vpCodHjiW+z/95SDs/fg==}
     engines: {node: '>=18'}
+
+  svix@1.96.1:
+    resolution: {integrity: sha512-l+GyPS6gjL0okiXplLazEY2GbBsv1jZ4UIwtjp553YkDDv635xMKbM5sABpIdiWy1BYxgyV8M6tHeTwY0gyXlQ==}
 
   tailwindcss@4.3.0:
     resolution: {integrity: sha512-y6nxMGB1nMW9R6k96e5gdIFzcfL/gTJRNaqGes1YvkLnPVXzWgbqFF2yLC0T8G774n24cx3Pe8XrKoniCOAH+Q==}
@@ -5660,6 +5725,25 @@ snapshots:
   '@colors/colors@1.5.0':
     optional: true
 
+  '@convex-dev/rate-limiter@0.3.2(convex@1.39.1(react@19.2.6))(react@19.2.6)':
+    dependencies:
+      convex: 1.39.1(react@19.2.6)
+    optionalDependencies:
+      react: 19.2.6
+
+  '@convex-dev/resend@0.2.5(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.39.1(react@19.2.6))(hono@4.12.22)(react@19.2.6)(typescript@5.9.3)(zod@3.25.76))(convex@1.39.1(react@19.2.6))(react@19.2.6)':
+    dependencies:
+      '@convex-dev/rate-limiter': 0.3.2(convex@1.39.1(react@19.2.6))(react@19.2.6)
+      '@convex-dev/workpool': 0.4.7(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.39.1(react@19.2.6))(hono@4.12.22)(react@19.2.6)(typescript@5.9.3)(zod@3.25.76))(convex@1.39.1(react@19.2.6))
+      convex: 1.39.1(react@19.2.6)
+      convex-helpers: 0.1.120(@standard-schema/spec@1.1.0)(convex@1.39.1(react@19.2.6))(hono@4.12.22)(react@19.2.6)(typescript@5.9.3)(zod@3.25.76)
+      remeda: 2.39.0
+      resend: 6.16.0
+      svix: 1.96.1
+    transitivePeerDependencies:
+      - '@react-email/render'
+      - react
+
   '@convex-dev/stripe@0.1.4(@types/node@22.19.19)(convex@1.39.1(react@19.2.6))(react@19.2.6)':
     dependencies:
       convex: 1.39.1(react@19.2.6)
@@ -5667,6 +5751,11 @@ snapshots:
       stripe: 20.4.1(@types/node@22.19.19)
     transitivePeerDependencies:
       - '@types/node'
+
+  '@convex-dev/workpool@0.4.7(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.39.1(react@19.2.6))(hono@4.12.22)(react@19.2.6)(typescript@5.9.3)(zod@3.25.76))(convex@1.39.1(react@19.2.6))':
+    dependencies:
+      convex: 1.39.1(react@19.2.6)
+      convex-helpers: 0.1.120(@standard-schema/spec@1.1.0)(convex@1.39.1(react@19.2.6))(hono@4.12.22)(react@19.2.6)(typescript@5.9.3)(zod@3.25.76)
 
   '@dependents/detective-less@5.0.3':
     dependencies:
@@ -8275,6 +8364,16 @@ snapshots:
 
   convert-source-map@2.0.0: {}
 
+  convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.39.1(react@19.2.6))(hono@4.12.22)(react@19.2.6)(typescript@5.9.3)(zod@3.25.76):
+    dependencies:
+      convex: 1.39.1(react@19.2.6)
+    optionalDependencies:
+      '@standard-schema/spec': 1.1.0
+      hono: 4.12.22
+      react: 19.2.6
+      typescript: 5.9.3
+      zod: 3.25.76
+
   convex-test@0.0.50(convex@1.39.1(react@19.2.6)):
     dependencies:
       convex: 1.39.1(react@19.2.6)
@@ -9793,6 +9892,8 @@ snapshots:
 
   pluralize@8.0.0: {}
 
+  postal-mime@2.7.4: {}
+
   postcss-values-parser@6.0.2(postcss@8.5.15):
     dependencies:
       color-name: 1.1.4
@@ -10028,6 +10129,8 @@ snapshots:
 
   readdirp@4.1.2: {}
 
+  remeda@2.39.0: {}
+
   repeat-string@1.6.1: {}
 
   require-directory@2.1.1: {}
@@ -10047,6 +10150,11 @@ snapshots:
       stringify-object: 3.3.0
 
   requirejs@2.3.8: {}
+
+  resend@6.16.0:
+    dependencies:
+      postal-mime: 2.7.4
+      standardwebhooks: 1.0.0
 
   resolve-dependency-path@4.0.1: {}
 
@@ -10467,6 +10575,10 @@ snapshots:
       zimmerframe: 1.1.4
     transitivePeerDependencies:
       - '@typescript-eslint/types'
+
+  svix@1.96.1:
+    dependencies:
+      standardwebhooks: 1.0.0
 
   tailwindcss@4.3.0: {}
 

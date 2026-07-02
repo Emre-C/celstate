@@ -24,8 +24,19 @@ const userDoc = v.object({
   email: v.optional(v.string()),
   name: v.optional(v.string()),
   image: v.optional(v.string()),
+  emailVerificationTime: v.optional(v.number()),
   credits: v.optional(v.number()),
   stripeCustomerId: v.optional(v.string()),
+  welcomeEmailStatus: v.optional(v.union(
+    v.literal("pending"),
+    v.literal("sent"),
+    v.literal("failed"),
+    v.literal("skipped"),
+  )),
+  welcomeEmailAttempts: v.optional(v.number()),
+  welcomeEmailSentAt: v.optional(v.number()),
+  emailUnsubscribed: v.optional(v.boolean()),
+  welcomeEmailBonusCreditsGranted: v.optional(v.boolean()),
 });
 
 const normalizeOptionalEmail = (email: string | undefined): string | undefined => {
@@ -270,6 +281,8 @@ const upsertUserRecord = async (
     name: profile.name,
     image: profile.image,
     credits: GENERATION_CONFIG.initialCredits,
+    welcomeEmailStatus: "pending",
+    welcomeEmailAttempts: 0,
   });
 
   const user = (await ctx.db.get(userId))!;
